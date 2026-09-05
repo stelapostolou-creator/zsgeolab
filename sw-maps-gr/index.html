@@ -692,8 +692,8 @@
 /*  Ιστορικό εργασιών — δένει τη σελίδα με το lib/jobs.js.
  *
  *  Στιγμιότυπο = φορτωμένο μοντέλο + σημεία χάραξης + κατάσταση layers.
- *  Οι συντεταγμένες ΕΓΣΑ87 δεν αποθηκεύονται· υπολογίζονται ξανά στην
- *  επαναφορά, ώστε μια διόρθωση στα grids να περνά και στις παλιές εργασίες.
+ *  Οι προβεβλημένες συντεταγμένες δεν αποθηκεύονται· υπολογίζονται ξανά στην
+ *  επαναφορά, ώστε μια διόρθωση να περνά και στις παλιές εργασίες.
  */
 (function(){
   'use strict';
@@ -730,48 +730,64 @@
     document.getElementById('btnCsv').disabled=!any;
     pick={p1:null,p2:null};
     renderSummary(); renderLayers(); renderMap();
-    setStatus('επαναφορά εργασίας ✓','ok');
   }
 
   function label(m){
-    var i=m.info||{};
-    var p=[];
+    var i=m.info||{}, p=[];
     if(i.feats) p.push(i.feats+' features');
     if(i.comp) p.push(i.comp+' χάραξης');
     if(i.fname) p.push(esc2(i.fname));
-    return p.join(' · ')||'—';
+    return p.join(' \u00b7 ')||'\u2014';
+  }
+
+  function box(inner){
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;'+
+           'background:rgba(255,255,255,.03)">'+inner+'</div>';
   }
 
   function renderJobs(){
-    return Jobs.list().then(function(rows){
+    return Promise.all([Jobs.list(), Jobs.activeMeta()]).then(function(r){
+      var rows=r[0], act=r[1];
       var auto=null, saved=[];
-      rows.forEach(function(r){ if(r.id===Jobs.AUTO) auto=r; else saved.push(r); });
+      rows.forEach(function(x){ if(x.id===Jobs.AUTO) auto=x; else saved.push(x); });
 
       var ha=document.getElementById('jobAuto');
-      if(auto){
-        ha.innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.03)">'+
-          '<div style="font-size:13px;color:#f0f6ff"><b>Τελευταία εργασία</b> — '+when(auto.saved)+'</div>'+
+      if(act){
+        // Ανοιχτή εργασία: κάθε αλλαγή γράφεται μέσα της, χωρίς ενέργεια του χρήστη.
+        ha.innerHTML=box(
+          '<div style="font-size:13px;color:#f0f6ff">\u25cf <b>'+esc2(act.name)+'</b> '+
+            '<span style="color:var(--ok);font-weight:600">\u00b7 αποθηκεύεται αυτόματα</span></div>'+
+          '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+
+            'τελευταία εγγραφή '+when(act.saved)+' \u00b7 '+label(act)+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<button class="btn small" onclick="jobOpen(\''+act.id+'\')">\u21bb Επαναφόρτωση</button>'+
+            '<button class="btn ghost small" onclick="jobClose()">\u2715 Κλείσιμο</button>'+
+          '</div>');
+      } else if(auto){
+        ha.innerHTML=box(
+          '<div style="font-size:13px;color:#f0f6ff"><b>Τελευταία εργασία (χωρίς όνομα)</b> \u2014 '+when(auto.saved)+'</div>'+
           '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-          '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Επαναφορά</button>'+
-          '<button class="btn ghost small" onclick="jobKeep()">\u2b50 Κράτησέ την</button>'+
-          '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
-          '</div></div>';
+            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Επαναφορά</button>'+
+            '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
+          '</div>');
       } else { ha.innerHTML=''; }
 
       var h=document.getElementById('jobList');
       if(!saved.length){ h.innerHTML='<div class="empty">Καμία αποθηκευμένη εργασία.</div>'; return; }
       h.innerHTML=saved.map(function(m){
-        var nm=esc2(m.name);
+        var nm=esc2(m.name), q=nm.replace(/'/g,"&#39;");
+        var isAct = act && act.id===m.id;
         return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding:9px 0">'+
           '<div style="flex:1;min-width:150px">'+
-            '<div style="font-size:13px;color:#f0f6ff">'+nm+'</div>'+
-            '<div style="font-size:11px;color:var(--mut)">'+when(m.saved)+' · '+label(m)+'</div>'+
+            '<div style="font-size:13px;color:#f0f6ff">'+(isAct?'\u25cf ':'')+nm+'</div>'+
+            '<div style="font-size:11px;color:var(--mut)">'+when(m.saved)+' \u00b7 '+label(m)+'</div>'+
           '</div>'+
-          '<button class="btn small" onclick="jobOpen(\''+m.id+'\')">Άνοιγμα</button>'+
-          '<button class="btn ghost small" onclick="jobRename(\''+m.id+'\',\''+nm.replace(/'/g,"&#39;")+'\')">\u270e</button>'+
+          (isAct ? '<span class="pill" style="color:var(--ok)">ανοιχτή</span>'
+                 : '<button class="btn small" onclick="jobOpen(\''+m.id+'\')">Άνοιγμα</button>')+
+          '<button class="btn ghost small" onclick="jobRename(\''+m.id+'\',\''+q+'\')">\u270e</button>'+
           '<button class="btn ghost small" onclick="Jobs.exportFile(\''+m.id+'\')">\u2b07</button>'+
-          '<button class="btn red small" onclick="jobDel(\''+m.id+'\',\''+nm.replace(/'/g,"&#39;")+'\')">\u2715</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+m.id+'\',\''+q+'\')">\u2715</button>'+
         '</div>';
       }).join('');
     }).catch(function(e){
@@ -780,37 +796,53 @@
   }
 
   window.jobOpen=function(id){
-    if((model&&model.features&&model.features.length)||computed.length){
+    var busy = (model&&model.features&&model.features.length)||computed.length;
+    if(busy && id!==Jobs.getActive()){
       if(!confirm('Θα αντικατασταθούν τα δεδομένα που είναι ανοιχτά τώρα. Συνέχεια;')) return;
     }
-    Jobs.load(id).then(jobRestore).catch(function(e){ alert('Δεν άνοιξε: '+e.message); });
+    Jobs.load(id).then(function(s){
+      jobRestore(s);
+      if(id!==Jobs.AUTO){ Jobs.setActive(id); Jobs.dropAuto().then(renderJobs); return; }
+      renderJobs();
+    }).catch(function(e){ alert('Δεν άνοιξε: '+e.message); });
   };
+
   window.jobSaveAs=function(){
     var n=prompt('Όνομα εργασίας:', (model&&model.__fname)||('Εργασία '+new Date().toLocaleDateString('el-GR')));
     if(n===null) return;
-    Jobs.saveAs(n).then(function(){ renderJobs(); setStatus('αποθηκεύτηκε ✓','ok'); })
-                  .catch(function(e){ alert(e.message); });
+    Jobs.saveAs(n).then(function(m){
+      renderJobs();
+      setStatus('αποθηκεύτηκε \u00ab'+m.name+'\u00bb \u2713','ok');
+    }).catch(function(e){ alert(e.message); });
   };
-  window.jobKeep=function(){
-    var n=prompt('Όνομα εργασίας:', 'Εργασία '+new Date().toLocaleDateString('el-GR'));
-    if(n===null) return;
-    Jobs.keepAuto(n).then(function(){ renderJobs(); setStatus('αποθηκεύτηκε ✓','ok'); })
-                    .catch(function(e){ alert(e.message); });
+
+  /*  Κλείσιμο: η εργασία μένει αποθηκευμένη, η οθόνη αδειάζει για την επόμενη.
+   *  Χωρίς αυτό, η δουλειά της επόμενης δουλειάς θα γραφόταν μέσα στην παλιά. */
+  window.jobClose=function(){
+    Jobs.activeMeta().then(function(m){
+      if(!confirm('Η εργασία \u00ab'+(m?m.name:'')+'\u00bb είναι αποθηκευμένη. Να καθαρίσει η οθόνη για νέα;')) return;
+      Jobs.setActive(null);
+      jobRestore({computed:[], model:null, layerState:{}, geoid:document.getElementById('chkGeoid').checked});
+      renderJobs();
+      setStatus('η εργασία έκλεισε','ok');
+    });
   };
+
   window.jobRename=function(id,cur){
     var n=prompt('Νέο όνομα:', cur);
     if(n===null) return;
     Jobs.rename(id,n).then(renderJobs).catch(function(e){ alert(e.message); });
   };
+
   window.jobDel=function(id,nm){
-    if(!confirm('Διαγραφή «'+(nm||'τελευταίας εργασίας')+'»;')) return;
+    if(!confirm('Διαγραφή \u00ab'+(nm||'τελευταίας εργασίας')+'\u00bb;')) return;
     Jobs.remove(id).then(renderJobs).catch(function(e){ alert(e.message); });
   };
 
   document.getElementById('fileJob').addEventListener('change',function(e){
     var f=e.target.files[0]; e.target.value='';
     if(!f) return;
-    Jobs.importFile(f).then(function(m){ renderJobs(); setStatus('εισήχθη «'+m.name+'» ✓','ok'); })
+    Jobs.importFile(f).then(function(m){ renderJobs(); setStatus('εισήχθη \u00ab'+m.name+'\u00bb \u2713','ok'); })
                       .catch(function(err){ alert(err.message); });
   });
 
