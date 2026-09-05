@@ -126,6 +126,10 @@ button.active .pro,button.on .pro{filter:brightness(1.08)}
           <div><div class="label" id="rxl">ΕΓΣΑ87 X</div><div class="big" id="rx">-</div></div>
           <div><div class="label" id="ryl">ΕΓΣΑ87 Y</div><div class="big" id="ry">-</div></div>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button class="ghost" id="btnCopyXY" onclick="copyXY(this)">📋 Αντιγραφή X,Y</button>
+          <span class="dim" style="font-size:12px">αντιγράφει «X,Y» σκέτο, χωρίς κενά</span>
+        </div>
       </div>
       <div class="formula" id="formula">X = A0 + A1·x + A2·y + A3·x² + A4·y² + A5·x·y<br>Y = B0 + B1·x + B2·y + B3·x² + B4·y² + B5·x·y</div>
       <div class="notice" id="residual"></div>
@@ -335,7 +339,49 @@ function updateMeta() {
   document.getElementById('dupNote').textContent = dup.length>1
     ? `Σημείωση: ο κωδικός ${chosen.code} εμφανίζεται ${dup.length} φορές. Χρησιμοποιείται η πρώτη εμφάνιση του κωδικού.` : '';
 }
+/*  Οι δύο πρώτες καρτέλες μοιράζονται τα ίδια πεδία και αλλάζουν μόνο ετικέτες.
+ *  Χωρίς χωριστή μνήμη, οι τιμές της μιας κατεύθυνσης εμφανίζονταν στην άλλη —
+ *  και μια συντεταγμένη HATT διαβαζόταν ως ΕΓΣΑ87. Εδώ κρατιέται η κατάσταση
+ *  κάθε κατεύθυνσης ξεχωριστά και επανέρχεται όπως αφέθηκε.
+ */
+const SINGLE_FIELDS = ['x', 'y'];
+const singleMem = { fwd:null, inv:null };
+
+function grabSingle() {
+  const g = id => document.getElementById(id);
+  const st = { v:{} };
+  SINGLE_FIELDS.forEach(id => { st.v[id] = g(id).value; });
+  st.rx = g('rx').textContent;
+  st.ry = g('ry').textContent;
+  st.residual = g('residual').textContent;
+  st.status = g('status').textContent;
+  st.statusCls = g('status').className;
+  st.sheetInfo = g('sheetInfo').innerHTML;
+  st.sheetCls = g('sheetInfo').className;
+  return st;
+}
+
+function putSingle(st) {
+  const g = id => document.getElementById(id);
+  if (!st) {                                   // πρώτη επίσκεψη: όλα κενά
+    SINGLE_FIELDS.forEach(id => { g(id).value = ''; });
+    clearResult();
+    return;
+  }
+  SINGLE_FIELDS.forEach(id => { g(id).value = st.v[id]; });
+  g('rx').textContent = st.rx;
+  g('ry').textContent = st.ry;
+  g('residual').textContent = st.residual;
+  g('status').textContent = st.status;
+  g('status').className = st.statusCls;
+  g('sheetInfo').innerHTML = st.sheetInfo;
+  g('sheetInfo').className = st.sheetCls;
+}
+
 function setMode(m) {
+  // Η επαναφορά γίνεται στο ΤΕΛΟΣ: η setMode καθαρίζει το αποτέλεσμα πριν βγει.
+  const switched = (mode !== m) && !!document.getElementById('x');
+  if (switched) singleMem[mode] = grabSingle();   // φυλάσσεται η κατεύθυνση που φεύγει
   mode=m;
   document.getElementById('tabF').classList.toggle('active',m==='fwd');
   document.getElementById('tabI').classList.toggle('active',m==='inv');
@@ -350,7 +396,9 @@ function setMode(m) {
   updateMeta();
   const bm=document.getElementById('batchMode'); if(bm){ bm.value=m; updateBatchLabels(); }
   applySheetMode('batchSheet', m);
-  clearResult();
+  // Χωρίς αλλαγή κατεύθυνσης δεν πειράζεται τίποτα: το πάτημα της ίδιας
+  // καρτέλας δεν είναι λόγος να χαθεί ένα αποτέλεσμα που ήδη υπάρχει.
+  if (switched) putSingle(singleMem[m]);          // επανέρχεται αυτή που ανοίγει
 }
 // Στο HATT → ΕΓΣΑ87 (fwd): κρύβει το «Αυτόματο» και δείχνει 001 ΑΒΔΗΡΑ. Στο inv: «Αυτόματο».
 var lastRealSheet=null;   // το τελευταίο πραγματικό φύλλο που διάλεξε ο χρήστης
@@ -424,6 +472,41 @@ function convertSingle() {
   si.innerHTML=html; si.className='sheetinfo show';
   st.textContent='OK'; st.className='status ok';
 }
+/*  Αντιγράφει «X,Y» σκέτο — έτοιμο για επικόλληση σε CAD ή φύλλο εργασίας. */
+function copyXY(btn) {
+  const x = document.getElementById('rx').textContent.trim();
+  const y = document.getElementById('ry').textContent.trim();
+  const st = document.getElementById('status');
+  if (!x || !y || x === '-' || y === '-') {
+    st.textContent = 'Δεν υπάρχει αποτέλεσμα για αντιγραφή.';
+    st.className = 'status warn';
+    return;
+  }
+  const text = x + ',' + y;
+  const ok = () => {
+    const old = btn.textContent;
+    btn.textContent = '\u2713 Αντιγράφηκε';
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  };
+  const fallback = () => {
+    // Παλιοί browsers ή μη ασφαλές context: αντιγραφή μέσω προσωρινού πεδίου.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    let done = false;
+    try { done = document.execCommand('copy'); } catch (e) { done = false; }
+    ta.remove();
+    if (done) ok();
+    else { st.textContent = 'Η αντιγραφή δεν επιτράπηκε από τον browser.'; st.className = 'status warn'; }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(ok, fallback);
+  } else fallback();
+}
+
 function clearResult() {
   document.getElementById('rx').textContent='-';document.getElementById('ry').textContent='-';document.getElementById('residual').textContent='';document.getElementById('status').textContent='';
   const si=document.getElementById('sheetInfo'); si.textContent=''; si.className='sheetinfo';
@@ -431,6 +514,7 @@ function clearResult() {
 function clearSingle() {
   document.getElementById('x').value=''; document.getElementById('y').value='';
   clearResult();
+  singleMem[mode] = null;
 }
 function clearBatch() {
   document.getElementById('batchInput').value='';
@@ -527,6 +611,9 @@ function onSheetChanged(){
   var s=document.getElementById('sheet');
   if(s && s.value!=='auto' && DATA[s.value]) lastRealSheet=s.value;
   if(typeof curTab!=='undefined') syncSheet(curTab);
+  // Το αποτέλεσμα ανήκε στο προηγούμενο φύλλο. Αν έμενε στην οθόνη, θα
+  // διαβαζόταν ως αποτέλεσμα του νέου — σιωπηλά λάθος συντεταγμένες.
+  clearResult();
 }
 function showTab(which, m){
   curTab=which;
