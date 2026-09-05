@@ -101,7 +101,7 @@
 </head>
 <body>
   <header>
-    <img src="../assets/zstop-logo.png" alt="ZS-Top" class="logo-img">
+    <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center"><img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
     <div class="htitle">SW<span>Hepos</span></div>
     <div class="status" id="status"></div>
     <button class="abtn" onclick="openAbout()" title="About / Πληροφορίες" aria-label="About">ℹ️</button>
@@ -395,6 +395,19 @@
     delete layerState[name]; renderSummary(); renderLayers(); renderMap();
   }
 
+  /*  Στόχος αφής.
+   *
+   *  Οι κουκκίδες του χάρτη είναι 10 pixel: με ποντίκι πετυχαίνονται ακριβώς,
+   *  με δάχτυλο όχι — γι' αυτό «δεν επιλέγονταν σημεία στο κινητό». Κάθε
+   *  σημείο αποκτά έναν αόρατο δίσκο επιλογής, αρκετά μεγάλο για δάχτυλο.
+   */
+  var COARSE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  var HIT_R = COARSE ? 22 : 10;
+  function hitHalo(lat, lon, layer){
+    return L.circleMarker([lat, lon], {radius:HIT_R, weight:0, opacity:0,
+                                       fillOpacity:0, interactive:true}).addTo(layer);
+  }
+
   function renderMap(){
     map.invalidateSize();
     drawnLayer.clearLayers();
@@ -405,9 +418,11 @@
       if(f.geomType==='POINT'){
         f.pts.forEach(function(p){
           var coords=(p.x!=null)?('<br>X: '+p.x.toFixed(3)+'<br>Y: '+p.y.toFixed(3)+'<br>Z: '+p.z.toFixed(3)):'';
-          var mk=L.circleMarker([p.lat,p.lon],{radius:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
-            .bindPopup('<b>'+(p.__id||f.name||f.layer)+'</b><br>'+f.layer+(f.remarks?('<br>'+f.remarks):'')+coords).addTo(drawnLayer);
-          (function(pt){ mk.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon});
+          var popup='<b>'+(p.__id||f.name||f.layer)+'</b><br>'+f.layer+(f.remarks?('<br>'+f.remarks):'')+coords;
+          L.circleMarker([p.lat,p.lon],{radius:COARSE?7:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
+            .addTo(drawnLayer);
+          var hit=hitHalo(p.lat,p.lon,drawnLayer).bindPopup(popup);
+          (function(pt){ hit.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon});
         });
       } else if(f.geomType==='LINE'){
         L.polyline(latlngs,{color:f.color,weight:3}).bindPopup(lbl).addTo(drawnLayer);
@@ -417,8 +432,11 @@
     });
     computed.forEach(function(cp){
       if(layerState[cp.layer||'StakeOut']===false) return;
-      L.circleMarker([cp.lat,cp.lon],{radius:6,color:'#ff2d2d',weight:2,fillColor:'#ff8a8a',fillOpacity:.9})
-        .bindPopup('<b>'+cp.id+'</b> <span style="color:#ff8a8a">('+cp.remarks+')</span><br>X: '+cp.x.toFixed(3)+'<br>Y: '+cp.y.toFixed(3)+'<br>Z: '+cp.z.toFixed(3)).addTo(drawnLayer);
+      var popup='<b>'+cp.id+'</b> <span style="color:#ff8a8a">('+cp.remarks+')</span><br>X: '+cp.x.toFixed(3)+'<br>Y: '+cp.y.toFixed(3)+'<br>Z: '+cp.z.toFixed(3);
+      L.circleMarker([cp.lat,cp.lon],{radius:COARSE?8:6,color:'#ff2d2d',weight:2,fillColor:'#ff8a8a',fillOpacity:.9})
+        .addTo(drawnLayer);
+      var hit=hitHalo(cp.lat,cp.lon,drawnLayer).bindPopup(popup);
+      (function(pt){ hit.on('click',function(){ setPick(pt); }); })(cp);
     });
     var b=drawnLayer.getBounds();
     if(b.isValid()) map.fitBounds(b,{padding:[30,30],maxZoom:18});
