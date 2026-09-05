@@ -343,6 +343,7 @@
     computed.forEach(function(c){ var xy=toXY(c.lat,c.lon); c.x=xy.x; c.y=xy.y; });
   }
   function setModel(m,fname){
+    if(window.jobOnNewFile) jobOnNewFile(fname);   // άλλη βάση = νέα εργασία
     model=m; layerState={}; m.layers.forEach(function(l){ layerState[l.name]=true; }); model.__fname=fname;
     transformModel(); renderSummary(); renderLayers(); renderMap();
     document.getElementById('btnDxf').disabled=false; document.getElementById('btnTxt').disabled=false;
@@ -624,6 +625,7 @@
 (function(){
   'use strict';
   var TOOL='sw-maps';
+  var activeName='';                   // για μηνύματα χωρίς δεύτερη ανάγνωση
 
   function when(ts){
     var d=new Date(ts);
@@ -683,6 +685,8 @@
   function renderJobs(){
     return Promise.all([Jobs.list(), Jobs.activeMeta()]).then(function(r){
       var rows=r[0], act=r[1];
+      activeName = act ? act.name : '';
+      var blank = !(model && model.features && model.features.length) && !computed.length;
       var auto=null, saved=[];
       rows.forEach(function(x){ if(x.id===Jobs.AUTO) auto=x; else saved.push(x); });
 
@@ -695,7 +699,8 @@
           '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+
             'last write '+when(act.saved)+' \u00b7 '+label(act)+'</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<button class="btn small" onclick="jobOpen(\''+act.id+'\')">\u21bb Reload</button>'+
+            (blank ? '<button class="btn small" onclick="jobOpen(\''+act.id+'\')">\u21bb Open</button>'
+                   : '<button class="btn small" onclick="jobRefreshData()">\u21ba Reload database</button>')+
             '<button class="btn ghost small" onclick="jobClose()">\u2715 Close</button>'+
           '</div>');
       } else if(auto){
@@ -729,6 +734,27 @@
       document.getElementById('jobList').innerHTML='<div class="empty">Storage unavailable ('+esc2(e.message)+').</div>';
     });
   }
+
+  /*  Ανανέωση βάσης: ο browser δεν επιτρέπεται να ξαναδιαβάσει αρχείο μόνος
+   *  του, οπότε ανοίγει η επιλογή αρχείου. */
+  window.jobRefreshData=function(){ document.getElementById('fileDb').click(); };
+
+  /*  Φορτώθηκε ΑΛΛΗ βάση από αυτήν της ανοιχτής εργασίας: η παλιά γράφεται και
+   *  κλείνει, και η νέα ξεκινά ως ανώνυμη εργασία. */
+  window.jobOnNewFile=function(fname){
+    if(!window.Jobs || !Jobs.getActive()) return;
+    var prev = model && model.__fname;
+    if(!fname || !prev || fname===prev) return;
+    var nm = activeName;
+    Jobs.save();
+    Jobs.setActive(null);
+    computed = [];
+    clearPick();
+    setTimeout(function(){
+      renderJobs();
+      setStatus('New job \u2014 "'+nm+'" was saved and closed.','ok');
+    }, 400);
+  };
 
   window.jobOpen=function(id){
     var busy = (model&&model.features&&model.features.length)||computed.length;
