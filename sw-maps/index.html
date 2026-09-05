@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SW Maps Helper (Global) — ZS-Top</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SWHelper">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="../lib/vendor/leaflet.css" />
+<script src="../lib/vendor/leaflet.js"></script>
+<script src="../lib/vendor/proj4.js"></script>
+<script src="../lib/vendor/xlsx.full.min.js"></script>
+<script src="../lib/vendor/sql-wasm.js"></script>
+<script src="../lib/swmaps.js"></script>
+<script src="../lib/jobs.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--red2:#c62027;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  html,body{height:100%;height:100dvh;margin:0;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;overflow:hidden;}
+  header{background:linear-gradient(135deg,#16233f,#0f1830);display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.4);flex-shrink:0;}
+  header .logo-img{height:38px;border-radius:8px;background:#fff;padding:3px 7px;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  header .status{margin-left:auto;font-size:12px;color:var(--mut);text-align:right;}
+  main{flex:1;overflow-y:auto;padding:14px;}
+  .map-wrap{height:42vh;min-height:250px;position:relative;margin-bottom:14px;}
+  #map{width:100%;height:100%;border-radius:10px;border:1px solid var(--line);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .card h2{font-size:14px;color:#f0f6ff;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .card h2 .c{width:4px;height:16px;background:var(--red);border-radius:2px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn{padding:11px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:var(--navy2);transition:.15s;}
+  .btn:active{background:var(--navy);} .btn.red{background:var(--red);} .btn.red:active{background:var(--red2);}
+  .btn.green{background:var(--ok);color:#08210f;} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn.small{padding:8px 12px;font-size:13px;} .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .layer{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:13px;}
+  .layer:last-child{border-bottom:0;}
+  .layer input[type=checkbox]{width:18px;height:18px;accent-color:var(--red);}
+  .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
+  .layer .nm{font-weight:700;color:#f0f6ff;} .layer .ty{font-size:11px;color:var(--mut);text-transform:uppercase;}
+  .layer .ct{margin-left:auto;font-size:12px;color:var(--mut);}
+  .lyrdel{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;margin-left:8px;}
+  .lyrdel:hover{border-color:var(--red);color:var(--red);}
+  .empty{color:var(--mut);font-size:13px;text-align:center;padding:14px;}
+  .sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .pill{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:12px;}
+  .pill b{color:var(--red);}
+  .hint{font-size:11.5px;color:var(--mut);margin-top:8px;} code{background:var(--bg2);padding:2px 6px;border-radius:4px;color:var(--red);font-size:12px;}
+  .opt{display:flex;align-items:center;gap:7px;font-size:13px;margin:8px 0;}
+  .opt input{width:auto;accent-color:var(--red);}
+  .fld label{display:block;font-size:12px;color:var(--mut);font-weight:700;margin-bottom:4px;}
+  .fld input,.fld select,select,input[type=text]{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:15px;}
+  .fld input:focus,.fld select:focus,select:focus{outline:none;border-color:var(--red);}
+  .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+  .pk{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;}
+  .pk.p1{border-color:#ff3df0;} .pk.p2{border-color:#ffcc00;}
+  .compbar{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  .tblwrap{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;} tr:hover td{background:rgba(224,53,58,.06);}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0f1830;color:var(--ink);}
+  .leaflet-container{background:#0a1020;}
+  .leaflet-control-layers{background:#0f1830;color:var(--ink);border:1px solid var(--line);border-radius:8px;}
+  .leaflet-control-layers-toggle{width:40px;height:40px;background-color:#0f1830;border:1px solid var(--line);border-radius:8px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e6ecf5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>");background-size:22px 22px;background-position:center;background-repeat:no-repeat;}
+  .leaflet-control-layers-expanded{padding:8px 12px;} .leaflet-control-layers label{color:var(--ink);font-size:13px;margin:3px 0;}
+  header .abtn{flex-shrink:0;background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;width:34px;height:34px;font-size:15px;line-height:1;cursor:pointer;padding:0;margin-left:8px;}
+  header .abtn:active{background:var(--bg2);}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:3000;padding:16px;}
+  .modal.show{display:flex;}
+  .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:430px;width:100%;max-height:86vh;overflow:auto;padding:22px 20px;position:relative;box-shadow:0 12px 45px rgba(0,0,0,.6);}
+  .modal-card h2{font-size:23px;font-weight:800;margin:0 0 6px;} .modal-card h2 span{color:var(--red);}
+  .modal-card h3{font-size:12px;color:var(--red);margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  .modal-card p{margin:5px 0;font-size:14px;line-height:1.55;} .modal-card .amut{color:var(--mut);}
+  .modal-card a{color:var(--navy2);font-weight:600;text-decoration:none;}
+  .modal-x{position:absolute;top:8px;right:10px;background:transparent;border:0;color:var(--mut);font-size:22px;cursor:pointer;line-height:1;}
+  .modal-card .em{color:var(--ink);font-weight:600;}
+  .modal-card .acc{background:rgba(46,204,113,.10);border:1px solid rgba(46,204,113,.38);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.5;color:#cdeede;margin:10px 0;}
+  .modal-card .acc b{color:#8ff0b6;}
+  .modal-card .logos{background:#fff;border-radius:10px;padding:14px 16px;margin:12px 0;display:flex;flex-direction:column;gap:12px;align-items:center;}
+  .modal-card .logos img{max-width:100%;max-height:74px;height:auto;object-fit:contain;}
+  .modal-card .foot2{text-align:center;line-height:1.7;font-size:11px;}
+  .crsbar{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+  .crsbar .fld{flex:1;min-width:140px;}
+  .crsnow{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--ok);margin-top:10px;}
+  footer{flex-shrink:0;text-align:center;font-size:11px;color:var(--mut);padding:8px;border-top:1px solid var(--line);background:var(--bg2);}
+  footer a{color:var(--navy2);text-decoration:none;}
+</style>
+</head>
+<body>
+  <header>
+    <img src="../assets/zstop-logo.png" alt="ZS-Top" class="logo-img">
+    <div class="htitle">SW<span>Helper</span></div>
+    <div class="status" id="status"></div>
+    <button class="abtn" onclick="openAbout()" title="About" aria-label="About">ℹ️</button>
+  </header>
+
+  <div id="aboutModal" class="modal" onclick="if(event.target===this)closeAbout()">
+    <div class="modal-card">
+      <button class="modal-x" onclick="closeAbout()" aria-label="Close">✕</button>
+      <h2>SW<span>Helper</span></h2>
+      <p class="amut">SW Maps → any coordinate system (EPSG): map, points / lines / polygons, stakeout, DXF &amp; CSV export. Free for everyone.</p>
+      <h3>Developer &amp; contact</h3>
+      <p><b>Stylianos F. Apostolou</b> — Surveying Engineer<br>
+         Zitsa, Ioannina, Greece<br>
+         Tel: <a href="tel:+306948938654">+30 694 893 8654</a><br>
+         Email: <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a><br>Web: <a href="https://zsgeolab.com/">zsgeolab.com</a> &middot; <a href="https://zstop.gr/">zstop.gr</a></p>
+      <h3>Works with SW Maps</h3>
+      <p>A specialized surveying assistant, designed to work in perfect harmony with <b>SW Maps</b> — the best entirely free field data collector, and one of the best overall.</p>
+      <p class="amut">Many thanks to developer <span class="em">Avinab Malla</span> of <span class="em">Aviyaan Tech (P) Ltd.</span>, and to <span class="em">Softwel (P) Ltd.</span> for publishing it.</p>
+      <div class="logos">
+        <img src="../assets/aviyaan-logo.png" alt="Aviyaan Tech (P) Ltd.">
+        <img src="../assets/softwel-logo.png" alt="Softwel (P) Ltd.">
+      </div>
+      <p class="amut" style="font-size:12.5px;line-height:1.65">254 Shree Ekata Marga, New Baneshwor<br>Kathmandu, Nepal<br>Phone: +977-01-4566627, 4566629<br>Email: <a href="mailto:support@aviyaantech.com">support@aviyaantech.com</a></p>
+      <p style="font-size:13px">Web: <a href="https://aviyaantech.com/swmaps/" target="_blank" rel="noopener">aviyaantech.com/swmaps</a> · <a href="http://softwel.com.np/" target="_blank" rel="noopener">softwel.com.np</a></p>
+      <p style="font-size:13px">Download SW Maps: <a href="https://play.google.com/store/apps/details?id=np.com.softwel.swmaps" target="_blank" rel="noopener">Google Play</a> · <a href="https://apps.apple.com/us/app/sw-maps/id6444248083" target="_blank" rel="noopener">App Store</a></p>
+      <p class="amut foot2">© ZS-Top<br>Built with Leaflet · proj4 · sql.js · SheetJS</p>
+    </div>
+  </div>
+
+  <input type="file" id="fileDb" accept=".swm2,.swm,.db,.sqlite" style="display:none">
+  <input type="file" id="fileXls" accept=".xlsx,.xls" style="display:none">
+  <input type="file" id="fileTxt" accept=".txt,.csv" style="display:none">
+  <input type="file" id="fileJob" accept=".zsj,.json" style="display:none">
+
+  <main>
+    <div class="map-wrap"><div id="map"></div></div>
+
+    <div class="card">
+      <h2><span class="c"></span>Coordinate system (EPSG)</h2>
+      <div class="crsbar">
+        <div class="fld"><label>EPSG code</label>
+          <input id="epsgCode" type="text" value="4326" list="epsgList" inputmode="numeric"></div>
+        <button class="btn" onclick="applyEPSG()">Apply</button>
+      </div>
+      <datalist id="epsgList">
+        <option value="4326">WGS84 — lat/lon</option>
+        <option value="3857">Web Mercator</option>
+        <option value="32633">UTM 33N</option><option value="32634">UTM 34N</option><option value="32635">UTM 35N</option>
+        <option value="25833">ETRS89 UTM 33N</option><option value="25834">ETRS89 UTM 34N</option>
+        <option value="2100">GGRS87 / Greek Grid</option><option value="27700">OSGB British</option>
+        <option value="25832">ETRS89 UTM 32N</option><option value="32617">UTM 17N</option><option value="32718">UTM 18S</option>
+      </datalist>
+      <div class="crsnow" id="crsInfo">Current: WGS84 (lat/lon)</div>
+      <div class="hint">Auto-detected from the SW Maps database when set. Any EPSG code is fetched from epsg.io. All UTM zones & WGS84 work offline.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Open data</h2>
+      <div class="btns">
+        <button class="btn" onclick="document.getElementById('fileDb').click()">📊 SW Maps DB (.swm2)</button>
+        <button class="btn ghost" onclick="document.getElementById('fileXls').click()">📥 Excel (SW Maps)</button>
+      </div>
+      <div class="opt" style="margin-top:10px"><input type="checkbox" id="chkGeoid"><label for="chkGeoid">Orthometric heights available (geoid applied in SW Maps)</label></div>
+      <button class="btn red" style="width:100%;margin-top:6px" onclick="clearAllData()">🧹 Clear all (data + points)</button>
+      <div class="hint">Reads all shapes: points, lines, polygons — with correct geometry. Heights: ellipsoidal (h) always; orthometric (H) if the checkbox is on.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Jobs <span style="color:var(--mut);font-weight:400">(on this device)</span></h2>
+      <div id="jobAuto"></div>
+      <div class="btns" style="margin-top:10px">
+        <button class="btn" onclick="jobSaveAs()">💾 Save as…</button>
+        <button class="btn ghost" onclick="document.getElementById('fileJob').click()">📂 Import .zsj</button>
+      </div>
+      <div class="hint">The current job is kept automatically on this device — a refresh loses nothing. Saved jobs stay until deleted.</div>
+      <div id="jobList" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Layers</h2>
+      <div class="sum" id="summary"></div>
+      <div id="layers"><div class="empty">Open a SW Maps file to see its layers.</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Points</h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn ghost small" onclick="toggleAllSel(this)">☑ All/none</button>
+        <button class="btn red small" onclick="deleteSelected()">🗑 Delete selected</button>
+      </div>
+      <div class="tblwrap"><table id="ptsTbl"><thead></thead><tbody><tr><td colspan="8" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Add point</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fld"><label>ID</label><input id="mID" placeholder="e.g. A1"></div>
+        <div class="fld"><label>Description</label><input id="mDesc" placeholder="optional"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+        <div class="fld"><label>X / E</label><input id="mX" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Y / N</label><input id="mY" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Z (ellipsoidal)</label><input id="mZ" type="number" step="0.001" inputmode="decimal"></div>
+      </div>
+      <div class="hint">X, Y in the active system above. Z is treated as ellipsoidal height.</div>
+      <button class="btn" style="width:100%;margin-top:12px" onclick="addManual()">➕ Add point</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Stakeout tools</h2>
+      <div class="pick">
+        <div class="pk p1" id="pk1">P1: —</div>
+        <div class="pk p2" id="pk2">P2: —</div>
+        <button class="btn ghost small" onclick="swapPick()">⇄</button>
+        <button class="btn ghost small" onclick="clearPick()">✕</button>
+      </div>
+      <div class="hint">Select two points (map or table): <b style="color:#ff3df0">P1</b> &amp; <b style="color:#ffcc00">P2</b>.</div>
+      <div class="fld" style="margin:12px 0"><label>Height of new points (Z)</label>
+        <select id="stZ"><option value="interp">Linear interpolation</option><option value="copy">Same as P1</option><option value="zero">Zero</option></select></div>
+      <div class="row2"><div class="fld"><label>Extend — distance beyond P2 (m)</label><input id="stDist" type="number" step="0.01" inputmode="decimal"></div><button class="btn" onclick="stExtend()">📏 Extend</button></div>
+      <div class="row2" style="margin-top:10px"><div class="fld"><label>Densify — step (m)</label><input id="stStep" type="number" step="0.01" inputmode="decimal"></div><button class="btn" onclick="stDivide()">📍 Densify</button></div>
+
+      <h3 style="margin:20px 0 4px;font-size:14px;color:#f0f6ff">Distance intersection</h3>
+      <div class="hint">Give a distance from <b style="color:#ff3df0">P1</b> and <b style="color:#ffcc00">P2</b> → 2 circle intersections (A/B), pick one.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div class="fld"><label>Distance from P1 (m)</label><input id="isD1" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Distance from P2 (m)</label><input id="isD2" type="number" step="0.001" inputmode="decimal"></div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Compute intersections</button>
+      <div id="isResult"></div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:20px 0 12px">
+      <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: include description (4th column → shows as “name:desc” in SW Maps)</label></div>
+      <div class="compbar">
+        <span class="pill">Stakeout points: <b id="compN">0</b></span>
+        <button class="btn green small" onclick="exportStakeCSV()">📤 Stakeout CSV</button>
+        <button class="btn red small" onclick="clearComputed()">🗑 Clear</button>
+      </div>
+      <div class="row2" style="margin-top:14px">
+        <div class="fld"><label>Upload points (txt: pt,x,y[,z][,disc])</label>
+          <select id="txtSys"><option value="xy">X,Y in active system</option><option value="ll">lat,lon (WGS84)</option></select></div>
+        <button class="btn ghost" onclick="document.getElementById('fileTxt').click()">📄 Upload txt</button>
+      </div>
+      <div class="hint">Stakeout CSV is always WGS84 lat/lon + ellipsoidal height (safest for SW Maps stakeout).</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Exports</h2>
+      <div class="fld" style="margin-bottom:10px"><label>Height in DXF / TXT (Z)</label>
+        <select id="expH"><option value="ellip">Ellipsoidal (h)</option><option value="ortho">Orthometric (H)</option></select></div>
+      <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (lines/polygons with elevation)</label></div>
+      <div class="opt"><input type="checkbox" id="dxfFlat"><label for="dxfFlat">DXF: flat points Z=0 (elevation shown as label)</label></div>
+      <div class="btns">
+        <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF</button>
+        <button class="btn" id="btnTxt" onclick="exportTXT()" disabled>📄 TXT points (per layer)</button>
+      </div>
+    </div>
+  </main>
+  <footer>SW Maps Helper · ZS-Top — Stylianos F. Apostolou, Surveying Engineer · <a href="../index.html">GeoLab</a> · <a href="mailto:supportlab@zstop.gr" style="color:inherit">supportlab@zstop.gr</a></footer>
+
+<script>
+  /* ---------- Projection engine (proj4) ---------- */
+  var proj={epsg:4326,isGeo:true,name:'WGS84 (lat/lon)'};
+  function utmDef(zone,north){ return '+proj=utm +zone='+zone+(north?'':' +south')+' +datum=WGS84 +units=m +no_defs'; }
+  function setCRSInfo(t,cls){ var e=document.getElementById('crsInfo'); e.textContent=t; e.style.color=cls==='err'?'#ff9ea0':(cls==='load'?'#f1c40f':'#8ff0b6'); }
+  function toXY(lat,lon){ if(proj.isGeo) return {x:lon,y:lat}; var r=proj4('EPSG:4326','EPSG:'+proj.epsg,[lon,lat]); return {x:r[0],y:r[1]}; }
+  function toLatLon(x,y){ if(proj.isGeo) return {lat:y,lon:x}; var r=proj4('EPSG:'+proj.epsg,'EPSG:4326',[x,y]); return {lat:r[1],lon:r[0]}; }
+  function applyEPSG(auto){
+    var code=parseInt(document.getElementById('epsgCode').value,10);
+    if(isNaN(code)){ if(!auto) alert('Enter an EPSG code.'); return; }
+    if(code===4326){ proj={epsg:4326,isGeo:true,name:'WGS84 (lat/lon)'}; onCRSReady(); return; }
+    var def=null,name='EPSG:'+code;
+    if(code>=32601&&code<=32660){ def=utmDef(code-32600,true); name='UTM '+(code-32600)+'N'; }
+    else if(code>=32701&&code<=32760){ def=utmDef(code-32700,false); name='UTM '+(code-32700)+'S'; }
+    if(def){ proj4.defs('EPSG:'+code,def); proj={epsg:code,isGeo:false,name:name,def:def}; onCRSReady(); return; }
+    if(proj4.defs('EPSG:'+code)){ proj={epsg:code,isGeo:false,name:name}; onCRSReady(); return; }
+    setCRSInfo('Loading EPSG:'+code+' from epsg.io…','load');
+    fetch('https://epsg.io/'+code+'.proj4').then(function(r){ if(!r.ok) throw 0; return r.text(); }).then(function(t){
+      t=(t||'').trim(); if(t.indexOf('+proj')<0) throw 0;
+      proj4.defs('EPSG:'+code,t); proj={epsg:code,isGeo:false,name:'EPSG:'+code,def:t}; onCRSReady();
+    }).catch(function(){ setCRSInfo('⛔ Could not load EPSG:'+code,'err'); alert('Could not load EPSG:'+code+' (check the code / internet).'); });
+  }
+  function onCRSReady(){
+    setCRSInfo('Current: '+proj.name+((proj.isGeo||proj.name.indexOf('EPSG:')===0)?'':' (EPSG:'+proj.epsg+')'));
+    document.getElementById('epsgCode').value=proj.epsg;
+    clearPick();
+    if(model||computed.length){ transformModel(); renderSummary(); renderLayers(); renderMap(); }
+  }
+
+  /* ---------- State + map ---------- */
+  var map, drawnLayer, model=null, layerState={}, computed=[];
+  var GEOM_DEFAULT={POINT:'#e0353a',LINE:'#2f6bbd',POLYGON:'#00c2c2'};
+  function setStatus(t,cls){ var s=document.getElementById('status'); s.textContent=t; s.style.color=cls==='err'?'#ff9ea0':(cls==='ok'?'#8ff0b6':'#93a3bd'); }
+  function hasGeoid(){ return document.getElementById('chkGeoid').checked; }
+
+  map=L.map('map',{zoomControl:true,maxZoom:24}).setView([39.68,20.85],13);
+  var streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:24,maxNativeZoom:19,attribution:'© OSM'});
+  var imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19,attribution:'© Esri, Maxar'});
+  var esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19});
+  var satLabeled=L.layerGroup([imagery,esriLabels]).addTo(map);
+  L.control.layers({'🛰️ Satellite':satLabeled,'🗺️ Map (OSM)':streets},{},{collapsed:true,position:'topright'}).addTo(map);
+  drawnLayer=L.featureGroup().addTo(map);
+  setTimeout(function(){ map.invalidateSize(); },300);
+  window.addEventListener('resize',function(){ map.invalidateSize(); });
+  function openAbout(){ document.getElementById('aboutModal').classList.add('show'); }
+  function closeAbout(){ document.getElementById('aboutModal').classList.remove('show'); }
+
+  /* ---------- File loading ---------- */
+  document.getElementById('fileDb').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadDb(f); e.target.value=''; });
+  document.getElementById('fileXls').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadXls(f); e.target.value=''; });
+  function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
+  async function loadDb(file){
+    try{ setStatus('loading DB…');
+      var SQL=await initSqlJs({locateFile:f=>'../lib/vendor/'+f});
+      var db=new SQL.Database(new Uint8Array(await readBuf(file)));
+      var m=SWMaps.fromDb(db); db.close();
+      if(m.crs&&m.crs.code){ document.getElementById('epsgCode').value=m.crs.code; applyEPSG(true); setStatus('DB CRS: EPSG:'+m.crs.code,'ok'); }
+      setModel(m,file.name);
+    }catch(err){ setStatus('DB error','err'); alert('Error reading .swm2:\n'+err.message); }
+  }
+  async function loadXls(file){
+    try{ setStatus('loading Excel…');
+      var wb=XLSX.read(new Uint8Array(await readBuf(file)),{type:'array'});
+      setModel(SWMaps.fromWorkbook(wb),file.name);
+    }catch(err){ setStatus('Excel error','err'); alert('Error reading Excel:\n'+err.message); }
+  }
+
+  /* ---------- Model transform (project + heights) ---------- */
+  function transformModel(){
+    if(model){
+      var colorByLayer={};
+      model.layers.forEach(function(l){ colorByLayer[l.name]=(l.color&&l.color!=='#e0353a')?l.color:GEOM_DEFAULT[l.geomType]||'#e0353a'; });
+      var pc=0;
+      model.features.forEach(function(f){
+        f.color=colorByLayer[f.layer]||GEOM_DEFAULT[f.geomType]||'#e0353a';
+        f.pts.forEach(function(p){
+          var xy=toXY(p.lat,p.lon); p.x=xy.x; p.y=xy.y;
+          p.h=(p.elv!=null?p.elv:0);
+          p.H=(p.ortho!=null&&p.ortho!==0)?p.ortho:null;
+          if(f.geomType==='POINT'){ pc++; p.__id=f.name||('p'+pc); }
+        });
+      });
+    }
+    computed.forEach(function(c){ var xy=toXY(c.lat,c.lon); c.x=xy.x; c.y=xy.y; });
+  }
+  function setModel(m,fname){
+    model=m; layerState={}; m.layers.forEach(function(l){ layerState[l.name]=true; }); model.__fname=fname;
+    transformModel(); renderSummary(); renderLayers(); renderMap();
+    document.getElementById('btnDxf').disabled=false; document.getElementById('btnTxt').disabled=false;
+    setStatus(fname||'');
+  }
+
+  /* Z helpers */
+  function zLive(p){ return p.h; }
+  function zExport(p){ var m=document.getElementById('expH').value; return (m==='ortho'&&p.H!=null)?p.H:p.h; }
+
+  function renderSummary(){
+    var host=document.getElementById('summary');
+    if(!model){ host.innerHTML='<span class="pill">no file</span>'+(computed.length?('<span class="pill"><b>'+computed.length+'</b> stakeout pts</span>'):''); return; }
+    var s=SWMaps.summarize(model);
+    host.innerHTML='<span class="pill"><b>'+s.features+'</b> features</span>'+
+      '<span class="pill">'+s.byType.POINT+' points</span>'+
+      '<span class="pill">'+s.byType.LINE+' lines</span>'+
+      '<span class="pill">'+s.byType.POLYGON+' polygons</span>'+
+      '<span class="pill">'+Object.keys(model.features.reduce(function(a,f){a[f.layer]=1;return a;},{})).length+' layers</span>';
+  }
+  function addLayerRow(host,name,type,color,n,isModel){
+    var row=document.createElement('div'); row.className='layer';
+    row.innerHTML='<input type="checkbox" '+((layerState[name]!==false)?'checked':'')+'>'+
+      '<span class="sw" style="background:'+color+'"></span>'+
+      '<span class="nm">'+esc(name)+'</span><span class="ty">'+type+'</span>'+
+      '<span class="ct">'+n+'</span><button class="lyrdel" title="Delete layer">🗑</button>';
+    row.querySelector('input').addEventListener('change',function(){ layerState[name]=this.checked; renderMap(); });
+    row.querySelector('.lyrdel').addEventListener('click',function(e){ e.stopPropagation(); isModel?deleteLayer(name):deleteComputedLayer(name); });
+    host.appendChild(row);
+  }
+  function renderLayers(){
+    var host=document.getElementById('layers'); host.innerHTML=''; var rows=0;
+    if(model){
+      var byLayer={};
+      model.features.forEach(function(f){ (byLayer[f.layer]=byLayer[f.layer]||{type:f.geomType,color:f.color,n:0}).n++; });
+      Object.keys(byLayer).forEach(function(name){ addLayerRow(host,name,byLayer[name].type,byLayer[name].color,byLayer[name].n,true); rows++; });
+    }
+    var comp={};
+    computed.forEach(function(cp){ var ly=cp.layer||'StakeOut'; comp[ly]=(comp[ly]||0)+1; });
+    Object.keys(comp).forEach(function(name){ addLayerRow(host,name,'POINT','#ff8a8a',comp[name],false); rows++; });
+    if(!rows) host.innerHTML='<div class="empty">Open a SW Maps file or upload a TXT to see layers.</div>';
+  }
+  function deleteComputedLayer(name){
+    var n=computed.filter(function(c){ return (c.layer||'StakeOut')===name; }).length;
+    if(!confirm('Delete layer "'+name+'" ('+n+' points)?')) return;
+    computed=computed.filter(function(c){ return (c.layer||'StakeOut')!==name; });
+    delete layerState[name]; renderSummary(); renderLayers(); renderMap();
+  }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  function renderMap(){
+    map.invalidateSize(); drawnLayer.clearLayers();
+    if(model) model.features.forEach(function(f){
+      if(!layerState[f.layer]) return;
+      var latlngs=f.pts.map(function(p){ return [p.lat,p.lon]; });
+      var lbl=(f.name||f.layer)+(f.remarks?(' — '+f.remarks):'');
+      if(f.geomType==='POINT'){
+        f.pts.forEach(function(p){
+          var c='<br>X: '+p.x.toFixed(3)+'<br>Y: '+p.y.toFixed(3)+'<br>h: '+p.h.toFixed(3)+(p.H!=null?('<br>H: '+p.H.toFixed(3)):'');
+          var mk=L.circleMarker([p.lat,p.lon],{radius:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
+            .bindPopup('<b>'+(p.__id||f.layer)+'</b><br>'+f.layer+(f.remarks?('<br>'+f.remarks):'')+c).addTo(drawnLayer);
+          (function(pt){ mk.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,h:p.h,H:p.H,lat:p.lat,lon:p.lon});
+        });
+      } else if(f.geomType==='LINE'){ L.polyline(latlngs,{color:f.color,weight:3}).bindPopup(lbl).addTo(drawnLayer); }
+      else { L.polygon(latlngs,{color:f.color,weight:2,fillColor:f.color,fillOpacity:.18}).bindPopup(lbl).addTo(drawnLayer); }
+    });
+    computed.forEach(function(cp){
+      if(layerState[cp.layer||'StakeOut']===false) return;
+      L.circleMarker([cp.lat,cp.lon],{radius:6,color:'#ff2d2d',weight:2,fillColor:'#ff8a8a',fillOpacity:.9})
+        .bindPopup('<b>'+cp.id+'</b> <span style="color:#ff8a8a">('+cp.remarks+')</span><br>X: '+cp.x.toFixed(3)+'<br>Y: '+cp.y.toFixed(3)+'<br>h: '+cp.h.toFixed(3)).addTo(drawnLayer);
+    });
+    var b=drawnLayer.getBounds(); if(b.isValid()) map.fitBounds(b,{padding:[30,30],maxZoom:18});
+    renderPointsTable(); renderLayers(); updatePick(); document.getElementById('compN').textContent=computed.length;
+    if(window.Jobs) Jobs.touch();          // αυτόματη αποθήκευση μετά από κάθε αλλαγή
+  }
+
+  function renderPointsTable(){
+    var geoid=hasGeoid();
+    var head='<tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>h</th>'+(geoid?'<th>H</th>':'')+'<th>Desc</th><th>layer</th></tr>';
+    document.querySelector('#ptsTbl thead').innerHTML=head;
+    var tb=document.querySelector('#ptsTbl tbody'); tb.innerHTML=''; var rows=0;
+    function addRow(id,x,y,h,H,rem,layer,ptObj,comp,ref){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><input type="checkbox" class="selchk"></td>'+
+        '<td'+(comp?' style="color:#ff8a8a"':'')+'>'+esc(id)+'</td><td>'+x+'</td><td>'+y+'</td><td>'+h+'</td>'+
+        (geoid?('<td>'+(H!=null?H:'—')+'</td>'):'')+'<td>'+esc(rem)+'</td><td style="color:var(--mut)">'+esc(layer)+'</td>';
+      var cb=tr.querySelector('.selchk'); cb.__ref=ref; cb.addEventListener('click',function(e){ e.stopPropagation(); });
+      tr.style.cursor='pointer';
+      tr.addEventListener('click',function(){ if(ptObj){ setPick(ptObj); map.setView([ptObj.lat,ptObj.lon],Math.max(map.getZoom(),18)); } });
+      tb.appendChild(tr); rows++;
+    }
+    if(model) model.features.forEach(function(f){ if(f.geomType!=='POINT'||!layerState[f.layer]) return;
+      f.pts.forEach(function(p){ addRow(p.__id,p.x.toFixed(3),p.y.toFixed(3),p.h.toFixed(3),(p.H!=null?p.H.toFixed(3):null),f.remarks,f.layer,{id:p.__id,x:p.x,y:p.y,h:p.h,H:p.H,lat:p.lat,lon:p.lon},false,{kind:'model',feature:f,pt:p}); });
+    });
+    computed.forEach(function(cp){ if(layerState[cp.layer||'StakeOut']===false) return; addRow(cp.id,cp.x.toFixed(3),cp.y.toFixed(3),cp.h.toFixed(3),(cp.H!=null?cp.H.toFixed(3):null),cp.remarks,(cp.layer||'StakeOut'),{id:cp.id,x:cp.x,y:cp.y,h:cp.h,H:cp.H,lat:cp.lat,lon:cp.lon},true,{kind:'computed',cp:cp}); });
+    if(!rows) tb.innerHTML='<tr><td colspan="'+(geoid?8:7)+'" style="color:var(--mut);text-align:center;padding:14px">No points</td></tr>';
+  }
+  document.getElementById('chkGeoid').addEventListener('change',function(){ if(model){ transformModel(); } renderMap(); });
+
+  function toggleAllSel(){ var b=document.querySelectorAll('#ptsTbl tbody input.selchk'); if(!b.length) return; var off=false; b.forEach(function(x){ if(!x.checked) off=true; }); b.forEach(function(x){ x.checked=off; }); }
+  function deleteSelected(){
+    var ch=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(!ch.length){ alert('No points selected.'); return; }
+    if(!confirm('Delete '+ch.length+' points?')) return;
+    var cd=[],md=[]; ch.forEach(function(c){ var r=c.__ref; if(!r)return; if(r.kind==='computed')cd.push(r.cp); else md.push(r); });
+    if(cd.length) computed=computed.filter(function(c){ return cd.indexOf(c)<0; });
+    md.forEach(function(r){ var i=r.feature.pts.indexOf(r.pt); if(i>=0) r.feature.pts.splice(i,1); });
+    if(model) model.features=model.features.filter(function(f){ return f.pts.length>0; });
+    renderSummary(); renderLayers(); renderMap();
+  }
+  function deleteLayer(name){
+    if(!model) return; var n=model.features.filter(function(f){return f.layer===name;}).length;
+    if(!confirm('Delete layer "'+name+'" ('+n+' shapes)?')) return;
+    model.features=model.features.filter(function(f){ return f.layer!==name; }); delete layerState[name];
+    renderSummary(); renderLayers(); renderMap();
+  }
+  function clearAllData(){
+    if(!model&&!computed.length) return;
+    if(!confirm('Clear ALL (loaded data + stakeout points)?')) return;
+    model=null; computed=[]; pick={p1:null,p2:null};
+    document.getElementById('btnDxf').disabled=true; document.getElementById('btnTxt').disabled=true;
+    renderSummary(); renderLayers(); renderMap(); setStatus('cleared','ok');
+  }
+  function addManual(){
+    var x=parseFloat(document.getElementById('mX').value), y=parseFloat(document.getElementById('mY').value), z=parseFloat(document.getElementById('mZ').value)||0;
+    if(isNaN(x)||isNaN(y)){ alert('Enter X and Y (active system).'); return; }
+    var id=document.getElementById('mID').value.trim()||('M'+(computed.length+1));
+    var desc=document.getElementById('mDesc').value.trim()||'Manual';
+    var ll=toLatLon(x,y); addComputedLL(id,ll.lat,ll.lon,z,null,desc,'Manual'); renderMap();
+    ['mID','mDesc','mX','mY','mZ'].forEach(function(k){ document.getElementById(k).value=''; });
+    setStatus('added '+id,'ok');
+  }
+
+  /* ---------- Stakeout tools ---------- */
+  var pick={p1:null,p2:null}, pickHL=L.layerGroup().addTo(map);
+  function setPick(pt){ if(!pt) return; if(!pick.p1) pick.p1=pt; else if(!pick.p2){ if(pt.lat===pick.p1.lat&&pt.lon===pick.p1.lon) return; pick.p2=pt; } else { pick.p1=pt; pick.p2=null; } updatePick(); }
+  function updatePick(){
+    pickHL.clearLayers();
+    var f=function(p){ return p?(p.id+'  ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+')'):'—'; };
+    document.getElementById('pk1').textContent='P1: '+f(pick.p1); document.getElementById('pk2').textContent='P2: '+f(pick.p2);
+    if(pick.p1) L.circleMarker([pick.p1.lat,pick.p1.lon],{radius:11,color:'#ff3df0',weight:3,fill:false}).addTo(pickHL);
+    if(pick.p2) L.circleMarker([pick.p2.lat,pick.p2.lon],{radius:11,color:'#ffcc00',weight:3,fill:false}).addTo(pickHL);
+  }
+  function swapPick(){ var t=pick.p1; pick.p1=pick.p2; pick.p2=t; updatePick(); }
+  function clearPick(){ pick.p1=pick.p2=null; if(document.getElementById('pk1')) updatePick(); }
+  function interpH(a,b,frac,key){ var av=a[key], bv=b[key]; if(av==null||bv==null) return null; return av+(bv-av)*frac; }
+  function zPair(a,b,frac){ var m=document.getElementById('stZ').value;
+    if(m==='zero') return {h:0,H:(a.H!=null&&b.H!=null)?0:null};
+    if(m==='copy') return {h:a.h||0,H:(a.H!=null?a.H:null)};
+    return {h:(a.h||0)+((b.h||0)-(a.h||0))*frac, H:interpH(a,b,frac,'H')};
+  }
+  function addComputedLL(id,lat,lon,h,H,rem,lyr){ var xy=toXY(lat,lon); computed.push({id:id,lat:lat,lon:lon,x:xy.x,y:xy.y,h:h,H:H,remarks:rem,fix:4,layer:lyr||'StakeOut'});
+    document.getElementById('btnDxf').disabled=false; document.getElementById('btnTxt').disabled=false; }
+  function stExtend(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2.'); return; }
+    var d=parseFloat(document.getElementById('stDist').value); if(isNaN(d)){ alert('Enter extension distance.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Points coincide.'); return; }
+    var nx=b.x+d*(b.x-a.x)/L, ny=b.y+d*(b.y-a.y)/L, z=zPair(a,b,(L+d)/L), ll=toLatLon(nx,ny);
+    addComputedLL('E_'+a.id+'_'+b.id, ll.lat, ll.lon, z.h, z.H, 'Extend'); renderMap();
+    document.getElementById('stDist').value='';
+  }
+  function stDivide(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2.'); return; }
+    var s=parseFloat(document.getElementById('stStep').value); if(isNaN(s)||s<=0){ alert('Enter step > 0.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Points coincide.'); return; }
+    var ux=(b.x-a.x)/L, uy=(b.y-a.y)/L, c=0;
+    for(var d=s; d<L-1e-9; d+=s){ c++; var z=zPair(a,b,d/L), ll=toLatLon(a.x+d*ux,a.y+d*uy); addComputedLL('D_'+a.id+'_'+c, ll.lat, ll.lon, z.h, z.H, 'Divide'); }
+    renderMap(); document.getElementById('stStep').value=''; if(!c) alert('Step is longer than the segment.');
+  }
+  function clearComputed(){ if(computed.length&&confirm('Delete '+computed.length+' stakeout points?')){ computed=[]; renderMap(); } }
+  function exportStakeCSV(){
+    if(!computed.length){ alert('No stakeout points.'); return; }
+    var wd=document.getElementById('chkStakeDesc').checked;
+    var out=computed.map(function(c){ var b=c.id+','+c.lat.toFixed(8)+','+c.lon.toFixed(8)+','+c.h.toFixed(3); return wd?(b+','+(c.remarks||'')):b; });
+    download(out.join('\n'),'stakeout_WGS84.csv');
+  }
+  document.getElementById('fileTxt').addEventListener('change',function(e){
+    var file=e.target.files[0]; if(!file) return; var sys=document.getElementById('txtSys').value; var lyr=(file.name||'').replace(/\.[^.]+$/,'')||'TXT'; var r=new FileReader();
+    r.onload=function(ev){ var lines=ev.target.result.split(/\r?\n/), n=0,i=0;
+      lines.forEach(function(ln){ ln=ln.trim(); if(!ln) return; var p=ln.split(/[,\t;]/); if(p.length<3) return;
+        var a=parseFloat(p[1]), bb=parseFloat(p[2]), z=parseFloat(p[3])||0; if(isNaN(a)||isNaN(bb)) return;
+        var disc=(p[4]!==undefined&&p[4].trim()!=='')?p[4].trim():'TXT';
+        var ll = sys==='ll' ? {lat:a,lon:bb} : toLatLon(a,bb);
+        i++; addComputedLL((p[0].trim()||('T'+i)), ll.lat, ll.lon, z, null, disc, lyr); n++;
+      });
+      renderMap(); if(!n) alert('No valid rows (pt,x,y[,z][,disc]).'); else setStatus('loaded '+n+' points','ok');
+    }; r.readAsText(file); e.target.value='';
+  });
+
+  /* ---------- Distance intersection ---------- */
+  var isCandidates=L.layerGroup().addTo(map), isCand=[];
+  function clearCand(){ isCandidates.clearLayers(); isCand=[]; document.getElementById('isResult').innerHTML=''; }
+  function calcIntersect(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2.'); return; }
+    var r1=parseFloat(document.getElementById('isD1').value), r2=parseFloat(document.getElementById('isD2').value);
+    if(isNaN(r1)||isNaN(r2)||r1<=0||r2<=0){ alert('Enter distances > 0.'); return; }
+    var a=pick.p1,b=pick.p2,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+    if(d===0){ alert('P1/P2 coincide.'); return; }
+    if(d>r1+r2+1e-6){ clearCand(); alert('No intersection: P1–P2 distance ('+d.toFixed(3)+' m) > sum of distances ('+(r1+r2).toFixed(3)+' m).'); return; }
+    if(d<Math.abs(r1-r2)-1e-6){ clearCand(); alert('No intersection: one circle is inside the other.'); return; }
+    var aa=(r1*r1-r2*r2+d*d)/(2*d), h=Math.sqrt(Math.max(0,r1*r1-aa*aa));
+    var mx=a.x+aa*dx/d, my=a.y+aa*dy/d, ox=h*dy/d, oy=h*dx/d;
+    var z=zPair(a,b,0.5);
+    var I1={x:mx+ox,y:my-oy}, I2={x:mx-ox,y:my+oy};
+    [I1,I2].forEach(function(p){ var ll=toLatLon(p.x,p.y); p.lat=ll.lat; p.lon=ll.lon; p.h=z.h; p.H=z.H; });
+    isCand=[I1,I2]; isCandidates.clearLayers();
+    ['A','B'].forEach(function(lb,i){ var p=isCand[i]; L.circleMarker([p.lat,p.lon],{radius:9,color:'#ff9800',weight:3,fillColor:'#ffb74d',fillOpacity:.95}).bindTooltip(lb,{permanent:true,direction:'right'}).addTo(isCandidates); });
+    document.getElementById('isResult').innerHTML=
+      '<div class="hint" style="margin-top:12px">2 intersections (A, B) — pick one:</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'+
+      '<button class="btn green" onclick="keepIntersect(0)">✓ Intersection A</button>'+
+      '<button class="btn green" onclick="keepIntersect(1)">✓ Intersection B</button></div>'+
+      '<div class="hint" style="margin-top:8px;font-family:ui-monospace,Consolas,monospace">A: '+I1.x.toFixed(3)+', '+I1.y.toFixed(3)+'<br>B: '+I2.x.toFixed(3)+', '+I2.y.toFixed(3)+'</div>';
+    map.fitBounds(L.latLngBounds([[a.lat,a.lon],[b.lat,b.lon],[I1.lat,I1.lon],[I2.lat,I2.lon]]),{padding:[45,45],maxZoom:19});
+  }
+  function keepIntersect(i){ var p=isCand[i]; if(!p) return; addComputedLL('T_'+pick.p1.id+'_'+pick.p2.id, p.lat, p.lon, p.h, p.H, 'Intersect '+(i===0?'A':'B')); clearCand(); document.getElementById('isD1').value=''; document.getElementById('isD2').value=''; renderMap(); }
+
+  /* ---------- Exports: DXF + TXT ---------- */
+  function aci(hex){ var pal={1:[255,0,0],2:[255,255,0],3:[0,255,0],4:[0,255,255],5:[0,0,255],6:[255,0,255],7:[255,255,255]};
+    var r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16),best=7,bd=1e9;
+    for(var k in pal){ var p=pal[k],dd=(p[0]-r)*(p[0]-r)+(p[1]-g)*(p[1]-g)+(p[2]-b)*(p[2]-b); if(dd<bd){bd=dd;best=+k;} } return best; }
+  function dxfName(s){ s=String(s==null?'':s).trim().replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_'); return s||'0'; }
+  function dxfText(s){ return String(s==null?'':s).replace(/[\r\n]+/g,' '); }
+  function num(v){ return (v==null||isNaN(v))?'0.000':(+v).toFixed(3); }
+  function exportDXF(){
+    if(!model&&!computed.length){ alert('No data.'); return; }
+    var scale=0.5, poly3d=document.getElementById('dxf3d').checked, flat=document.getElementById('dxfFlat').checked;
+    var lyr={}; function addLyr(n,c){ if(!(n in lyr)) lyr[n]=c; }
+    function ptL(base,col){ addLyr(base,col); addLyr(base+'_ID',2); addLyr(base+'_Z',4); addLyr(base+'_Desc',3); }
+    if(model) model.features.forEach(function(f){ var base=dxfName(f.layer),col=aci(f.color); if(f.geomType==='POINT') ptL(base,col); else addLyr(base,col); });
+    computed.forEach(function(c){ ptL(dxfName(c.layer||'StakeOut'),1); });
+    var d='0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
+    Object.keys(lyr).forEach(function(n){ d+='0\nLAYER\n2\n'+n+'\n70\n0\n62\n'+lyr[n]+'\n6\nCONTINUOUS\n'; });
+    d+='0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+    function emitPoint(base,col,id,x,y,z,rem){ var pz=flat?0:z;
+      d+='0\nPOINT\n8\n'+base+'\n62\n'+col+'\n10\n'+num(x)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n';
+      if(id) d+='0\nTEXT\n8\n'+base+'_ID\n62\n2\n10\n'+num(x+scale)+'\n20\n'+num(y+scale)+'\n30\n'+num(pz)+'\n40\n'+scale+'\n1\n'+dxfText(id)+'\n';
+      d+='0\nTEXT\n8\n'+base+'_Z\n62\n4\n10\n'+num(x+scale)+'\n20\n'+num(y-scale)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+num(z)+'\n';
+      if(rem) d+='0\nTEXT\n8\n'+base+'_Desc\n62\n3\n10\n'+num(x+scale*1.7)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+dxfText(rem)+'\n';
+    }
+    if(model) model.features.forEach(function(f){ var base=dxfName(f.layer),col=aci(f.color);
+      if(f.geomType==='POINT'){ f.pts.forEach(function(p){ emitPoint(base,col,(p.__id||f.name),p.x,p.y,zExport(p),f.remarks); }); }
+      else { var closed=f.geomType==='POLYGON', pf=(poly3d?8:0)|(closed?1:0);
+        d+='0\nPOLYLINE\n8\n'+base+'\n62\n'+col+'\n66\n1\n70\n'+pf+'\n';
+        f.pts.forEach(function(p){ d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(p.x)+'\n20\n'+num(p.y)+'\n30\n'+num(poly3d?zExport(p):0)+'\n'; });
+        d+='0\nSEQEND\n8\n'+base+'\n';
+      }
+    });
+    computed.forEach(function(c){ emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,c.x,c.y,zExport(c),c.remarks); });
+    d+='0\nENDSEC\n0\nEOF\n'; download(d,'SW_Maps_'+(proj.isGeo?'WGS84':('EPSG'+proj.epsg))+'.dxf');
+  }
+  function exportTXT(){
+    if(!model&&!computed.length){ alert('No data.'); return; }
+    var out=[];
+    if(model) model.features.forEach(function(f){ f.pts.forEach(function(p,i){ if(p.x==null) return;
+      var id=(f.geomType==='POINT')?p.__id:((f.name||f.layer)+'_'+(i+1));
+      out.push(id+','+p.x.toFixed(3)+','+p.y.toFixed(3)+','+zExport(p).toFixed(3)+','+(f.remarks||'')+','+(p.fix!=null?p.fix:'')+','+f.layer);
+    }); });
+    computed.forEach(function(c){ out.push(c.id+','+c.x.toFixed(3)+','+c.y.toFixed(3)+','+zExport(c).toFixed(3)+','+(c.remarks||'')+','+(c.fix!=null?c.fix:4)+','+(c.layer||'StakeOut')); });
+    if(!out.length){ alert('No points.'); return; }
+    download(out.join('\n'),'SW_Maps_'+(proj.isGeo?'WGS84':('EPSG'+proj.epsg))+'_points.txt');
+  }
+  document.getElementById('expH').addEventListener('change',function(){});
+  function download(text,name){
+    var mime = /\.dxf$/i.test(name) ? 'application/octet-stream' : /\.csv$/i.test(name) ? 'text/csv' : 'text/plain';
+    var b=new Blob([text],{type:mime+';charset=utf-8'}); var url=URL.createObjectURL(b);
+    var a=document.createElement('a'); a.href=url; a.download=name; a.rel='noopener'; a.style.display='none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ try{document.body.removeChild(a);}catch(e){} URL.revokeObjectURL(url); }, 2000);
+  }
+</script>
+<script>
+/*  Job history — δένει τη σελίδα με το lib/jobs.js.
+ *
+ *  Το στιγμιότυπο κρατά και το σύστημα αναφοράς (EPSG + ορισμό proj4), αλλιώς
+ *  μια εργασία σε UTM θα επανερχόταν σιωπηλά ως WGS84. Οι προβεβλημένες
+ *  συντεταγμένες υπολογίζονται ξανά στην επαναφορά, όχι αποθηκευμένες.
+ */
+(function(){
+  'use strict';
+  var TOOL='sw-maps';
+
+  function when(ts){
+    var d=new Date(ts);
+    return d.toLocaleDateString()+' '+d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  }
+  function esc2(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+  function jobSnapshot(){
+    var feats=(model&&model.features)?model.features.length:0;
+    if(!feats && !computed.length) return {empty:true};
+    return {
+      v:1,
+      model: model?{layers:model.layers, features:model.features, __fname:model.__fname}:null,
+      computed: computed,
+      layerState: layerState,
+      geoid: document.getElementById('chkGeoid').checked,
+      crs: {epsg:proj.epsg, isGeo:!!proj.isGeo, name:proj.name, def:proj.def||null},
+      info: {feats:feats, comp:computed.length, fname:(model&&model.__fname)||'', epsg:proj.epsg}
+    };
+  }
+
+  function jobRestore(s){
+    if(!s) return;
+    if(s.crs){
+      var c=s.crs;
+      if(c.def){ try{ proj4.defs('EPSG:'+c.epsg, c.def); }catch(e){} }
+      proj={epsg:c.epsg, isGeo:!!c.isGeo, name:c.name||('EPSG:'+c.epsg), def:c.def||null};
+      document.getElementById('epsgCode').value=proj.epsg;
+      setCRSInfo('Current: '+proj.name+((proj.isGeo||String(proj.name).indexOf('EPSG:')===0)?'':' (EPSG:'+proj.epsg+')'));
+    }
+    document.getElementById('chkGeoid').checked = !!s.geoid;
+    computed = s.computed||[];
+    layerState = s.layerState||{};
+    model = s.model||null;
+    transformModel();
+    var any = !!model || computed.length>0;
+    document.getElementById('btnDxf').disabled=!any;
+    document.getElementById('btnTxt').disabled=!any;
+    clearPick();
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('job restored \u2713','ok');
+  }
+
+  function label(m){
+    var i=m.info||{}, p=[];
+    if(i.feats) p.push(i.feats+' features');
+    if(i.comp) p.push(i.comp+' stakeout');
+    if(i.epsg) p.push('EPSG:'+i.epsg);
+    if(i.fname) p.push(esc2(i.fname));
+    return p.join(' \u00b7 ')||'\u2014';
+  }
+
+  function renderJobs(){
+    return Jobs.list().then(function(rows){
+      var auto=null, saved=[];
+      rows.forEach(function(r){ if(r.id===Jobs.AUTO) auto=r; else saved.push(r); });
+
+      var ha=document.getElementById('jobAuto');
+      if(auto){
+        ha.innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.03)">'+
+          '<div style="font-size:13px;color:#f0f6ff"><b>Last job</b> \u2014 '+when(auto.saved)+'</div>'+
+          '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+          '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Restore</button>'+
+          '<button class="btn ghost small" onclick="jobKeep()">\u2b50 Keep it</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
+          '</div></div>';
+      } else { ha.innerHTML=''; }
+
+      var h=document.getElementById('jobList');
+      if(!saved.length){ h.innerHTML='<div class="empty">No saved jobs yet.</div>'; return; }
+      h.innerHTML=saved.map(function(m){
+        var nm=esc2(m.name), q=nm.replace(/'/g,"&#39;");
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding:9px 0">'+
+          '<div style="flex:1;min-width:150px">'+
+            '<div style="font-size:13px;color:#f0f6ff">'+nm+'</div>'+
+            '<div style="font-size:11px;color:var(--mut)">'+when(m.saved)+' \u00b7 '+label(m)+'</div>'+
+          '</div>'+
+          '<button class="btn small" onclick="jobOpen(\''+m.id+'\')">Open</button>'+
+          '<button class="btn ghost small" onclick="jobRename(\''+m.id+'\',\''+q+'\')">\u270e</button>'+
+          '<button class="btn ghost small" onclick="Jobs.exportFile(\''+m.id+'\')">\u2b07</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+m.id+'\',\''+q+'\')">\u2715</button>'+
+        '</div>';
+      }).join('');
+    }).catch(function(e){
+      document.getElementById('jobList').innerHTML='<div class="empty">Storage unavailable ('+esc2(e.message)+').</div>';
+    });
+  }
+
+  window.jobOpen=function(id){
+    if((model&&model.features&&model.features.length)||computed.length){
+      if(!confirm('This will replace the data currently open. Continue?')) return;
+    }
+    Jobs.load(id).then(jobRestore).catch(function(e){ alert('Could not open: '+e.message); });
+  };
+  window.jobSaveAs=function(){
+    var n=prompt('Job name:', (model&&model.__fname)||('Job '+new Date().toLocaleDateString()));
+    if(n===null) return;
+    Jobs.saveAs(n).then(function(){ renderJobs(); setStatus('saved \u2713','ok'); })
+                  .catch(function(e){ alert(e.message); });
+  };
+  window.jobKeep=function(){
+    var n=prompt('Job name:', 'Job '+new Date().toLocaleDateString());
+    if(n===null) return;
+    Jobs.keepAuto(n).then(function(){ renderJobs(); setStatus('saved \u2713','ok'); })
+                    .catch(function(e){ alert(e.message); });
+  };
+  window.jobRename=function(id,cur){
+    var n=prompt('New name:', cur);
+    if(n===null) return;
+    Jobs.rename(id,n).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+  window.jobDel=function(id,nm){
+    if(!confirm('Delete "'+(nm||'last job')+'"?')) return;
+    Jobs.remove(id).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+
+  document.getElementById('fileJob').addEventListener('change',function(e){
+    var f=e.target.files[0]; e.target.value='';
+    if(!f) return;
+    Jobs.importFile(f).then(function(m){ renderJobs(); setStatus('imported "'+m.name+'" \u2713','ok'); })
+                      .catch(function(err){ alert(err.message); });
+  });
+
+  if(!window.indexedDB){
+    document.getElementById('jobList').innerHTML='<div class="empty">This browser has no storage support.</div>';
+    return;
+  }
+  Jobs.init({tool:TOOL, autoName:'Last job', snapshot:jobSnapshot, onSaved:function(){ renderJobs(); }})
+      .then(function(){ renderJobs(); });
+})();
+</script>
+<script>
+/*  Service worker: κάνει το εργαλείο να ανοίγει και χωρίς σήμα.
+ *  Βρίσκεται στη ρίζα του site και παίρνει αυτόματα εκείνη ως εμβέλεια,
+ *  ώστε να καλύπτει και το lib/ — ακόμη κι αν το site δεν είναι στη ρίζα
+ *  του τομέα (GitHub Pages: /zsgeolab/).
+ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('../sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>

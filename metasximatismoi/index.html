@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ομοιότητας &amp; Αφινικός | ZS-GeoLab</title>
+<style>
+:root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--line:#25334f;--line2:#1b2740;
+  --ink:#c9d3e0;--head:#f0f6ff;--mut:#93a3bd;--red:#e0353a;--red2:#c62027;
+  --navy:#1e4d8c;--navy2:#2f6bbd;--ok:#2ecc71;--warn:#f1c40f;--err:#e5534b;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif}
+body{background:var(--bg);color:var(--ink);line-height:1.6;min-height:100vh}
+header{background:rgba(13,17,23,.95);padding:14px 32px;display:flex;justify-content:space-between;
+  align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.logo-img{height:42px;border-radius:8px;background:#fff;padding:4px 7px;display:block}
+.back{font-size:13px;color:var(--mut);text-decoration:none;font-weight:bold}
+main{max-width:1000px;margin:26px auto;padding:0 20px 70px}
+h1{font-size:26px;color:var(--head);margin-bottom:4px}
+h1 span{color:var(--red)}
+.lead{color:var(--mut);font-size:13.5px;margin-bottom:18px}
+.tabs{display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap}
+button{border:1px solid var(--line);background:var(--bg2);color:var(--ink);padding:10px 17px;
+  border-radius:9px;cursor:pointer;font-weight:700;font-size:14px;transition:.15s;font-family:inherit}
+button:hover{border-color:var(--navy2)}
+button.active{background:var(--red);border-color:var(--red);color:#fff}
+button.primary{background:var(--navy2);border-color:var(--navy2);color:#fff}
+button.primary:hover{background:var(--navy)}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+.pro{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:1.1px;
+  padding:4px 11px;border-radius:12px;margin-left:9px;vertical-align:middle;color:#3d2e06;
+  background:linear-gradient(180deg,#fff3c4 0%,#ffdc73 38%,#e0a91c 72%,#b8830f 100%);
+  border:1px solid #8f6608;
+  box-shadow:0 2px 5px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.85),
+             inset 0 -2px 3px rgba(120,80,0,.35);
+  text-shadow:0 1px 0 rgba(255,255,255,.55);}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;
+  margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.card h2{font-size:15px;color:var(--head);margin-bottom:14px;display:flex;align-items:center}
+.card h2 .n{color:var(--red);margin-right:8px;font-weight:900}
+label{display:block;color:var(--mut);font-size:12px;font-weight:700;margin:10px 0 5px}
+textarea,select,input[type=text]{width:100%;background:var(--bg2);border:1px solid var(--line);
+  color:var(--ink);border-radius:8px;padding:10px 11px;outline:none;font-size:14px;font-family:inherit}
+textarea{font-family:Consolas,'Courier New',monospace;font-size:13px;resize:vertical}
+textarea:focus,select:focus,input:focus{border-color:var(--navy2)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rowswap{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+@media(max-width:720px){.rowswap{grid-template-columns:1fr}}
+#btnSwap{padding:14px 13px;font-size:20px;line-height:1;border-radius:11px;
+  background:var(--bg2);color:var(--navy2);border:1px solid var(--navy2)}
+#btnSwap:hover{background:var(--navy2);color:#fff}
+.swapwrap{display:flex;flex-direction:column;align-items:center;gap:5px}
+.swapwrap span{font-size:10.5px;color:var(--mut);letter-spacing:.3px;text-align:center}
+@media(max-width:720px){.row{grid-template-columns:1fr}}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:5px}
+.seg button{flex:1;border:0;border-radius:0;background:var(--bg2);color:var(--mut);padding:11px 8px}
+.seg button.on{background:var(--navy2);color:#fff}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.spacer{flex:1}
+.status{font-size:12.5px}
+.status.err{color:var(--err)} .status.ok{color:var(--ok)} .status.warn{color:var(--warn)}
+.drop{border:2px dashed var(--line);border-radius:11px;padding:22px 16px;text-align:center;
+  cursor:pointer;background:var(--bg2);transition:.15s;font-size:13.5px;margin-top:6px}
+.drop:hover,.drop.hot{border-color:var(--navy2);background:#12203c}
+.hint{color:var(--mut);font-size:12.3px;margin-top:9px;line-height:1.5}
+.hidden{display:none!important}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line2);text-align:left;white-space:nowrap}
+th{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+td.num,th.num{text-align:right;font-family:Consolas,monospace}
+tr.bad td{background:rgba(241,196,15,.10)}
+tr.bad td:last-child{color:var(--warn);font-weight:700}
+.tblwrap{overflow-x:auto;max-height:360px;overflow-y:auto}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px}
+.pgrid div{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.pgrid .k{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+.pgrid .v{color:var(--head);font-size:16px;font-family:Consolas,monospace;margin-top:2px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.stats div{background:rgba(30,77,140,.14);border:1px solid var(--navy2);border-radius:9px;
+  padding:9px 13px;font-size:13px}
+.stats b{color:var(--head);font-family:Consolas,monospace}
+.dl{display:flex;align-items:center;gap:11px;background:rgba(46,204,113,.10);
+  border:1px solid var(--ok);border-radius:10px;padding:12px 14px;margin-top:10px}
+.dl b{color:var(--ok)} .dl .sz{color:var(--mut);font-size:12px} .dl a{margin-left:auto;text-decoration:none}
+pre{background:#0a0f1c;border:1px solid var(--line);border-radius:9px;padding:14px;
+  font-size:12.5px;white-space:pre;overflow-x:auto;color:#cfe0f5;font-family:Consolas,monospace}
+footer{color:#64748b;font-size:11.5px;text-align:center;padding:18px}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="../index.html"><img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+  <a href="../index.html" class="back">← GeoLab</a>
+</header>
+
+<main>
+  <h1>Μετασχηματισμός <span>Ομοιότητας &amp; Αφινικός</span></h1>
+  <p class="lead">2D και 3D, με <b>Μέθοδο Ελαχίστων Τετραγώνων</b> — παράμετροι,
+     υπόλοιπα ανά σημείο, σ₀ και εντοπισμός ύποπτου σημείου.</p>
+
+  <div class="tabs">
+    <button id="tabA" class="active" onclick="showTab('fit')">1 · Παράμετροι</button>
+    <button id="tabB" onclick="showTab('apply')">2 · Μετασχηματισμός</button>
+    <button id="tabC" onclick="showTab('dxf')">3 · Σχέδιο DXF <span class="pro">PRO</span></button>
+  </div>
+
+  <!-- ═══════════ ΡΥΘΜΙΣΕΙΣ ═══════════ -->
+  <div class="card" id="cardKind">
+    <h2><span class="n">◆</span>Είδος μετασχηματισμού</h2>
+    <div class="row">
+      <div>
+        <label>Μοντέλο</label>
+        <div class="seg">
+          <button id="kSim" class="on" onclick="setKind('similarity')">Ομοιότητας</button>
+          <button id="kAff" onclick="setKind('affine')">Αφινικός</button>
+        </div>
+      </div>
+      <div>
+        <label>Διάσταση</label>
+        <div class="seg">
+          <button id="d2" class="on" onclick="setDim(2)">2D</button>
+          <button id="d3" onclick="setDim(3)">3D</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint" id="kindHint"></p>
+  </div>
+
+  <!-- ═══════════ 1. ΠΑΡΑΜΕΤΡΟΙ ═══════════ -->
+  <div id="panelFit">
+    <div class="card">
+      <h2><span class="n">1</span>Κοινά σημεία στα δύο συστήματα</h2>
+      <div class="rowswap">
+        <div>
+          <label>Σύστημα Α &nbsp;<span style="color:var(--mut);font-weight:400">όνομα, X, Y[, Z]</span></label>
+          <textarea id="taA" rows="9" placeholder="Α1, 100.000, 200.000&#10;Α2, 1500.000, 300.000&#10;Β1, 800.000, 1900.000"></textarea>
+          <div class="drop" id="dropA">📄 ή σύρε αρχείο <b>.txt / .csv</b>
+            <input type="file" id="fA" accept=".txt,.csv" style="display:none"></div>
+        </div>
+
+        <div class="swapwrap">
+          <button id="btnSwap" onclick="swapDir()" title="Αντιστρέφει τη φορά: Α ⇄ Β">⇄</button>
+          <span>αντιστροφή<br>φοράς</span>
+        </div>
+
+        <div>
+          <label>Σύστημα Β &nbsp;<span style="color:var(--mut);font-weight:400">όνομα, X, Y[, Z]</span></label>
+          <textarea id="taB" rows="9" placeholder="Α1, 1332.790, -9670.860&#10;Α2, 2731.530, -9509.350&#10;Β1, 1949.790, -7801.040"></textarea>
+          <div class="drop" id="dropB">📄 ή σύρε αρχείο <b>.txt / .csv</b>
+            <input type="file" id="fB" accept=".txt,.csv" style="display:none"></div>
+        </div>
+      </div>
+      <p class="hint">Αν και τα δύο έχουν <b>ονόματα</b>, τα σημεία ταιριάζουν με το όνομα —
+        αλλιώς με τη σειρά. Γραμμές που δεν διαβάζονται αγνοούνται.</p>
+      <div class="toolbar">
+        <button class="primary" onclick="runFit()">Υπολογισμός παραμέτρων</button>
+        <button class="ghost" onclick="clearFit()">Καθαρισμός</button>
+        <span class="spacer"></span><span class="status" id="fitStat"></span>
+      </div>
+    </div>
+
+    <div class="card hidden" id="cardRes">
+      <h2><span class="n">2</span>Παράμετροι &amp; έλεγχος</h2>
+      <div class="pgrid" id="pgrid"></div>
+      <div class="stats" id="stats"></div>
+      <div class="tblwrap"><table id="resTbl"></table></div>
+      <p class="hint" id="worstHint"></p>
+      <div class="toolbar">
+        <button class="primary" onclick="downloadParams()">⬇ Κατέβασε τους συντελεστές</button>
+        <span class="status" id="pStat"></span>
+      </div>
+      <div id="pLink"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 2. ΜΕΤΑΣΧΗΜΑΤΙΣΜΟΣ ═══════════ -->
+  <div id="panelApply" class="hidden">
+    <div class="card">
+      <h2><span class="n">◆</span>Ποιες παραμέτρους;</h2>
+      <div id="haveParams" class="stats"></div>
+      <div class="toolbar">
+        <button class="ghost" onclick="document.getElementById('fP').click()">
+          ⬆ Φόρτωση αρχείου συντελεστών <span class="pro">PRO</span></button>
+        <input type="file" id="fP" accept=".txt" style="display:none">
+        <span class="status" id="upStat"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">1</span>Σημεία προς μετασχηματισμό</h2>
+      <textarea id="taP" rows="8" placeholder="Ν1, 500.000, 700.000&#10;Ν2, 1800.000, 1200.000"></textarea>
+      <div class="drop" id="dropP">📄 ή σύρε αρχείο <b>.txt / .csv</b>
+        <input type="file" id="fT" accept=".txt,.csv" style="display:none"></div>
+      <div class="toolbar">
+        <button class="primary" onclick="runApply()">Μετασχηματισμός</button>
+        <button class="ghost" onclick="copyOut()" id="btnCopy">Αντιγραφή</button>
+        <span class="spacer"></span><span class="status" id="apStat"></span>
+      </div>
+      <div class="tblwrap"><table id="apTbl"></table></div>
+      <div id="apLink"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 3. DXF ═══════════ -->
+  <div id="panelDxf" class="hidden">
+    <div class="card">
+      <h2><span class="n">◆</span>Σχέδιο DXF <span class="pro">PRO</span></h2>
+      <div id="haveParams2" class="stats"></div>
+      <div class="drop" id="dropD" style="margin-top:14px">
+        📐 Σύρε εδώ το <b>.dxf</b> ή κάνε κλικ
+        <input type="file" id="fD" accept=".dxf" style="display:none"></div>
+      <div class="toolbar">
+        <button class="primary" id="dGo" onclick="runDxf()" disabled>Μετασχηματισμός σχεδίου</button>
+        <span class="spacer"></span><span class="status" id="dStat"></span>
+      </div>
+      <p class="hint">Μετασχηματίζονται σημεία, γραμμές, πολυγραμμές, κείμενα, κύκλοι,
+        τόξα και blocks. Ισχύει για <b>δισδιάστατους</b> μετασχηματισμούς — τα υψόμετρα
+        των οντοτήτων διατηρούνται ως έχουν.</p>
+      <pre id="dRep" class="hidden"></pre>
+      <div id="dLink"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Μετασχηματισμός Ομοιότητας &amp; Αφινικός · ZS-Top — Αποστόλου Φ. Στυλιανός ·
+  Πτυχιούχος Τοπογράφος Μηχανικός · <a href="../index.html">GeoLab</a> ·
+  <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a>
+</footer>
+
+<script>
+var KIND='similarity', DIM=2, RESULT=null, PARAMS=null, fileD=null, lastOut='', INVERTED=false;
+
+var MINP={'similarity2':2,'affine2':3,'similarity3':3,'affine3':4};
+var NPAR={'similarity2':4,'affine2':6,'similarity3':7,'affine3':12};
+
+function showTab(w){
+  document.getElementById('tabA').classList.toggle('active', w==='fit');
+  document.getElementById('tabB').classList.toggle('active', w==='apply');
+  document.getElementById('tabC').classList.toggle('active', w==='dxf');
+  document.getElementById('panelFit').classList.toggle('hidden', w!=='fit');
+  document.getElementById('panelApply').classList.toggle('hidden', w!=='apply');
+  document.getElementById('panelDxf').classList.toggle('hidden', w!=='dxf');
+  document.getElementById('cardKind').classList.toggle('hidden', w!=='fit');
+  showParams();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function setKind(k){
+  KIND=k;
+  document.getElementById('kSim').classList.toggle('on', k==='similarity');
+  document.getElementById('kAff').classList.toggle('on', k==='affine');
+  hint();
+}
+function setDim(d){
+  DIM=d;
+  document.getElementById('d2').classList.toggle('on', d===2);
+  document.getElementById('d3').classList.toggle('on', d===3);
+  hint();
+}
+function hint(){
+  var key=KIND+DIM;
+  document.getElementById('kindHint').innerHTML =
+    '<b>'+NPAR[key]+' παράμετροι</b> · ελάχιστα <b>'+MINP[key]+'</b> κοινά σημεία — '+
+    'με ακριβώς τα ελάχιστα τα υπόλοιπα βγαίνουν μηδέν και δεν ελέγχεται τίποτα· '+
+    'βάλε <b>τουλάχιστον '+(MINP[key]+1)+'</b>.';
+}
+
+/* ---------- διάβασμα αρχείων σε textarea ---------- */
+function wire(dropId, inputId, taId){
+  var dz=document.getElementById(dropId), inp=document.getElementById(inputId);
+  dz.addEventListener('click', function(){ inp.click(); });
+  inp.addEventListener('change', function(){
+    var f=inp.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(e){ document.getElementById(taId).value=e.target.result; };
+    r.readAsText(f, 'utf-8');
+  });
+  ['dragenter','dragover'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.add('hot');});});
+  ['dragleave','drop'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.remove('hot');});});
+  dz.addEventListener('drop',function(ev){
+    var f=ev.dataTransfer.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(e){ document.getElementById(taId).value=e.target.result; };
+    r.readAsText(f,'utf-8');
+  });
+}
+
+function parseLines(t){
+  var out=[];
+  (t||'').split(/\r?\n/).forEach(function(l){
+    l=l.trim(); if(!l||l[0]==='#') return;
+    var p=l.split(/[,;\t]/).map(function(x){return x.trim();}).filter(function(x){return x!=='';});
+    if(p.length<2) p=l.split(/\s+/);
+    var nums=[], name=null;
+    p.forEach(function(v){
+      var f=parseFloat(v.replace(',','.'));
+      if(isNaN(f)){ if(name===null) name=v; } else nums.push(f);
+    });
+    // Αν περισσεύουν αριθμοί, ο ΠΡΩΤΟΣ είναι το όνομα: «101, 500, 700».
+    // Χωρίς αυτό, σημεία με αριθμητικά ονόματα έδιναν σιωπηλά λάθος συντεταγμένες.
+    if(name===null && nums.length>DIM){ name=String(nums[0]); nums=nums.slice(1); }
+    if(nums.length<DIM) return;
+    out.push({name:(name!==null?name:String(out.length+1)), c:nums.slice(0,DIM)});
+  });
+  return out;
+}
+
+/* ---------- 1. ΠΑΡΑΜΕΤΡΟΙ ---------- */
+function runFit(){
+  var st=document.getElementById('fitStat');
+  var A=parseLines(document.getElementById('taA').value);
+  var B=parseLines(document.getElementById('taB').value);
+  if(!A.length||!B.length){ st.textContent='Δώσε σημεία και στα δύο συστήματα.'; st.className='status err'; return; }
+  var src=[],dst=[],names=[];
+  var autoA=A.every(function(r,i){return r.name===String(i+1);});
+  var autoB=B.every(function(r,i){return r.name===String(i+1);});
+  if(!autoA&&!autoB){
+    var idx={}; B.forEach(function(r){ idx[r.name.toUpperCase()]=r; });
+    A.forEach(function(r){ var m=idx[r.name.toUpperCase()];
+      if(m){ src.push(r.c); dst.push(m.c); names.push(r.name); } });
+    if(!src.length){ st.textContent='Κανένα κοινό όνομα σημείου.'; st.className='status err'; return; }
+  } else {
+    var n=Math.min(A.length,B.length);
+    for(var i=0;i<n;i++){ src.push(A[i].c); dst.push(B[i].c); names.push(A[i].name); }
+  }
+  st.textContent='Υπολογισμός…'; st.className='status';
+  fetch('/api/aff/fit',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({src:src,dst:dst,kind:KIND,dim:DIM,names:names})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     st.textContent=''; RESULT=j.result; INVERTED=false;
+     PARAMS={kind:RESULT.kind, dim:RESULT.dim, params:RESULT.params};
+     renderResult(RESULT); showParams();
+   })
+   .catch(function(){ st.textContent='Δεν απάντησε ο server. Τρέξε το run.bat.'; st.className='status err'; });
+}
+
+function renderResult(r){
+  var i=r.info, g=[];
+  function add(k,v){ g.push('<div><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'); }
+  if(r.kind==='similarity'&&r.dim===2){
+    add('Κλίμακα', i['κλίμακα'].toFixed(9));
+    add('Στροφή', i['στροφή_μοίρες'].toFixed(6)+'°');
+    add('tx', i.tx.toFixed(4)); add('ty', i.ty.toFixed(4));
+  } else if(r.kind==='similarity'){
+    add('Κλίμακα', i['κλίμακα'].toFixed(9));
+    add('ω', i['ω_μοίρες'].toFixed(6)+'°'); add('φ', i['φ_μοίρες'].toFixed(6)+'°');
+    add('κ', i['κ_μοίρες'].toFixed(6)+'°');
+    add('tx', i.tx.toFixed(4)); add('ty', i.ty.toFixed(4)); add('tz', i.tz.toFixed(4));
+  } else if(r.dim===2){
+    add('a', i.a.toFixed(9)); add('b', i.b.toFixed(9)); add('tx', i.tx.toFixed(4));
+    add('c', i.c.toFixed(9)); add('d', i.d.toFixed(9)); add('ty', i.ty.toFixed(4));
+    add('Κλίμακα X', i['κλίμακα_X'].toFixed(9)); add('Κλίμακα Y', i['κλίμακα_Y'].toFixed(9));
+  } else {
+    i['πίνακας'].forEach(function(row,k){
+      add('Γραμμή '+(k+1), row.map(function(v){return v.toFixed(6);}).join('  '));
+    });
+  }
+  document.getElementById('pgrid').innerHTML=g.join('');
+  document.getElementById('stats').innerHTML =
+    '<div>κοινά σημεία <b>'+r.n+'</b></div>'+
+    '<div>παράμετροι <b>'+r.n_params+'</b></div>'+
+    '<div>πλεονασμός <b>'+r.redundancy+'</b></div>'+
+    '<div>σ₀ <b>'+(r.sigma0===null?'—':r.sigma0.toFixed(4))+'</b></div>'+
+    '<div>RMS <b>'+r.rms.toFixed(4)+'</b></div>';
+  var h='<thead><tr><th>Σημείο</th><th class="num">vX</th><th class="num">vY</th>'+
+        (r.dim===3?'<th class="num">vZ</th>':'')+'<th class="num">|v|</th></tr></thead><tbody>';
+  r.residuals.forEach(function(x,k){
+    var bad = (x.i===r.worst && r.redundancy>0 && r.rms>0);
+    h+='<tr'+(bad?' class="bad"':'')+'><td>'+(r.names[k]||(k+1))+'</td>'+
+       '<td class="num">'+x.v[0].toFixed(4)+'</td><td class="num">'+x.v[1].toFixed(4)+'</td>'+
+       (r.dim===3?'<td class="num">'+x.v[2].toFixed(4)+'</td>':'')+
+       '<td class="num">'+x.mag.toFixed(4)+'</td></tr>';
+  });
+  document.getElementById('resTbl').innerHTML=h+'</tbody>';
+  document.getElementById('worstHint').innerHTML = (r.redundancy<=0)
+    ? '⚠️ <b>Μηδενικός πλεονασμός</b> — έδωσες ακριβώς τα ελάχιστα σημεία, οπότε τα υπόλοιπα είναι μηδέν εξ ορισμού. Δεν ελέγχεται τίποτα.'
+    : 'Το σημείο με το μεγαλύτερο υπόλοιπο είναι επισημασμένο. Τα ελάχιστα τετράγωνα «μοιράζουν» μέρος του σφάλματος στα υπόλοιπα σημεία — γι\' αυτό το υπόλοιπο βγαίνει μικρότερο από το πραγματικό λάθος.';
+  document.getElementById('cardRes').classList.remove('hidden');
+}
+function clearFit(){
+  document.getElementById('taA').value=''; document.getElementById('taB').value='';
+  document.getElementById('cardRes').classList.add('hidden');
+  document.getElementById('fitStat').textContent='';
+}
+function downloadParams(){
+  if(!RESULT) return;
+  var st=document.getElementById('pStat'); st.textContent='…';
+  fetch('/api/aff/params',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({result:RESULT,name:'parametroi_'+RESULT.kind+'_'+RESULT.dim+'D'})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     st.textContent='';
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     document.getElementById('pLink').innerHTML=
+       '<div class="dl"><b>'+j.file.name+'</b><span class="sz">'+j.file.size+
+       ' bytes</span><a href="'+j.file.url+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
+   }).catch(function(){ st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
+}
+
+/* ---------- κοινό: ποιες παραμέτρους έχουμε ---------- */
+function showParams(){
+  var txt;
+  if(PARAMS){
+    txt = '<div>'+(PARAMS.kind==='similarity'?'Ομοιότητας':'Αφινικός')+' <b>'+PARAMS.dim+'D</b></div>';
+    if(RESULT){
+      txt += '<div>σ₀ <b>'+(RESULT.sigma0===null?'—':RESULT.sigma0.toFixed(4))+'</b></div>'+
+             '<div>RMS <b>'+RESULT.rms.toFixed(4)+'</b></div>'+
+             '<div>κοινά σημεία <b>'+RESULT.n+'</b></div>';
+    }
+    if(INVERTED) txt += '<div style="color:var(--warn)">αντεστραμμένος <b>Β → Α</b></div>';
+  } else {
+    txt = '<div style="color:var(--warn)">Δεν έχουν οριστεί παράμετροι — υπολόγισέ τες στην <b>καρτέλα 1</b> ή φόρτωσε αρχείο.</div>';
+  }
+  ['haveParams','haveParams2'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.innerHTML=txt;
+  });
+  var g=document.getElementById('dGo');
+  if(g) g.disabled = !(PARAMS && fileD);
+}
+
+/* ---------- αντιστροφή φοράς ---------- */
+function swapDir(){
+  var st=document.getElementById('fitStat');
+  var A=document.getElementById('taA'), B=document.getElementById('taB');
+  if(A.value.trim() || B.value.trim()){
+    // Υπάρχουν δεδομένα: εναλλάσσουμε τα δύο συστήματα και ξαναϋπολογίζουμε.
+    var t=A.value; A.value=B.value; B.value=t;
+    INVERTED=false;
+    st.textContent='⇄ Α και Β εναλλάχθηκαν'; st.className='status ok';
+    if(RESULT) runFit();
+    return;
+  }
+  // Χωρίς σημεία (π.χ. συντελεστές από αρχείο): αντιστρέφουμε τις παραμέτρους.
+  if(!PARAMS){ st.textContent='Δώσε σημεία ή φόρτωσε συντελεστές.'; st.className='status warn'; return; }
+  st.textContent='…'; st.className='status';
+  fetch('/api/aff/invert',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({params:PARAMS})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     PARAMS=j.params; INVERTED=!INVERTED;
+     st.textContent='✔ Η φορά αντιστράφηκε'; st.className='status ok';
+     showParams();
+   }).catch(function(){ st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
+}
+
+/* ---------- 2. ΜΕΤΑΣΧΗΜΑΤΙΣΜΟΣ ---------- */
+function runApply(){
+  var st=document.getElementById('apStat');
+  if(!PARAMS){ st.textContent='Πρώτα όρισε παραμέτρους.'; st.className='status warn'; return; }
+  var P=parseLines(document.getElementById('taP').value);
+  if(!P.length){ st.textContent='Δώσε σημεία.'; st.className='status err'; return; }
+  st.textContent='…'; st.className='status';
+  fetch('/api/aff/apply',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({params:PARAMS, points:P.map(function(r){return r.c;})})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     st.textContent='';
+     var d3=PARAMS.dim===3;
+     var h='<thead><tr><th>Σημείο</th><th class="num">X</th><th class="num">Y</th>'+
+           (d3?'<th class="num">Z</th>':'')+'</tr></thead><tbody>';
+     var lines=[];
+     j.results.forEach(function(v,k){
+       h+='<tr><td>'+P[k].name+'</td><td class="num">'+v[0].toFixed(4)+'</td>'+
+          '<td class="num">'+v[1].toFixed(4)+'</td>'+(d3?'<td class="num">'+v[2].toFixed(4)+'</td>':'')+'</tr>';
+       lines.push([P[k].name].concat(v.map(function(x){return x.toFixed(4);})).join(','));
+     });
+     document.getElementById('apTbl').innerHTML=h+'</tbody>';
+     lastOut=lines.join('\n');
+   })
+   .catch(function(){ st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
+}
+function copyOut(){
+  if(!lastOut) return;
+  navigator.clipboard.writeText(lastOut).then(function(){
+    var b=document.getElementById('btnCopy'), t=b.textContent;
+    b.textContent='✔ Αντιγράφηκε'; setTimeout(function(){b.textContent=t;},1400);
+  });
+}
+
+/* ---------- φόρτωση συντελεστών (PRO) ---------- */
+document.getElementById('fP').addEventListener('change', function(){
+  var f=this.files[0]; if(!f) return;
+  var st=document.getElementById('upStat'); st.textContent='…'; st.className='status';
+  var fd=new FormData(); fd.append('file',f);
+  fetch('/api/aff/params_read',{method:'POST',body:fd}).then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     PARAMS=j.params; RESULT=null; INVERTED=false;
+     st.textContent='✔ Φορτώθηκαν'; st.className='status ok'; showParams();
+   }).catch(function(){ st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
+});
+
+/* ---------- 3. DXF ---------- */
+(function(){
+  var dz=document.getElementById('dropD'), inp=document.getElementById('fD');
+  function pick(f){ if(!f) return; fileD=f;
+    dz.innerHTML='📐 <b>'+f.name+'</b> ('+(f.size/1024).toFixed(0)+' KB)';
+    dz.appendChild(inp); showParams(); }
+  dz.addEventListener('click', function(){ inp.click(); });
+  inp.addEventListener('change', function(){ pick(inp.files[0]); });
+  ['dragenter','dragover'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.add('hot');});});
+  ['dragleave','drop'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.remove('hot');});});
+  dz.addEventListener('drop',function(ev){ pick(ev.dataTransfer.files[0]); });
+})();
+function runDxf(){
+  var st=document.getElementById('dStat'), go=document.getElementById('dGo');
+  if(!PARAMS||!fileD) return;
+  go.disabled=true; st.textContent='Επεξεργασία…'; st.className='status';
+  var fd=new FormData(); fd.append('file',fileD); fd.append('params',JSON.stringify(PARAMS));
+  fetch('/api/aff/dxf',{method:'POST',body:fd}).then(function(r){return r.json();})
+   .then(function(j){
+     go.disabled=false;
+     if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
+     st.textContent='';
+     var p=document.getElementById('dRep'); p.textContent=j.report; p.classList.remove('hidden');
+     document.getElementById('dLink').innerHTML=
+       '<div class="dl"><b>'+j.file.name+'</b><span class="sz">'+(j.file.size/1024).toFixed(0)+
+       ' KB</span><a href="'+j.file.url+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
+   })
+   .catch(function(){ go.disabled=false; st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
+}
+
+wire('dropA','fA','taA'); wire('dropB','fB','taB'); wire('dropP','fT','taP');
+hint(); showParams();
+</script>
+<script src="../lib/server-check.js"></script>
+<script>
+  ZSServer.banner('<b>\u26a0 Προσωρινά εκτός λειτουργίας.</b><br>Το εργαλείο αυτό εκτελεί τους υπολογισμούς <b>στον server</b>. Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση — το εργαλείο θα ενεργοποιηθεί μόνο του μόλις ανέβει.');
+</script>
+</body>
+</html>

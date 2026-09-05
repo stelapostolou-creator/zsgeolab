@@ -1,0 +1,21 @@
+{
+  "name": "SWHepos — Στυλιανός Φ. Αποστόλου",
+  "short_name": "SWHepos",
+  "description": "SW Maps → ΕΓΣΑ87 (HEPOS). Χάρτης, σημεία/γραμμές/πολύγωνα, χάραξη, ιστορικό εργασιών, εξαγωγή DXF & CSV. Ζίτσα Ιωαννίνων.",
+  "lang": "el",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0b1220",
+  "background_color": "#0b1220",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png",          "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png",          "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-192-maskable.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "icon-512-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

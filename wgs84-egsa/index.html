@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WGS84 &#8646; ΕΓΣΑ87 | ZS-GeoLab</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+  :root{
+    --bg:#0b1220; --bg2:#0f1830; --card:#131d33; --line:#25334f; --line2:#1b2740;
+    --txt:#c9d3e0; --head:#f0f6ff; --mut:#93a3bd; --acc:#e0353a; --acc2:#c62027;
+    --navy:#1e4d8c; --ok:#2ecc71; --warn:#f1c40f; --err:#e5534b;
+  }
+  body{ background:var(--bg); color:var(--txt); line-height:1.6; min-height:100vh; }
+  a{ color:inherit; }
+
+  /* top bar */
+  header{ background:rgba(13,17,23,.95); padding:14px 32px; display:flex; justify-content:space-between; align-items:center;
+          border-bottom:1px solid var(--line); position:sticky; top:0; z-index:50; }
+  .logo-img{ height:42px; border-radius:8px; background:#fff; padding:4px 7px; display:block; }
+  .back{ font-size:13px; color:var(--mut); text-decoration:none; font-weight:bold; }
+  .back:hover{ color:var(--acc); }
+
+  main{ max-width:1000px; margin:0 auto; padding:32px 20px 60px; }
+  .title{ font-size:26px; color:var(--head); margin-bottom:4px; }
+  .title span{ color:var(--acc); }
+  .lead{ color:var(--mut); font-size:14px; margin-bottom:22px; }
+
+  .status{ font-size:12.5px; padding:8px 12px; border-radius:6px; margin-bottom:20px; border:1px solid var(--line); }
+  .status.ok{ background:rgba(46,204,113,.08); color:var(--ok); border-color:rgba(46,204,113,.4); }
+  .status.err{ background:rgba(229,83,75,.1); color:var(--err); border-color:rgba(229,83,75,.5); font-weight:700; }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:8px; padding:22px; margin-bottom:20px; }
+  .card h2{ font-size:15px; color:var(--head); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .card h2 .n{ background:var(--acc); color:#fff; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:900; }
+
+  /* direction segmented */
+  .seg{ display:flex; background:var(--bg2); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button{ flex:1; padding:12px; background:transparent; border:0; color:var(--mut); font-size:14px; font-weight:700; cursor:pointer; transition:.2s; }
+  .seg button.active{ background:var(--acc); color:#fff; }
+  .seg button:not(.active):hover{ color:var(--head); background:var(--line2); }
+
+  label{ display:block; font-size:12px; font-weight:700; color:var(--mut); margin-bottom:5px; }
+  input[type=text], input[type=number], textarea{
+    width:100%; padding:10px; background:var(--bg2); border:1px solid var(--line); border-radius:6px; color:var(--head); font-size:14px; }
+  input:focus, textarea:focus{ outline:none; border-color:var(--acc); }
+  textarea{ font-family:ui-monospace,Consolas,monospace; font-size:12.5px; min-height:130px; resize:vertical; }
+  .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+
+  /* dropzone */
+  .drop{ border:2px dashed var(--line); border-radius:8px; padding:22px; text-align:center; color:var(--mut); cursor:pointer; transition:.2s; margin-bottom:12px; }
+  .drop:hover, .drop.over{ border-color:var(--acc); color:var(--head); background:rgba(224,53,58,.06); }
+  .drop b{ color:var(--acc); }
+  .hint{ font-size:11.5px; color:var(--mut); margin-top:8px; }
+  code{ background:var(--bg2); padding:2px 6px; border-radius:4px; color:var(--acc); font-size:12px; }
+
+  .opts{ display:flex; flex-wrap:wrap; gap:18px; align-items:center; margin-top:14px; }
+  .opt{ display:flex; align-items:center; gap:7px; font-size:13px; color:var(--txt); }
+  .opt input{ width:auto; accent-color:var(--acc); }
+  select{ padding:8px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:6px; color:var(--head); font-size:13px; }
+
+  .btn{ padding:12px 18px; background:var(--acc); color:#fff; border:0; border-radius:6px; font-size:14px; font-weight:800; cursor:pointer; transition:.2s; }
+  .btn:hover{ background:var(--acc2); color:#fff; }
+  .btn:disabled{ background:var(--line); color:var(--mut); cursor:not-allowed; }
+  .btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--txt); }
+  .btn.ghost:hover{ border-color:var(--acc); color:var(--acc); background:transparent; }
+
+  .summary{ font-size:13px; color:var(--txt); margin-bottom:14px; }
+  .summary .pill{ display:inline-block; background:var(--bg2); border:1px solid var(--line); border-radius:20px; padding:3px 12px; margin-right:8px; font-size:12px; }
+  .summary .pill b{ color:var(--acc); }
+
+  .tblwrap{ max-height:320px; overflow:auto; border:1px solid var(--line); border-radius:6px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; font-family:ui-monospace,Consolas,monospace; white-space:nowrap; }
+  th,td{ padding:7px 10px; text-align:left; border-bottom:1px solid var(--line2); }
+  th{ background:var(--bg2); color:var(--head); position:sticky; top:0; }
+  tr:hover td{ background:rgba(224,53,58,.05); }
+
+  .dlrow{ display:flex; gap:12px; flex-wrap:wrap; margin-top:16px; }
+  .muted{ color:var(--mut); font-size:12px; }
+  @media(max-width:640px){ .row3{ grid-template-columns:1fr; } header{ padding:12px 16px; } main{ padding:20px 14px 50px; } }
+
+/* ---------- καρτέλες ---------- */
+.tabs{display:flex;gap:9px;margin:0 0 18px;flex-wrap:wrap}
+.tabs .tb{border:1px solid var(--line);background:var(--bg2);color:var(--txt);
+  padding:11px 18px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px;
+  font-family:inherit;transition:.15s;display:flex;align-items:center}
+.tabs .tb:hover{border-color:var(--navy2)}
+.tabs .tb.active{background:var(--red);border-color:var(--red);color:#fff}
+/* ---------- σήμα PRO (χρυσό, ανάγλυφο) ---------- */
+.pro{display:inline-block;font-size:10.5px;font-weight:900;letter-spacing:1.1px;
+  padding:4px 11px;border-radius:12px;margin-left:9px;vertical-align:middle;
+  color:#3d2e06;
+  background:linear-gradient(180deg,#fff3c4 0%,#ffdc73 38%,#e0a91c 72%,#b8830f 100%);
+  border:1px solid #8f6608;
+  box-shadow:0 2px 5px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.15),
+             inset 0 1px 0 rgba(255,255,255,.85), inset 0 -2px 3px rgba(120,80,0,.35);
+  text-shadow:0 1px 0 rgba(255,255,255,.55);}
+h2 .pro{margin-left:10px}
+/* ---------- πάνελ αρχείων ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{display:flex;align-items:center;gap:7px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12.8px;cursor:pointer}
+.chip input{accent-color:var(--navy2)}
+.chip.on{border-color:var(--navy2);background:#12203c}
+.info{background:rgba(30,77,140,.14);border:1px solid var(--navy2);border-radius:10px;
+  padding:13px 15px;font-size:13px;margin-top:13px;line-height:1.55}
+.dl{display:flex;align-items:center;gap:11px;background:rgba(46,204,113,.10);
+  border:1px solid var(--ok,#2ecc71);border-radius:10px;padding:12px 14px;margin-top:10px}
+.dl b{color:var(--ok,#2ecc71)}
+.dl .sz{color:var(--mut);font-size:12px}
+.dl a{margin-left:auto;text-decoration:none}
+.hidden{display:none!important}
+pre.rep{background:#0a0f1c;border:1px solid var(--line);border-radius:10px;padding:15px;
+  font-size:12.5px;white-space:pre;overflow-x:auto;color:#cfe0f5;
+  font-family:Consolas,'Courier New',monospace;margin:0}
+</style>
+</head>
+<body>
+  <header>
+    <a href="../index.html"><img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+    <a href="../index.html" class="back">&#8592; GeoLab</a>
+  </header>
+
+  <main>
+    <h1 class="title">WGS84 &#8646; <span>&#917;&#915;&#931;&#913;87</span> Converter</h1>
+    <p class="lead">&#924;&#945;&#950;&#953;&#954;&#972;&#962; &#956;&#949;&#964;&#945;&#963;&#967;&#951;&#956;&#945;&#964;&#953;&#963;&#956;&#972;&#962; &#956;&#949; &#964;&#959;&#965;&#962; &#949;&#960;&#943;&#963;&#951;&#956;&#959;&#965;&#962; &#963;&#965;&#957;&#964;&#949;&#955;&#949;&#963;&#964;&#941;&#962; &amp; grids HEPOS. Upload TXT/CSV.</p>
+
+    <div id="status" class="status">&#8987;&#65039; &#8230;</div>
+<div class="tabs">
+  <button class="tb active" id="tabP" onclick="showTab('points')">Σημεία &middot; TXT &middot; CSV</button>
+  <button class="tb" id="tabF" onclick="showTab('files')">SHP &middot; KML &middot; KMZ <span class="pro">PRO</span></button>
+</div>
+<div id="panelPoints">
+
+
+    <!-- 1. Direction -->
+    <div class="card">
+      <h2><span class="n">1</span> &#922;&#945;&#964;&#949;&#973;&#952;&#965;&#957;&#963;&#951;</h2>
+      <div class="seg">
+        <button id="segE" class="active" onclick="setDir('toEGSA')">WGS84 &#8594; &#917;&#915;&#931;&#913;87</button>
+        <button id="segW" onclick="setDir('toWGS')">&#917;&#915;&#931;&#913;87 &#8594; WGS84</button>
+      </div>
+      <p class="hint" id="dirHint"></p>
+    </div>
+
+    <!-- 2. Input -->
+    <div class="card">
+      <h2><span class="n">2</span> &#916;&#949;&#948;&#959;&#956;&#941;&#957;&#945;</h2>
+      <div id="drop" class="drop">
+        &#128193; &#931;&#973;&#961;&#949; &#949;&#948;&#974; &#941;&#957;&#945; <b>.txt / .csv</b> &#8226; &#942; <b>&#954;&#940;&#957;&#949; &#954;&#955;&#953;&#954;</b> &#947;&#953;&#945; &#949;&#960;&#953;&#955;&#959;&#947;&#942;
+        <input type="file" id="fileIn" accept=".txt,.csv" style="display:none">
+      </div>
+      <label>&#942; &#949;&#960;&#953;&#954;&#972;&#955;&#955;&#951;&#963;&#951; &#947;&#961;&#945;&#956;&#956;&#974;&#957;</label>
+      <textarea id="bulk" placeholder="1,476786.540,4395337.358,544.963,corner&#10;2,476780.337,4395349.614,543.712"></textarea>
+      <p class="hint">&#916;&#949;&#954;&#964;&#940;: <code>pt,x,y</code> &#8226; <code>pt,x,y,z</code> &#8226; <code>pt,x,y,z,disc</code> &#8212; &#960;&#949;&#961;&#953;&#963;&#963;&#972;&#964;&#949;&#961;&#949;&#962; &#963;&#964;&#942;&#955;&#949;&#962; &#945;&#947;&#957;&#959;&#959;&#973;&#957;&#964;&#945;&#953;.</p>
+
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <button id="btnGo" class="btn" onclick="run()" disabled>&#9881;&#65039; &#924;&#949;&#964;&#945;&#964;&#961;&#959;&#960;&#942;</button>
+        <button class="btn ghost" onclick="clearAll()">&#128465;&#65039; &#922;&#945;&#952;&#945;&#961;&#953;&#963;&#956;&#972;&#962;</button>
+      </div>
+    </div>
+
+    <!-- 3. Output -->
+    <div class="card" id="outCard" style="display:none">
+      <h2><span class="n">3</span> &#913;&#960;&#959;&#964;&#941;&#955;&#949;&#963;&#956;&#945;</h2>
+      <div class="summary" id="summary"></div>
+      <div class="tblwrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+
+      <div class="opts" style="margin-top:18px">
+        <label style="margin:0">&#904;&#958;&#959;&#948;&#959;&#962;:</label>
+        <select id="fmt">
+          <option value="csv">CSV</option>
+          <option value="txt">TXT</option>
+        </select>
+        <div class="opt"><input type="checkbox" id="chkDesc" checked> <label style="margin:0">&#956;&#949; &#960;&#949;&#961;&#953;&#947;&#961;&#945;&#966;&#942; (disc)</label></div>
+        <div class="opt" id="geoidWrap"><input type="checkbox" id="chkGeoid"> <label style="margin:0" title="&#928;&#961;&#959;&#963;&#952;&#941;&#964;&#949;&#953; &#964;&#959; N &#964;&#959;&#965; geoid &#8594; &#949;&#955;&#955;&#949;&#953;&#968;&#959;&#949;&#953;&#948;&#941;&#962; &#973;&#968;&#959;&#962;">&#949;&#955;&#955;&#949;&#953;&#968;. &#973;&#968;&#959;&#962;</label></div>
+      </div>
+
+      <div class="dlrow">
+        <button class="btn" onclick="download()">&#8595; &#922;&#945;&#964;&#941;&#946;&#945;&#963;&#956;&#945;</button>
+        <button class="btn ghost" onclick="copyOut()">&#128203; &#913;&#957;&#964;&#953;&#947;&#961;&#945;&#966;&#942;</button>
+        <span class="muted" id="dlname" style="align-self:center"></span>
+      </div>
+      <p class="hint" style="margin-top:10px">&#8505;&#65039; &#932;&#959; CSV &#948;&#953;&#945;&#946;&#940;&#950;&#949;&#964;&#945;&#953; &#945;&#960;&#972; &#964;&#959; SW Maps &#963;&#964;&#959; Import &#964;&#959;&#965;.</p>
+    </div>
+  </div><!-- /panelPoints -->
+
+<div id="panelFiles" class="hidden">
+  <div class="card">
+    <h2><span class="n">1</span> Κατεύθυνση &amp; αρχείο <span class="pro">PRO</span></h2>
+    <div class="seg">
+      <button id="fF" class="active" onclick="setFileDir('fwd')">WGS84 &#8594; ΕΓΣΑ87</button>
+      <button id="fI" onclick="setFileDir('inv')">ΕΓΣΑ87 &#8594; WGS84</button>
+    </div>
+    <div id="fdrop" class="drop" style="margin-top:14px">
+      &#128506;&#65039; Σύρε εδώ <b>.zip</b> (shapefile) &middot; <b>.kml</b> &middot; <b>.kmz</b> &middot; <b>.dxf</b> &#8226; ή <b>κάνε κλικ</b>
+      <input type="file" id="ffile" accept=".zip,.kml,.kmz,.dxf,.shp" style="display:none">
+    </div>
+    <div class="info hidden" id="finfo"></div>
+    <p class="hint"><b>Εισαγωγή shapefile:</b> το πρότυπο ESRI Shapefile αποτελείται από
+       περισσότερα του ενός αρχεία. Απαιτούνται τα <b>.shp</b> (γεωμετρία),
+       <b>.shx</b> (ευρετήριο) και <b>.dbf</b> (περιγραφικά χαρακτηριστικά)&middot;
+       συνιστάται και το <b>.prj</b> (σύστημα αναφοράς). Υποβάλλονται συμπιεσμένα
+       σε ένα αρχείο <b>.zip</b>. Αρχεία εξαγωγής SW Maps που περιέχουν πολλαπλά
+       επίπεδα αναγνωρίζονται αυτόματα.</p>
+  </div>
+
+  <div class="card hidden" id="cardOpts">
+    <h2><span class="n">2</span> Τι θα βγει</h2>
+    <div id="layerBox" class="hidden">
+      <label>Στρώσεις μέσα στο αρχείο</label>
+      <div class="chips" id="layers"></div>
+      <p class="hint">Τα <b>_2d</b> (χωρίς υψόμετρα) και <b>_vertices</b> (κορυφές γραμμών)
+         είναι αντίγραφα του SW Maps &mdash; μένουν ξεδιάλεκτα.</p>
+    </div>
+    <label style="margin-top:14px">Μορφές εξόδου</label>
+    <div class="chips" id="outs"></div>
+    <label style="margin-top:16px">Ιδιότητες ως ετικέτες στο DXF / KML</label>
+    <div class="chips" id="fields"></div>
+    <div class="chips" style="margin-top:8px">
+      <label class="chip"><input type="checkbox" id="chkZ"
+        onchange="this.parentNode.classList.toggle(&quot;on&quot;,this.checked)">
+        να γράφεται και το <b>υψόμετρο</b> στην ετικέτα</label>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn" id="fgo" onclick="runFile()">&#9881;&#65039; Μετατροπή</button>
+      <button class="btn ghost" onclick="clearFile()">&#128465;&#65039; Καθαρισμός</button>
+      <span class="muted" id="fstat"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="cardRes">
+    <h2><span class="n">3</span> Αποτέλεσμα</h2>
+    <pre class="rep" id="freport"></pre>
+    <div id="flinks"></div>
+  </div>
+</div>
+</main>
+
+  <footer style="background:var(--bg2);border-top:1px solid var(--line);color:var(--mut);text-align:center;padding:18px;font-size:13px;">
+    ZS-Top &mdash; Αποστόλου Φ. Στυλιανός &middot; Πτυχιούχος Τοπογράφος Μηχανικός &middot; <a href="../index.html">GeoLab</a> &middot; <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a>
+  </footer>
+
+
+<script>
+function setupDrop(){
+    var dz=document.getElementById('drop'), fi=document.getElementById('fileIn');
+    dz.onclick=function(){ fi.click(); };
+    fi.onchange=function(e){ var f=e.target.files[0]; if(f) readFile(f); e.target.value=''; };
+    ['dragenter','dragover'].forEach(function(ev){ dz.addEventListener(ev,function(e){ e.preventDefault(); dz.classList.add('over'); }); });
+    ['dragleave','drop'].forEach(function(ev){ dz.addEventListener(ev,function(e){ e.preventDefault(); dz.classList.remove('over'); }); });
+    dz.addEventListener('drop',function(e){ var f=e.dataTransfer.files[0]; if(f) readFile(f); });
+    // Χειροκίνητη πληκτρολόγηση → μηδενίζει το όνομα αρχείου (χρήση προεπιλογής)
+    document.getElementById('bulk').addEventListener('input', function(){ uploadedBase=''; });
+  }
+
+function readFile(f){
+    uploadedBase = (f.name||'').replace(/\.[^.]+$/,'') || '';
+    var r=new FileReader();
+    r.onload=function(ev){ document.getElementById('bulk').value=ev.target.result; run(); };
+    r.readAsText(f);
+  }
+
+function parseCoords(a,b){
+    // returns {lat,lon} for toEGSA, or {x,y} for toWGS — auto-swapping if needed
+    if(DIR==='toEGSA'){
+      var isLat=function(v){ return v>=34&&v<=42; }, isLon=function(v){ return v>=19&&v<=28; };
+      if(isLat(a)&&isLon(b)) return {lat:a,lon:b};
+      if(isLon(a)&&isLat(b)) return {lat:b,lon:a};
+      return {lat:a,lon:b,warn:true};
+    } else {
+      var isN=function(v){ return v>=3800000&&v<=4700000; }, isE=function(v){ return v>=90000&&v<=900000; };
+      if(isE(a)&&isN(b)) return {x:a,y:b};
+      if(isN(a)&&isE(b)) return {x:b,y:a};
+      return {x:a,y:b,warn:true};
+    }
+  }
+
+function buildText(withDesc){
+    lastText = lastRows.map(function(r){
+      var base = r.id+','+r.A+','+r.B+','+r.Z;
+      return (withDesc && r.disc)? base+','+r.disc : base;
+    }).join('\n');
+  }
+
+function render(rows, ignored, outOfRange, withDesc){
+    if(!rows.length){ document.getElementById('outCard').style.display='none'; return; }
+    document.getElementById('outCard').style.display='block';
+    var headA = DIR==='toEGSA' ? 'X (Easting)' : 'Latitude';
+    var headB = DIR==='toEGSA' ? 'Y (Northing)' : 'Longitude';
+    var headZ = DIR==='toEGSA' ? 'Z' : 'z';
+    var thead='<tr><th>pt</th><th>'+headA+'</th><th>'+headB+'</th><th>'+headZ+'</th>'+(withDesc?'<th>disc</th>':'')+'</tr>';
+    document.querySelector('#tbl thead').innerHTML=thead;
+    var tb='';
+    for(var i=0;i<Math.min(rows.length,200);i++){ var r=rows[i];
+      tb+='<tr><td>'+r.id+'</td><td>'+r.A+'</td><td>'+r.B+'</td><td>'+r.Z+'</td>'+(withDesc?('<td>'+(r.disc||'')+'</td>'):'')+'</tr>';
+    }
+    document.querySelector('#tbl tbody').innerHTML=tb;
+    var sm='<span class="pill"><b>'+rows.length+'</b> &#963;&#951;&#956;&#949;&#943;&#945;</span>';
+    if(ignored) sm+='<span class="pill">'+ignored+' &#945;&#947;&#957;&#959;&#942;&#952;&#951;&#954;&#945;&#957;</span>';
+    if(outOfRange) sm+='<span class="pill" style="border-color:var(--warn);color:var(--warn)">&#9888; '+outOfRange+' &#949;&#954;&#964;&#972;&#962; &#959;&#961;&#943;&#969;&#957; &#917;&#955;&#955;&#940;&#948;&#945;&#962;</span>';
+    if(rows.length>200) sm+='<span class="pill">&#960;&#961;&#959;&#949;&#960;&#953;&#963;&#954;&#972;&#960;&#951;&#963;&#951; &#960;&#961;&#974;&#964;&#969;&#957; 200</span>';
+    document.getElementById('summary').innerHTML=sm;
+    document.getElementById('dlname').textContent = outName();
+  }
+
+function outName(){
+    var ext=document.getElementById('fmt').value;
+    var suffix=(DIR==='toEGSA')?'_EGSA87':'_WGS84';
+    return uploadedBase ? (uploadedBase+suffix+'.'+ext) : ((DIR==='toEGSA'?'EGSA87':'WGS84')+'.'+ext);
+  }
+
+function download(){
+    if(!lastText){ return; }
+    var name=outName();
+    var blob=new Blob([lastText],{type:'text/plain;charset=utf-8'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  }
+
+function copyOut(){ if(lastText) navigator.clipboard.writeText(lastText); }
+
+function clearAll(){
+    document.getElementById('bulk').value='';
+    uploadedBase=''; lastRows=[]; lastText='';
+    document.getElementById('outCard').style.display='none';
+    document.querySelector('#tbl tbody').innerHTML='';
+    document.querySelector('#tbl thead').innerHTML='';
+    document.getElementById('summary').innerHTML='';
+    document.getElementById('bulk').focus();
+  }
+
+var DIR='toEGSA', lastRows=[], lastText='', uploadedBase='';
+
+/* ---------------- καρτέλες ---------------- */
+function showTab(w){
+  document.getElementById('tabP').classList.toggle('active', w==='points');
+  document.getElementById('tabF').classList.toggle('active', w==='files');
+  document.getElementById('panelPoints').classList.toggle('hidden', w!=='points');
+  document.getElementById('panelFiles').classList.toggle('hidden', w!=='files');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ---------------- κατεύθυνση ---------------- */
+function setDir(d){
+  DIR=d;
+  document.getElementById('segE').classList.toggle('active', d==='toEGSA');
+  document.getElementById('segW').classList.toggle('active', d==='toWGS');
+  document.getElementById('geoidWrap').style.display = (d==='toWGS')?'flex':'none';
+  var h=document.getElementById('dirHint');
+  h.innerHTML = (d==='toEGSA')
+    ? 'Είσοδος: WGS84 &mdash; στήλες <code>pt,φ,λ[,h][,disc]</code>. Έξοδος: ΕΓΣΑ87 <code>pt,X,Y,Z</code> (ορθομετρικό ύψος).'
+    : 'Είσοδος: ΕΓΣΑ87 &mdash; στήλες <code>pt,X,Y[,Z][,disc]</code>. Έξοδος: WGS84 <code>pt,lat,lon,z</code>.';
+}
+
+/* ---------------- μετατροπή σημείων (τρέχει στον server) ---------------- */
+function run(){
+  var raw=document.getElementById('bulk').value.split(/\r?\n/);
+  var withDesc=document.getElementById('chkDesc').checked;
+  var ell=document.getElementById('chkGeoid').checked;
+  var st=document.getElementById('status');
+  var pending=[], ignored=0, outOfRange=0;
+
+  for(var i=0;i<raw.length;i++){
+    var line=raw[i].trim(); if(!line) continue;
+    var parts=line.split(/[,\t;]/);
+    if(parts.length<3){ ignored++; continue; }
+    var id=parts[0].trim();
+    var a=parseFloat(parts[1]), b=parseFloat(parts[2]);
+    var zc=parts[3]!==undefined?parseFloat(parts[3]):NaN;
+    var z=isNaN(zc)?0:zc;
+    var disc=(parts[4]!==undefined?parts[4].trim():'');
+    if(isNaN(a)||isNaN(b)){ ignored++; continue; }
+    var c=parseCoords(a,b); if(c.warn) outOfRange++;
+    pending.push({id:id, disc:disc,
+                  p:(DIR==='toEGSA') ? [c.lat,c.lon,z] : [c.x,c.y,z], z:z});
+  }
+  if(!pending.length){
+    st.style.display='block'; st.className='status err';
+    st.textContent='Δεν βρέθηκαν έγκυρες γραμμές. Δώσε: όνομα, αριθμός, αριθμός';
+    return;
+  }
+  st.style.display='block'; st.className='status';
+  st.textContent='Υπολογισμός ' + pending.length + ' σημείων…';
+
+  fetch('/api/wgs/points',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({points:pending.map(function(x){return x.p;}),
+                         reverse:(DIR!=='toEGSA'), geoid:ell})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ st.className='status err'; st.textContent=j.error||'Σφάλμα'; return; }
+     st.style.display='none';
+     var rows=[];
+     for(var i=0;i<pending.length;i++){
+       var v=j.results[i]; if(!v){ ignored++; continue; }
+       rows.push((DIR==='toEGSA')
+         ? {id:pending[i].id, A:v[0].toFixed(3), B:v[1].toFixed(3), Z:v[2].toFixed(3), disc:pending[i].disc}
+         : {id:pending[i].id, A:v[0].toFixed(8), B:v[1].toFixed(8),
+            Z:(ell? v[2] : pending[i].z).toFixed(3), disc:pending[i].disc});
+     }
+     lastRows=rows;
+     try{
+       buildText(withDesc);
+       render(rows, ignored, outOfRange, withDesc);
+     }catch(e){
+       st.style.display='block'; st.className='status err';
+       st.textContent='Σφάλμα εμφάνισης: '+e.message;
+     }
+   })
+   .catch(function(e){
+     // μόνο πραγματικό πρόβλημα δικτύου φτάνει εδώ
+     st.style.display='block'; st.className='status err';
+     st.textContent='Δεν απάντησε ο server. Τρέξε το run.bat και ξαναδοκίμασε.';
+   });
+}
+
+/* ---------------- αρχεία (PRO) ---------------- */
+var FDIR='fwd', fileObj=null, meta=null;
+
+function setFileDir(d){
+  FDIR=d;
+  document.getElementById('fF').classList.toggle('active', d==='fwd');
+  document.getElementById('fI').classList.toggle('active', d==='inv');
+  if(fileObj) inspect();
+}
+function setupFileDrop(){
+  var dz=document.getElementById('fdrop'), inp=document.getElementById('ffile');
+  dz.addEventListener('click', function(){ inp.click(); });
+  inp.addEventListener('change', function(){ if(inp.files[0]){ fileObj=inp.files[0]; inspect(); } });
+  ['dragenter','dragover'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.add('over');});});
+  ['dragleave','drop'].forEach(function(e){
+    dz.addEventListener(e,function(ev){ev.preventDefault();dz.classList.remove('over');});});
+  dz.addEventListener('drop',function(ev){
+    if(ev.dataTransfer.files.length){ fileObj=ev.dataTransfer.files[0]; inspect(); }});
+}
+function inspect(){
+  var fi=document.getElementById('finfo');
+  fi.classList.remove('hidden'); fi.textContent='Ανάλυση…';
+  var fd=new FormData(); fd.append('file',fileObj); fd.append('reverse', FDIR==='inv'?'1':'0');
+  fetch('/api/wgs/inspect',{method:'POST',body:fd}).then(function(r){return r.json();})
+   .then(function(j){
+     if(!j.ok){ fi.innerHTML='<b style="color:#e5534b">'+j.error+'</b>';
+                document.getElementById('cardOpts').classList.add('hidden'); return; }
+     meta=j;
+     var k=Object.keys(j.kinds).map(function(x){return j.kinds[x]+' '+x;}).join(' · ');
+     var crs=j.crs==='egsa87'?'ΕΓΣΑ87 (μέτρα)':(j.crs==='wgs84'?'WGS84 (μοίρες)':'άγνωστο');
+     var want=FDIR==='inv'?'egsa87':'wgs84';
+     var bad=(j.crs!=='unknown' && j.crs!==want);
+     fi.innerHTML='<b>'+fileObj.name+'</b> — '+j.count+' αντικείμενα ('+k+')<br>'+
+       'Εντοπίστηκε: <b>'+crs+'</b> <span class="muted">(από '+j.crs_source+')</span>'+
+       (bad?'<br><b style="color:#f1c40f">⚠️ Δεν ταιριάζει με την κατεύθυνση που διάλεξες — άλλαξέ την, αλλιώς το αποτέλεσμα θα είναι λάθος.</b>':'');
+     buildLayers(j.layers);
+     buildOpts(j.fields);
+     document.getElementById('cardOpts').classList.remove('hidden');
+   })
+   .catch(function(){ fi.innerHTML='<b style="color:#e5534b">Δεν απάντησε ο server. Τρέξε το run.bat.</b>'; });
+}
+function buildLayers(ls){
+  var box=document.getElementById('layerBox'), el=document.getElementById('layers');
+  if(!ls || ls.length<2){ box.classList.add('hidden'); el.innerHTML=''; return; }
+  box.classList.remove('hidden');
+  el.innerHTML = ls.map(function(L){
+    var k=Object.keys(L.kinds).map(function(x){return L.kinds[x]+' '+x;}).join(', ');
+    var on = !L.dup;
+    return '<label class="chip'+(on?' on':'')+'" title="'+(L.dup?'αντίγραφο':'')+'">'+
+      '<input type="checkbox" value="'+L.name+'"'+(on?' checked':'')+
+      ' onchange="this.parentNode.classList.toggle(&quot;on&quot;,this.checked)"> '+
+      L.name+' <span class="muted">('+k+(L.has_z?', Z':'')+')</span></label>';
+  }).join('');
+}
+function buildOpts(fields){
+  var inv=FDIR==='inv';
+  var outs = inv ? [['shp','SHP (EPSG:4326)'],['kml','KML'],['kmz','KMZ'],['txt','TXT']]
+                 : [['shp','SHP (EPSG:2100)'],['dxf','DXF'],['txt','TXT']];
+  document.getElementById('outs').innerHTML = outs.map(function(o,i){
+    return '<label class="chip'+(i<2?' on':'')+'"><input type="checkbox" value="'+o[0]+'"'+
+      (i<2?' checked':'')+' onchange="this.parentNode.classList.toggle(&quot;on&quot;,this.checked)"> '+o[1]+'</label>';
+  }).join('');
+  document.getElementById('fields').innerHTML = (fields&&fields.length)
+    ? fields.map(function(f,i){
+        var sm=(meta&&meta.sample&&meta.sample[f])?' <span class="muted">('+meta.sample[f]+')</span>':'';
+        return '<label class="chip'+(i===0?' on':'')+'"><input type="checkbox" value="'+f+'"'+
+          (i===0?' checked':'')+' onchange="this.parentNode.classList.toggle(&quot;on&quot;,this.checked)"> '+f+sm+'</label>';
+      }).join('')
+    : '<span class="muted">Το αρχείο δεν έχει ιδιότητες.</span>';
+}
+function checkedVals(id){
+  return [].slice.call(document.querySelectorAll('#'+id+' input:checked')).map(function(i){return i.value;});
+}
+function runFile(){
+  var st=document.getElementById('fstat'), go=document.getElementById('fgo');
+  var outs=checkedVals('outs');
+  if(!outs.length){ st.textContent='Διάλεξε τουλάχιστον μία μορφή.'; return; }
+  go.disabled=true; st.textContent='Επεξεργασία…';
+  document.getElementById('cardRes').classList.add('hidden');
+  var fd=new FormData();
+  fd.append('file',fileObj); fd.append('reverse', FDIR==='inv'?'1':'0');
+  fd.append('outputs', outs.join(',')); fd.append('labels', checkedVals('fields').join(','));
+  fd.append('layers', checkedVals('layers').join(','));
+  fd.append('with_z', document.getElementById('chkZ').checked?'1':'0');
+  fetch('/api/wgs/convert',{method:'POST',body:fd}).then(function(r){return r.json();})
+   .then(function(j){
+     go.disabled=false;
+     if(!j.ok){ st.textContent=j.error; return; }
+     st.textContent='';
+     document.getElementById('freport').textContent=j.report;
+     document.getElementById('flinks').innerHTML=j.files.map(function(f){
+       return '<div class="dl"><b>'+f.name+'</b><span class="sz">'+(f.size/1024).toFixed(0)+
+              ' KB</span><a href="'+f.url+'"><button class="btn">&#11015; Κατέβασμα</button></a></div>';
+     }).join('');
+     document.getElementById('cardRes').classList.remove('hidden');
+     document.getElementById('cardRes').scrollIntoView({behavior:'smooth'});
+   })
+   .catch(function(){ go.disabled=false; st.textContent='Δεν απάντησε ο server.'; });
+}
+function clearFile(){
+  fileObj=null; meta=null;
+  document.getElementById('ffile').value='';
+  document.getElementById('finfo').classList.add('hidden');
+  document.getElementById('cardOpts').classList.add('hidden');
+  document.getElementById('cardRes').classList.add('hidden');
+  document.getElementById('layerBox').classList.add('hidden');
+  document.getElementById('fstat').textContent='';
+}
+
+/* ---------------- εκκίνηση + αυτοέλεγχος ---------------- */
+function init(){
+  var s=document.getElementById('status');
+  setDir('toEGSA'); setupDrop(); setupFileDrop();
+  document.getElementById('btnGo').disabled=false;
+  s.style.display='block'; s.className='status';
+  s.textContent='Έλεγχος σύνδεσης…';
+  fetch('/api/wgs/points',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({points:[[39.70758029,20.72920305,544.963]],reverse:false})})
+   .then(function(r){return r.json();})
+   .then(function(j){
+     var v=j.ok&&j.results&&j.results[0];
+     var ok=v && Math.abs(v[0]-219438.037)<0.05 && Math.abs(v[1]-4400131.243)<0.05;
+     if(ok){ s.style.display='none'; }
+     else { s.className='status err'; s.innerHTML='&#9940; Ο έλεγχος ορθότητας απέτυχε — μη το χρησιμοποιείς.'; }
+   })
+   .catch(function(){
+     s.className='status err';
+     s.innerHTML='&#9940; Δεν βρέθηκε ο server. Τρέξε το <b>run.bat</b> και ξαναφόρτωσε τη σελίδα.';
+   });
+}
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+<script src="../lib/server-check.js"></script>
+<script>
+  ZSServer.banner('<b>\u26a0 Προσωρινά εκτός λειτουργίας.</b><br>Το εργαλείο αυτό εκτελεί τους υπολογισμούς <b>στον server</b>, ώστε οι επίσημοι συντελεστές και τα grids HEPOS να μη φεύγουν στον browser. Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση — το εργαλείο θα ενεργοποιηθεί μόνο του μόλις ανέβει.');
+</script>
+</body>
+</html>

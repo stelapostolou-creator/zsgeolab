@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZS-Top | Λογαριασμός</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--red2:#c62027;--line:#25334f;--ok:#2ecc71;}
+  body{background:var(--bg);color:var(--ink);min-height:100vh;
+    background-image:linear-gradient(rgba(11,18,32,.90),rgba(11,18,32,.96)),url('assets/zstop-hero.jpg');background-size:cover;background-position:center;}
+  header{padding:14px 32px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);background:rgba(11,18,32,.7);}
+  .logo-img{height:46px;border-radius:9px;background:#fff;padding:4px 8px;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+  .back{color:var(--mut);text-decoration:none;font-size:13px;font-weight:bold;}
+  .back:hover{color:var(--red);}
+  .wrap{max-width:430px;margin:6vh auto;padding:0 18px;}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:30px;box-shadow:0 20px 50px rgba(0,0,0,.5);}
+  h1{font-size:22px;color:#f0f6ff;text-align:center;margin-bottom:4px;}
+  .sub{text-align:center;color:var(--mut);font-size:13px;margin-bottom:22px;}
+  .demo{background:rgba(224,53,58,.1);border:1px solid rgba(224,53,58,.4);color:#ffb3b5;font-size:12px;padding:9px 12px;border-radius:8px;margin-bottom:18px;text-align:center;}
+  .tabs{display:flex;background:var(--bg2);border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:20px;}
+  .tabs button{flex:1;padding:11px;background:transparent;border:0;color:var(--mut);font-weight:700;font-size:14px;cursor:pointer;transition:.2s;}
+  .tabs button.active{background:var(--red);color:#fff;}
+  label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin:12px 0 5px;}
+  input{width:100%;padding:11px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:#f0f6ff;font-size:14px;}
+  input:focus{outline:none;border-color:var(--red);}
+  .btn{width:100%;margin-top:18px;padding:12px;background:var(--red);color:#fff;border:0;border-radius:8px;font-weight:800;font-size:15px;cursor:pointer;transition:.2s;}
+  .btn:hover{background:var(--red2);}
+  .btn:disabled{opacity:.6;cursor:not-allowed;}
+  .gbtn{width:100%;margin-top:12px;padding:11px;background:#fff;color:#222;border:0;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;}
+  .gbtn:hover{background:#f1f1f1;}
+  .or{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px;margin:16px 0;}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line);}
+  .msg{margin-top:14px;font-size:13px;padding:10px;border-radius:8px;display:none;}
+  .msg.err{display:block;background:rgba(224,53,58,.12);color:#ff9ea0;border:1px solid rgba(224,53,58,.4);}
+  .msg.ok{display:block;background:rgba(46,204,113,.12);color:#8ff0b6;border:1px solid rgba(46,204,113,.4);}
+  .signed{text-align:center;}
+  .signed .av{width:64px;height:64px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;margin:0 auto 14px;}
+  .foot{text-align:center;color:var(--mut);font-size:12px;margin-top:18px;}
+  .foot a{color:var(--navy2);text-decoration:none;}
+</style>
+</head>
+<body>
+  <header>
+    <a href="index.html"><img src="assets/zstop-logo.png" alt="ZS-Top" class="logo-img"></a>
+    <a href="index.html" class="back">← GeoLab</a>
+  </header>
+
+  <div class="wrap">
+    <div class="box">
+      <div id="demoBanner" class="demo" style="display:none">⚠ DEMO MODE — τοπική δοκιμή (χωρίς πραγματικό backend). Στήσε Supabase για αληθινούς λογαριασμούς.</div>
+
+      <!-- Signed-out view -->
+      <div id="authView">
+        <h1>Καλώς ήρθες στο <span style="color:var(--red)">ZS-Top</span></h1>
+        <p class="sub">Συνδέσου ή δημιούργησε λογαριασμό</p>
+
+        <div class="tabs">
+          <button id="tabLogin" class="active" onclick="showTab('login')">Σύνδεση</button>
+          <button id="tabReg" onclick="showTab('reg')">Εγγραφή</button>
+        </div>
+
+        <div id="fName" style="display:none">
+          <label>Ονοματεπώνυμο</label>
+          <input id="name" type="text" placeholder="π.χ. Στυλιανός Αποστόλου">
+        </div>
+        <label>Email</label>
+        <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+        <label>Κωδικός</label>
+        <input id="pass" type="password" placeholder="≥ 6 χαρακτήρες" autocomplete="current-password">
+        <div id="fConfirm" style="display:none">
+          <label>Επιβεβαίωση κωδικού</label>
+          <input id="pass2" type="password" placeholder="ξανά ο κωδικός">
+        </div>
+
+        <button id="submitBtn" class="btn" onclick="submit()">Σύνδεση</button>
+
+        <div class="or">ή</div>
+        <button class="gbtn" onclick="google()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.2 13.7 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.7-9.9 6.7-17.4z"/><path fill="#FBBC05" d="M10.4 28.3a14.5 14.5 0 0 1 0-8.6l-7.8-6.1a24 24 0 0 0 0 20.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.6l-7.3-5.7c-2 1.4-4.7 2.3-7.9 2.3-6.4 0-11.8-4.2-13.6-9.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+          Σύνδεση με Google
+        </button>
+
+        <div id="msg" class="msg"></div>
+      </div>
+
+      <!-- Signed-in view -->
+      <div id="signedView" style="display:none" class="signed">
+        <div class="av" id="avatar">?</div>
+        <h1 id="hello">Συνδεδεμένος</h1>
+        <p class="sub" id="whoEmail"></p>
+        <a href="index.html"><button class="btn">→ Πήγαινε στο GeoLab</button></a>
+        <button class="btn" style="background:transparent;border:1px solid var(--line);color:var(--ink);margin-top:10px" onclick="logout()">Αποσύνδεση</button>
+      </div>
+
+      <div class="foot">Με τη σύνδεση αποδέχεσαι τη χρήση των εργαλείων ZS-Top. <a href="index.html">Αρχική</a></div>
+    </div>
+  </div>
+
+<script src="lib/config.js"></script>
+<script src="lib/auth.js"></script>
+<script>
+  var mode='login';
+  function q(id){return document.getElementById(id);}
+  function showTab(m){
+    mode=m;
+    q('tabLogin').classList.toggle('active',m==='login');
+    q('tabReg').classList.toggle('active',m==='reg');
+    q('fName').style.display = m==='reg'?'block':'none';
+    q('fConfirm').style.display = m==='reg'?'block':'none';
+    q('submitBtn').textContent = m==='reg'?'Δημιουργία λογαριασμού':'Σύνδεση';
+    q('pass').autocomplete = m==='reg'?'new-password':'current-password';
+    hideMsg();
+  }
+  function showMsg(t,ok){var m=q('msg');m.className='msg '+(ok?'ok':'err');m.textContent=t;}
+  function hideMsg(){q('msg').className='msg';}
+  function nextUrl(){var p=new URLSearchParams(location.search).get('next');return p||'index.html';}
+
+  function renderUser(u){
+    if(u){
+      q('authView').style.display='none';
+      q('signedView').style.display='block';
+      q('avatar').textContent=(u.name||u.email||'?').charAt(0).toUpperCase();
+      q('hello').textContent='Γεια σου, '+(u.name||'χρήστη')+'!';
+      q('whoEmail').textContent=u.email;
+    } else {
+      q('authView').style.display='block';
+      q('signedView').style.display='none';
+    }
+  }
+
+  ZSAuth.ready.then(function(){
+    if(ZSAuth.mode==='demo') q('demoBanner').style.display='block';
+    ZSAuth.onChange(renderUser);
+  });
+
+  function submit(){
+    hideMsg();
+    var email=q('email').value.trim(), pass=q('pass').value, name=q('name').value.trim();
+    var btn=q('submitBtn'); btn.disabled=true;
+    var done=function(){btn.disabled=false;};
+    if(mode==='reg'){
+      if(pass!==q('pass2').value){ showMsg('Οι κωδικοί δεν ταιριάζουν.'); done(); return; }
+      ZSAuth.register({email:email,password:pass,name:name}).then(function(){
+        showMsg('Ο λογαριασμός δημιουργήθηκε! Αν το Supabase ζητά επιβεβαίωση email, έλεγξε το inbox σου.',true);
+        setTimeout(function(){ if(ZSAuth.getUser()) location.href=nextUrl(); },900);
+        done();
+      }).catch(function(e){ showMsg(e.message||'Σφάλμα εγγραφής.'); done(); });
+    } else {
+      ZSAuth.login({email:email,password:pass}).then(function(){
+        location.href=nextUrl();
+      }).catch(function(e){ showMsg(e.message||'Σφάλμα σύνδεσης.'); done(); });
+    }
+  }
+  function google(){ hideMsg(); ZSAuth.loginGoogle().catch(function(e){ showMsg(e.message); }); }
+  function logout(){ ZSAuth.logout(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "gr.zstop.swhepos",
+      "sha256_cert_fingerprints": [
+        "17:B4:43:3A:5D:D6:85:88:06:3F:2C:40:21:65:D4:82:A3:C2:A1:29:BE:B3:EB:EF:AF:C9:9F:6F:C2:79:A4:BA"
+      ]
+    }
+  }
+]

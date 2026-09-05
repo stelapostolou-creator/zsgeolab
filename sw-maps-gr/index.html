@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SW Maps GR Helper (HEPOS) — ZS-Top</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SWHepos">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="../lib/vendor/leaflet.css" />
+<script src="../lib/vendor/leaflet.js"></script>
+<script src="../lib/vendor/xlsx.full.min.js"></script>
+<script src="../lib/vendor/sql-wasm.js"></script>
+<script src="../lib/vendor/proj4.js"></script>
+<script src="../lib/hepos.js"></script>
+<script src="../lib/hepos_grids.js"></script>
+<script src="../lib/swmaps.js"></script>
+<script src="../lib/jobs.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--red2:#c62027;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  html,body{height:100%;height:100dvh;margin:0;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;overflow:hidden;}
+  header{background:linear-gradient(135deg,#16233f,#0f1830);display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.4);flex-shrink:0;}
+  header .logo-img{height:38px;border-radius:8px;background:#fff;padding:3px 7px;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  header .status{margin-left:auto;font-size:12px;color:var(--mut);}
+  header .abtn{flex-shrink:0;background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;width:34px;height:34px;font-size:15px;line-height:1;cursor:pointer;padding:0;}
+  header .abtn:active{background:var(--bg2);}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:3000;padding:16px;}
+  .modal.show{display:flex;}
+  .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:430px;width:100%;max-height:86vh;overflow:auto;padding:22px 20px;position:relative;box-shadow:0 12px 45px rgba(0,0,0,.6);}
+  .modal-card h2{font-size:23px;font-weight:800;margin:0 0 6px;} .modal-card h2 span{color:var(--red);}
+  .modal-card h3{font-size:12px;color:var(--red);margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  .modal-card p{margin:5px 0;font-size:14px;line-height:1.55;} .modal-card .amut{color:var(--mut);}
+  .modal-card a{color:var(--navy2);font-weight:600;text-decoration:none;}
+  .modal-x{position:absolute;top:8px;right:10px;background:transparent;border:0;color:var(--mut);font-size:22px;cursor:pointer;line-height:1;}
+  .modal-card .logos{background:#fff;border-radius:10px;padding:14px 16px;margin:12px 0;display:flex;flex-direction:column;gap:12px;align-items:center;}
+  .modal-card .logos img{max-width:100%;max-height:74px;height:auto;object-fit:contain;}
+  .modal-card .em{color:var(--ink);font-weight:600;}
+  .langtabs{display:flex;gap:6px;margin-bottom:8px;}
+  .langbtn{background:var(--bg2);border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer;}
+  .langbtn.active{background:var(--navy2);color:#fff;border-color:var(--navy2);}
+  .modal-card .acc{background:rgba(46,204,113,.10);border:1px solid rgba(46,204,113,.38);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.5;color:#cdeede;margin:10px 0;}
+  .modal-card .acc b{color:#8ff0b6;}
+  .modal-card .foot2{text-align:center;line-height:1.7;font-size:11px;}
+  main{flex:1;overflow-y:auto;padding:14px;}
+  .map-wrap{height:44vh;min-height:260px;position:relative;margin-bottom:14px;}
+  #map{width:100%;height:100%;border-radius:10px;border:1px solid var(--line);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .card h2{font-size:14px;color:#f0f6ff;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .card h2 .c{width:4px;height:16px;background:var(--red);border-radius:2px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn{padding:11px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:var(--navy2);transition:.15s;}
+  .btn:active{background:var(--navy);} .btn.red{background:var(--red);} .btn.red:active{background:var(--red2);}
+  .btn.green{background:var(--ok);color:#08210f;} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .layer{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:13px;}
+  .layer:last-child{border-bottom:0;}
+  .layer input{width:18px;height:18px;accent-color:var(--red);}
+  .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
+  .layer .nm{font-weight:700;color:#f0f6ff;} .layer .ty{font-size:11px;color:var(--mut);text-transform:uppercase;}
+  .layer .ct{margin-left:auto;font-size:12px;color:var(--mut);}
+  .lyrdel{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;margin-left:8px;}
+  .lyrdel:hover{border-color:var(--red);color:var(--red);}
+  .empty{color:var(--mut);font-size:13px;text-align:center;padding:14px;}
+  .sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .pill{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:12px;}
+  .pill b{color:var(--red);}
+  .hint{font-size:11.5px;color:var(--mut);margin-top:8px;}
+  .opt{display:flex;align-items:center;gap:7px;font-size:13px;margin:8px 0;}
+  .opt input{width:auto;accent-color:var(--red);}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0f1830;color:var(--ink);}
+  .leaflet-container{background:#0a1020;}
+  .leaflet-control-layers{background:#0f1830;color:var(--ink);border:1px solid var(--line);border-radius:8px;}
+  .leaflet-control-layers-toggle{width:40px;height:40px;background-color:#0f1830;border:1px solid var(--line);border-radius:8px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e6ecf5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>");background-size:22px 22px;background-position:center;background-repeat:no-repeat;}
+  .leaflet-control-layers-expanded{padding:8px 12px;}
+  .leaflet-control-layers label{color:var(--ink);font-size:13px;margin:3px 0;}
+  .tblwrap{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;}
+  tr:hover td{background:rgba(224,53,58,.06);}
+  .pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+  .pk{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;}
+  .pk.p1{border-color:#ff3df0;} .pk.p2{border-color:#ffcc00;}
+  .btn.small{padding:8px 12px;font-size:13px;}
+  .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .fld label{display:block;font-size:12px;color:var(--mut);font-weight:700;margin-bottom:4px;}
+  .fld input,.fld select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:15px;}
+  .fld input:focus,.fld select:focus{outline:none;border-color:var(--red);}
+  .compbar{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  footer{flex-shrink:0;text-align:center;font-size:11px;color:var(--mut);padding:8px;border-top:1px solid var(--line);background:var(--bg2);}
+  footer a{color:var(--navy2);text-decoration:none;}
+</style>
+</head>
+<body>
+  <header>
+    <img src="../assets/zstop-logo.png" alt="ZS-Top" class="logo-img">
+    <div class="htitle">SW<span>Hepos</span></div>
+    <div class="status" id="status"></div>
+    <button class="abtn" onclick="openAbout()" title="About / Πληροφορίες" aria-label="About">ℹ️</button>
+  </header>
+
+  <div id="aboutModal" class="modal" onclick="if(event.target===this)closeAbout()">
+    <div class="modal-card">
+      <button class="modal-x" onclick="closeAbout()" aria-label="Close">✕</button>
+      <div class="langtabs">
+        <button id="lgEn" class="langbtn active" onclick="setAboutLang('en')">EN</button>
+        <button id="lgEl" class="langbtn" onclick="setAboutLang('el')">ΕΛ</button>
+      </div>
+      <h2>SW<span>Hepos</span></h2>
+
+      <div class="alang" data-lang="en">
+        <p class="amut">SW Maps → ΕΓΣΑ87 (HEPOS): map, points / lines / polygons, stakeout, DXF &amp; CSV export. Free for everyone.</p>
+        <p class="acc">✔ Uses the official <b>HEPOS 7-parameter transformation</b> with grid corrections — deviation <b>&lt; 0.005 m</b> from the HEPOS Transformation Tool.</p>
+        <h3>Developer &amp; contact</h3>
+        <p><b>Stylianos F. Apostolou</b> — Surveying Engineer<br>
+           Zitsa, Ioannina, Greece<br>
+           Tel: <a href="tel:+306948938654">+30 694 893 8654</a><br>
+           Email: <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a><br>Web: <a href="https://zsgeolab.com/">zsgeolab.com</a> &middot; <a href="https://zstop.gr/">zstop.gr</a></p>
+        <h3>Works with SW Maps</h3>
+        <p>A specialized surveying assistant, designed to work in perfect harmony with <b>SW Maps</b> — the best entirely free field data collector, and one of the best overall — for Greek users.</p>
+        <p class="amut">Many thanks to developer <span class="em">Avinab Malla</span> of <span class="em">Aviyaan Tech (P) Ltd.</span>, and to <span class="em">Softwel (P) Ltd.</span> for publishing it.</p>
+      </div>
+
+      <div class="alang" data-lang="el" hidden>
+        <p class="amut">SW Maps → ΕΓΣΑ87 (HEPOS): χάρτης, σημεία / γραμμές / πολύγωνα, χάραξη, εξαγωγή DXF &amp; CSV. Δωρεάν για όλους.</p>
+        <p class="acc">✔ Χρησιμοποιεί τον επίσημο <b>7-παραμετρικό μετασχηματισμό HEPOS</b> με εφαρμογή διορθώσεων (grid) — απόκλιση <b>&lt; 0,005 μ</b> από το HEPOS Transformation Tool.</p>
+        <h3>Δημιουργός &amp; επικοινωνία</h3>
+        <p><b>Στυλιανός Φ. Αποστόλου</b> — Τοπογράφος Μηχανικός<br>
+           Ζίτσα, Ιωάννινα<br>
+           Τηλ: <a href="tel:+306948938654">+30 694 893 8654</a><br>
+           Email: <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a><br>Web: <a href="https://zsgeolab.com/">zsgeolab.com</a> &middot; <a href="https://zstop.gr/">zstop.gr</a></p>
+        <h3>Συνεργάζεται με το SW Maps</h3>
+        <p>Ένας εξειδικευμένος τοπογραφικός βοηθός, σχεδιασμένος να λειτουργεί σε απόλυτη αρμονία με το <b>SW Maps</b> — την καλύτερη εντελώς δωρεάν εφαρμογή συλλογής δεδομένων πεδίου, και μία από τις καλύτερες γενικά — για Έλληνες χρήστες.</p>
+        <p class="amut">Πολλές ευχαριστίες στον developer <span class="em">Avinab Malla</span> της <span class="em">Aviyaan Tech (P) Ltd.</span>, και στη <span class="em">Softwel (P) Ltd.</span> για το publishing.</p>
+      </div>
+
+      <div class="logos">
+        <img src="../assets/aviyaan-logo.png" alt="Aviyaan Tech (P) Ltd.">
+        <img src="../assets/softwel-logo.png" alt="Softwel (P) Ltd.">
+      </div>
+      <p class="amut" style="font-size:12.5px;line-height:1.65">254 Shree Ekata Marga, New Baneshwor<br>Kathmandu, Nepal<br>Phone: +977-01-4566627, 4566629<br>Email: <a href="mailto:support@aviyaantech.com">support@aviyaantech.com</a></p>
+      <p style="font-size:13px">Web: <a href="https://aviyaantech.com/swmaps/" target="_blank" rel="noopener">aviyaantech.com/swmaps</a> · <a href="http://softwel.com.np/" target="_blank" rel="noopener">softwel.com.np</a></p>
+      <p style="font-size:13px"><span class="alang" data-lang="en">Download SW Maps:</span><span class="alang" data-lang="el" hidden>Κατέβασε το SW Maps:</span> <a href="https://play.google.com/store/apps/details?id=np.com.softwel.swmaps" target="_blank" rel="noopener">Google Play</a> · <a href="https://apps.apple.com/us/app/sw-maps/id6444248083" target="_blank" rel="noopener">App Store</a></p>
+      <p class="amut foot2" data-lang="en">
+        © ZS-Top<br>
+        Built with Leaflet · proj4 · sql.js · SheetJS
+      </p>
+      <p class="amut foot2" data-lang="el" hidden>
+        © ZS-Top<br>
+        Χτισμένο με Leaflet · proj4 · sql.js · SheetJS
+      </p>
+    </div>
+  </div>
+
+  <input type="file" id="fileDb" accept=".swm2,.swm,.db,.sqlite" style="display:none">
+  <input type="file" id="fileXls" accept=".xlsx,.xls" style="display:none">
+  <input type="file" id="fileEgsa" accept=".txt,.csv" style="display:none">
+  <input type="file" id="fileJob" accept=".zsj,.json" style="display:none">
+
+  <main>
+    <div class="map-wrap"><div id="map"></div></div>
+
+    <div class="card">
+      <h2><span class="c"></span>Άνοιγμα δεδομένων</h2>
+      <div class="btns">
+        <button class="btn" onclick="document.getElementById('fileDb').click()">📊 SW Maps DB (.swm2)</button>
+        <button class="btn ghost" onclick="document.getElementById('fileXls').click()">📥 Excel (SW Maps)</button>
+      </div>
+      <div class="hint">Διαβάζει όλα τα σχήματα: σημεία, γραμμές, πολύγωνα — με σωστή γεωμετρία.</div>
+      <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Καθαρισμός όλων (δεδομένα + σημεία)</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Εργασίες <span style="color:var(--mut);font-weight:400">(στη συσκευή)</span></h2>
+      <div id="jobAuto"></div>
+      <div class="btns" style="margin-top:10px">
+        <button class="btn" onclick="jobSaveAs()">💾 Αποθήκευση ως…</button>
+        <button class="btn ghost" onclick="document.getElementById('fileJob').click()">📂 Εισαγωγή .zsj</button>
+      </div>
+      <div class="hint">Η τρέχουσα εργασία κρατιέται αυτόματα στη συσκευή — ένα refresh δεν χάνει τίποτα. Οι αποθηκευμένες μένουν μέχρι να διαγραφούν.</div>
+      <div id="jobList" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Layers</h2>
+      <div class="sum" id="summary"></div>
+      <div id="layers"><div class="empty">Άνοιξε ένα αρχείο SW Maps για να δεις τα layers.</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Σημεία <span style="color:var(--mut);font-weight:400">(ΕΓΣΑ87)</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn ghost small" onclick="toggleAllSel(this)">☑ Όλα/κανένα</button>
+        <button class="btn red small" onclick="deleteSelected()">🗑 Διαγραφή επιλεγμένων</button>
+      </div>
+      <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Περιγραφή</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Προσθήκη σημείου <span style="color:var(--mut);font-weight:400">(ΕΓΣΑ87)</span></h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fld"><label>ID</label><input id="mID" placeholder="π.χ. A1"></div>
+        <div class="fld"><label>Περιγραφή</label><input id="mDesc" placeholder="προαιρετικό"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+        <div class="fld"><label>X (E)</label><input id="mX" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Y (N)</label><input id="mY" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Z</label><input id="mZ" type="number" step="0.001" inputmode="decimal"></div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:12px" onclick="addManual()">➕ Προσθήκη σημείου</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Χάραξη (Stakeout)</h2>
+      <div class="pick">
+        <div class="pk p1" id="pk1">P1: —</div>
+        <div class="pk p2" id="pk2">P2: —</div>
+        <button class="btn ghost small" onclick="swapPick()">⇄</button>
+        <button class="btn ghost small" onclick="clearPick()">✕</button>
+      </div>
+      <div class="hint">Επίλεξε δύο σημεία (στον χάρτη ή τον πίνακα): <b style="color:#ff3df0">P1</b> & <b style="color:#ffcc00">P2</b>.</div>
+      <div class="fld" style="margin:12px 0"><label>Υψόμετρο νέων σημείων (Z)</label>
+        <select id="stZ"><option value="interp">Γραμμική παρεμβολή</option><option value="copy">Ίδιο με P1</option><option value="zero">Μηδέν (0)</option></select></div>
+      <div class="row2"><div class="fld"><label>Προέκταση — απόσταση μετά το P2 (m)</label><input id="stDist" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div><button class="btn" onclick="stExtend()">📏 Προέκταση</button></div>
+      <div class="row2" style="margin-top:10px"><div class="fld"><label>Πύκνωση — βήμα (m)</label><input id="stStep" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50"></div><button class="btn" onclick="stDivide()">📍 Πύκνωση</button></div>
+      <h3 style="margin:20px 0 4px;font-size:14px;color:#f0f6ff">Τομή αποστάσεων</h3>
+      <div class="hint">Δώσε απόσταση από <b style="color:#ff3df0">P1</b> και <b style="color:#ffcc00">P2</b> → 2 τομές κύκλων (A/B), διάλεξε ποια. (Z από την παραπάνω επιλογή)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+        <div class="fld"><label>Απόσταση από P1 (m)</label><input id="isD1" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Απόσταση από P2 (m)</label><input id="isD2" type="number" step="0.001" inputmode="decimal"></div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Υπολογισμός τομών</button>
+      <div id="isResult"></div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:20px 0 12px">
+      <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: να μπει και η περιγραφή (4η στήλη → στο SW «όνομα:περιγραφή»)</label></div>
+      <div class="compbar">
+        <span class="pill">Σημεία χάραξης: <b id="compN">0</b></span>
+        <button class="btn green small" onclick="exportStakeCSV()">📤 CSV χάραξης</button>
+        <button class="btn red small" onclick="clearComputed()">🗑 Καθαρισμός</button>
+      </div>
+      <div style="margin-top:14px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Εξαγωγές</h2>
+      <div class="opt"><input type="checkbox" id="chkGeoid" checked><label for="chkGeoid">Ορθομετρικό ύψος (Z = h − N γεωειδούς)</label></div>
+      <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (γραμμές/πολύγωνα με υψόμετρο)</label></div>
+      <div class="opt"><input type="checkbox" id="dxfFlat"><label for="dxfFlat">DXF: σημεία επίπεδα Z=0 (ετικέτα με πραγματικό υψόμετρο)</label></div>
+      <div class="btns">
+        <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF (ΕΓΣΑ87)</button>
+        <button class="btn" id="btnCsv" onclick="exportTXT()" disabled>📄 TXT σημείων (ανά layer)</button>
+      </div>
+    </div>
+  </main>
+  <footer>SW Maps GR Helper · ZS-Top — Αποστόλου Φ. Στυλιανός · <a href="../index.html">GeoLab</a> · <a href="mailto:supportlab@zstop.gr" style="color:inherit">supportlab@zstop.gr</a></footer>
+
+<script>
+  var map, drawnLayer, model=null, layerState={}, gridsOK=false;
+  var GEOM_DEFAULT={POINT:'#e0353a',LINE:'#2f6bbd',POLYGON:'#00c2c2'};
+
+  function setStatus(t,cls){ var s=document.getElementById('status'); s.textContent=t; s.style.color = cls==='err'?'#ff9ea0':(cls==='ok'?'#8ff0b6':'#93a3bd'); }
+  function openAbout(){ document.getElementById('aboutModal').classList.add('show'); }
+  function closeAbout(){ document.getElementById('aboutModal').classList.remove('show'); }
+  function setAboutLang(l){
+    document.querySelectorAll('#aboutModal [data-lang]').forEach(function(el){ el.hidden = (el.getAttribute('data-lang')!==l); });
+    var en=document.getElementById('lgEn'), el=document.getElementById('lgEl');
+    if(en) en.classList.toggle('active', l==='en'); if(el) el.classList.toggle('active', l==='el');
+  }
+
+  // --- Map ---
+  map=L.map('map',{zoomControl:true,maxZoom:24}).setView([39.68,20.85],13);
+  var streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:24,maxNativeZoom:19,attribution:'© OSM'});
+  var imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19,attribution:'© Esri, Maxar'});
+  var esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19});
+  var satLabeled=L.layerGroup([imagery,esriLabels]).addTo(map);
+  L.control.layers({'🛰️ Δορυφόρος':satLabeled,'🗺️ Χάρτης (OSM)':streets},{},{collapsed:true,position:'topright'}).addTo(map);
+  drawnLayer=L.featureGroup().addTo(map);
+  setTimeout(function(){ map.invalidateSize(); },300);
+  window.addEventListener('resize',function(){ map.invalidateSize(); });
+
+  // --- Grids for EGSA ---
+  // Grids: πρώτα δοκίμασε τα ενσωματωμένα (script — δουλεύει και offline/file://),
+  // αλλιώς fetch (fallback).
+  if(window.HEPOS_GRIDS){
+    HEPOS.setGrids(window.HEPOS_GRIDS); gridsOK=true; setStatus('');
+  } else {
+    HEPOS.loadGrids('../lib/hepos_grids.json').then(function(){ gridsOK=true; if(model){ retransform(); } else { setStatus(''); } })
+      .catch(function(e){ gridsOK=false; setStatus('⚠ grids εκτός','err'); });
+  }
+
+  // --- File handlers ---
+  document.getElementById('fileDb').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadDb(f); e.target.value=''; });
+  document.getElementById('fileXls').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadXls(f); e.target.value=''; });
+
+  function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
+
+  async function loadDb(file){
+    try{
+      setStatus('φόρτωση DB…');
+      var SQL=await initSqlJs({locateFile:f=>'../lib/vendor/'+f});
+      var buf=await readBuf(file);
+      var db=new SQL.Database(new Uint8Array(buf));
+      var m=SWMaps.fromDb(db); db.close();
+      setModel(m,file.name);
+    }catch(err){ setStatus('σφάλμα DB','err'); alert('Σφάλμα ανάγνωσης .swm2:\n'+err.message); }
+  }
+  async function loadXls(file){
+    try{
+      setStatus('φόρτωση Excel…');
+      var buf=await readBuf(file);
+      var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+      var m=SWMaps.fromWorkbook(wb);
+      setModel(m,file.name);
+    }catch(err){ setStatus('σφάλμα Excel','err'); alert('Σφάλμα ανάγνωσης Excel:\n'+err.message); }
+  }
+
+  // --- Model -> transform + render ---
+  function transformModel(){
+    if(!model) return;
+    var colorByLayer={};
+    model.layers.forEach(function(l){ colorByLayer[l.name]=(l.color && l.color!=='#e0353a')?l.color:GEOM_DEFAULT[l.geomType]||'#e0353a'; });
+    var applyZ=document.getElementById('chkGeoid').checked;
+    model.features.forEach(function(f){
+      f.color = colorByLayer[f.layer] || GEOM_DEFAULT[f.geomType] || '#e0353a';
+      f.pts.forEach(function(p){
+        var h = (p.elv!=null? p.elv : 0);
+        if(gridsOK){ var e=HEPOS.toEGSA87(p.lat,p.lon,h,applyZ); p.x=e.x; p.y=e.y; p.z=e.z; }
+        else { p.x=p.y=p.z=null; }
+      });
+    });
+    var pc=0;
+    model.features.forEach(function(f){ if(f.geomType==='POINT'){ f.pts.forEach(function(p){ pc++; p.__id=f.name||('p'+pc); }); } });
+  }
+  function setModel(m,fname){
+    model=m; layerState={};
+    m.layers.forEach(function(l){ layerState[l.name]=true; });
+    if(fname) model.__fname=fname;
+    transformModel();
+    renderSummary(); renderLayers(); renderMap();
+    document.getElementById('btnDxf').disabled=false;
+    document.getElementById('btnCsv').disabled=false;
+    setStatus((model.__fname||'')+(gridsOK?'':' · grids…'), gridsOK?'':'err');
+  }
+  function retransform(){ transformModel(); renderMap(); if(model) setStatus(model.__fname||'', gridsOK?'':'err'); }
+
+  function renderSummary(){
+    if(!model){ document.getElementById('summary').innerHTML='<span class="pill">καμία φόρτωση</span>'+(computed.length?('<span class="pill"><b>'+computed.length+'</b> σημεία χάραξης</span>'):''); return; }
+    var s=SWMaps.summarize(model);
+    document.getElementById('summary').innerHTML=
+      '<span class="pill"><b>'+s.features+'</b> features</span>'+
+      '<span class="pill">'+s.byType.POINT+' σημεία</span>'+
+      '<span class="pill">'+s.byType.LINE+' γραμμές</span>'+
+      '<span class="pill">'+s.byType.POLYGON+' πολύγωνα</span>'+
+      '<span class="pill">'+Object.keys(model.features.reduce(function(a,f){a[f.layer]=1;return a;},{})).length+' layers</span>';
+  }
+
+  function addLayerRow(host,name,type,color,n,isModel){
+    var row=document.createElement('div'); row.className='layer';
+    var checked=(layerState[name]!==false);
+    row.innerHTML='<input type="checkbox" '+(checked?'checked':'')+'>'+
+      '<span class="sw" style="background:'+color+'"></span>'+
+      '<span class="nm">'+esc(name)+'</span><span class="ty">'+type+'</span>'+
+      '<span class="ct">'+n+'</span>'+
+      '<button class="lyrdel" title="Διαγραφή layer">🗑</button>';
+    row.querySelector('input').addEventListener('change',function(){ layerState[name]=this.checked; renderMap(); });
+    row.querySelector('.lyrdel').addEventListener('click',function(e){ e.stopPropagation(); isModel?deleteLayer(name):deleteComputedLayer(name); });
+    host.appendChild(row);
+  }
+  function renderLayers(){
+    var host=document.getElementById('layers'); host.innerHTML=''; var rows=0;
+    if(model){
+      var byLayer={};
+      model.features.forEach(function(f){ (byLayer[f.layer]=byLayer[f.layer]||{type:f.geomType,color:f.color,n:0}).n++; });
+      Object.keys(byLayer).forEach(function(name){ addLayerRow(host,name,byLayer[name].type,byLayer[name].color,byLayer[name].n,true); rows++; });
+    }
+    var comp={};
+    computed.forEach(function(cp){ var ly=cp.layer||'StakeOut'; comp[ly]=(comp[ly]||0)+1; });
+    Object.keys(comp).forEach(function(name){ addLayerRow(host,name,'POINT','#ff8a8a',comp[name],false); rows++; });
+    if(!rows) host.innerHTML='<div class="empty">Άνοιξε αρχείο SW Maps ή ανέβασε TXT για να δεις τα layers.</div>';
+  }
+  function deleteComputedLayer(name){
+    var n=computed.filter(function(c){ return (c.layer||'StakeOut')===name; }).length;
+    if(!confirm('Διαγραφή του layer «'+name+'» ('+n+' σημεία);')) return;
+    computed=computed.filter(function(c){ return (c.layer||'StakeOut')!==name; });
+    delete layerState[name]; renderSummary(); renderLayers(); renderMap();
+  }
+
+  function renderMap(){
+    map.invalidateSize();
+    drawnLayer.clearLayers();
+    if(model) model.features.forEach(function(f){
+      if(!layerState[f.layer]) return;
+      var latlngs=f.pts.map(function(p){ return [p.lat,p.lon]; });
+      var lbl=(f.name||f.layer)+(f.remarks?(' — '+f.remarks):'');
+      if(f.geomType==='POINT'){
+        f.pts.forEach(function(p){
+          var coords=(p.x!=null)?('<br>X: '+p.x.toFixed(3)+'<br>Y: '+p.y.toFixed(3)+'<br>Z: '+p.z.toFixed(3)):'';
+          var mk=L.circleMarker([p.lat,p.lon],{radius:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
+            .bindPopup('<b>'+(p.__id||f.name||f.layer)+'</b><br>'+f.layer+(f.remarks?('<br>'+f.remarks):'')+coords).addTo(drawnLayer);
+          (function(pt){ mk.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon});
+        });
+      } else if(f.geomType==='LINE'){
+        L.polyline(latlngs,{color:f.color,weight:3}).bindPopup(lbl).addTo(drawnLayer);
+      } else {
+        L.polygon(latlngs,{color:f.color,weight:2,fillColor:f.color,fillOpacity:.18}).bindPopup(lbl).addTo(drawnLayer);
+      }
+    });
+    computed.forEach(function(cp){
+      if(layerState[cp.layer||'StakeOut']===false) return;
+      L.circleMarker([cp.lat,cp.lon],{radius:6,color:'#ff2d2d',weight:2,fillColor:'#ff8a8a',fillOpacity:.9})
+        .bindPopup('<b>'+cp.id+'</b> <span style="color:#ff8a8a">('+cp.remarks+')</span><br>X: '+cp.x.toFixed(3)+'<br>Y: '+cp.y.toFixed(3)+'<br>Z: '+cp.z.toFixed(3)).addTo(drawnLayer);
+    });
+    var b=drawnLayer.getBounds();
+    if(b.isValid()) map.fitBounds(b,{padding:[30,30],maxZoom:18});
+    renderPointsTable();
+    renderLayers();
+    updatePick();
+    document.getElementById('compN').textContent=computed.length;
+    if(window.Jobs) Jobs.touch();          // αυτόματη αποθήκευση μετά από κάθε αλλαγή
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function renderPointsTable(){
+    var tb=document.querySelector('#ptsTbl tbody'); tb.innerHTML=''; var rows=0;
+    function addRow(id,x,y,z,rem,layer,ptObj,comp,ref){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><input type="checkbox" class="selchk"></td>'+
+        '<td'+(comp?' style="color:#ff8a8a"':'')+'>'+esc(id)+'</td><td>'+x+'</td><td>'+y+'</td><td>'+z+'</td><td>'+esc(rem)+'</td><td style="color:var(--mut)">'+esc(layer)+'</td>';
+      var cb=tr.querySelector('.selchk'); cb.__ref=ref;
+      cb.addEventListener('click',function(e){ e.stopPropagation(); });
+      tr.style.cursor='pointer';
+      tr.addEventListener('click',function(){ if(ptObj&&ptObj.x!=null){ setPick(ptObj); map.setView([ptObj.lat,ptObj.lon],Math.max(map.getZoom(),18)); } });
+      tb.appendChild(tr); rows++;
+    }
+    if(model){
+      model.features.forEach(function(f){
+        if(f.geomType!=='POINT' || !layerState[f.layer]) return;
+        f.pts.forEach(function(p){
+          addRow(p.__id, (p.x!=null)?p.x.toFixed(3):'—', (p.y!=null)?p.y.toFixed(3):'—', (p.z!=null)?p.z.toFixed(3):'—',
+            f.remarks, f.layer, {id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon}, false, {kind:'model',feature:f,pt:p});
+        });
+      });
+    }
+    computed.forEach(function(cp){
+      if(layerState[cp.layer||'StakeOut']===false) return;
+      addRow(cp.id, cp.x.toFixed(3), cp.y.toFixed(3), cp.z.toFixed(3), cp.remarks, (cp.layer||'StakeOut'), {id:cp.id,x:cp.x,y:cp.y,z:cp.z,lat:cp.lat,lon:cp.lon}, true, {kind:'computed',cp:cp});
+    });
+    if(!rows) tb.innerHTML='<tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">Δεν υπάρχουν σημεία</td></tr>';
+  }
+  function toggleAllSel(btn){
+    var boxes=document.querySelectorAll('#ptsTbl tbody input.selchk'); if(!boxes.length) return;
+    var anyOff=false; boxes.forEach(function(b){ if(!b.checked) anyOff=true; });
+    boxes.forEach(function(b){ b.checked=anyOff; });
+  }
+  function deleteSelected(){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(!checks.length){ alert('Δεν επέλεξες σημεία (τσέκαρε τα κουτάκια).'); return; }
+    if(!confirm('Διαγραφή '+checks.length+' σημείων;')) return;
+    var compDel=[], modelDel=[];
+    checks.forEach(function(ch){ var r=ch.__ref; if(!r) return; if(r.kind==='computed') compDel.push(r.cp); else modelDel.push(r); });
+    if(compDel.length) computed=computed.filter(function(c){ return compDel.indexOf(c)<0; });
+    modelDel.forEach(function(r){ var i=r.feature.pts.indexOf(r.pt); if(i>=0) r.feature.pts.splice(i,1); });
+    if(model){ model.features=model.features.filter(function(f){ return f.pts.length>0; }); }
+    renderSummary(); renderLayers(); renderMap();
+  }
+  function deleteLayer(name){
+    if(!model) return;
+    var cnt=model.features.filter(function(f){ return f.layer===name; }).length;
+    if(!confirm('Διαγραφή του layer «'+name+'» ('+cnt+' σχήματα);')) return;
+    model.features=model.features.filter(function(f){ return f.layer!==name; });
+    delete layerState[name];
+    renderSummary(); renderLayers(); renderMap();
+  }
+
+  // ---- STAKEOUT ----
+  var pick={p1:null,p2:null}, pickHL=L.layerGroup().addTo(map), computed=[];
+  function setPick(pt){
+    if(!pt||pt.x==null) return;
+    if(!pick.p1) pick.p1=pt;
+    else if(!pick.p2){ if(pt.lat===pick.p1.lat&&pt.lon===pick.p1.lon) return; pick.p2=pt; }
+    else { pick.p1=pt; pick.p2=null; }
+    updatePick();
+  }
+  function updatePick(){
+    pickHL.clearLayers();
+    var f=function(p){ return p?(p.id+'  ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+')'):'—'; };
+    document.getElementById('pk1').textContent='P1: '+f(pick.p1);
+    document.getElementById('pk2').textContent='P2: '+f(pick.p2);
+    if(pick.p1) L.circleMarker([pick.p1.lat,pick.p1.lon],{radius:11,color:'#ff3df0',weight:3,fill:false}).addTo(pickHL);
+    if(pick.p2) L.circleMarker([pick.p2.lat,pick.p2.lon],{radius:11,color:'#ffcc00',weight:3,fill:false}).addTo(pickHL);
+  }
+  function swapPick(){ var t=pick.p1; pick.p1=pick.p2; pick.p2=t; updatePick(); }
+  function clearPick(){ pick.p1=pick.p2=null; updatePick(); }
+  function zVal(a,b,d,L){ var m=document.getElementById('stZ').value; if(m==='copy')return a.z||0; if(m==='zero')return 0; return (a.z||0)+((b.z||0)-(a.z||0))*(d/L); }
+  function stExtend(){
+    if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2 (στον χάρτη ή τον πίνακα).'); return; }
+    var d=parseFloat(document.getElementById('stDist').value);
+    if(isNaN(d)){ alert('Δώσε απόσταση προέκτασης.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Τα σημεία συμπίπτουν.'); return; }
+    addComputed('E_'+a.id+'_'+b.id, b.x+d*(b.x-a.x)/L, b.y+d*(b.y-a.y)/L, zVal(a,b,L+d,L), 'Extend');
+    document.getElementById('stDist').value='';
+  }
+  function stDivide(){
+    if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2.'); return; }
+    var s=parseFloat(document.getElementById('stStep').value);
+    if(isNaN(s)||s<=0){ alert('Δώσε βήμα > 0.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Τα σημεία συμπίπτουν.'); return; }
+    var ux=(b.x-a.x)/L, uy=(b.y-a.y)/L, c=0;
+    for(var d=s; d<L-1e-9; d+=s){ c++; addComputedSilent('D_'+a.id+'_'+c, a.x+d*ux, a.y+d*uy, zVal(a,b,d,L), 'Divide'); }
+    renderMap(); document.getElementById('stStep').value='';
+    if(!c) alert('Το βήμα είναι μεγαλύτερο από το μήκος του τμήματος.');
+  }
+  function addComputedSilent(id,x,y,z,rem,lyr){ var w=gridsOK?HEPOS.toWGS84(x,y,z):{lat:0,lon:0,h:z}; computed.push({id:id,x:x,y:y,z:z,lat:w.lat,lon:w.lon,h:w.h,remarks:rem,fix:4,layer:lyr||'StakeOut'}); document.getElementById('btnCsv').disabled=false; document.getElementById('btnDxf').disabled=false; }
+  function addComputed(id,x,y,z,rem){ addComputedSilent(id,x,y,z,rem); renderMap(); }
+  function clearComputed(){ if(computed.length && confirm('Διαγραφή '+computed.length+' σημείων χάραξης;')){ computed=[]; renderMap(); } }
+
+  // ---- ΤΟΜΗ ΑΠΟΣΤΑΣΕΩΝ (distance-distance intersection) ----
+  var isCandidates=L.layerGroup().addTo(map), isCand=[];
+  function clearCand(){ isCandidates.clearLayers(); isCand=[]; document.getElementById('isResult').innerHTML=''; }
+  function calcIntersect(){
+    if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2 (στον χάρτη ή τον πίνακα).'); return; }
+    var r1=parseFloat(document.getElementById('isD1').value), r2=parseFloat(document.getElementById('isD2').value);
+    if(isNaN(r1)||isNaN(r2)||r1<=0||r2<=0){ alert('Δώσε αποστάσεις > 0.'); return; }
+    var a=pick.p1, b=pick.p2, dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+    if(d===0){ alert('Τα σημεία P1/P2 συμπίπτουν.'); return; }
+    if(d>r1+r2+1e-6){ clearCand(); alert('Δεν τέμνονται: η απόσταση P1–P2 ('+d.toFixed(3)+' m) είναι μεγαλύτερη από το άθροισμα των αποστάσεων ('+(r1+r2).toFixed(3)+' m).'); return; }
+    if(d<Math.abs(r1-r2)-1e-6){ clearCand(); alert('Δεν τέμνονται: ο ένας κύκλος βρίσκεται μέσα στον άλλο.'); return; }
+    var aa=(r1*r1-r2*r2+d*d)/(2*d), h=Math.sqrt(Math.max(0,r1*r1-aa*aa));
+    var mx=a.x+aa*dx/d, my=a.y+aa*dy/d, ox=h*dy/d, oy=h*dx/d;
+    var zMode=document.getElementById('stZ').value;
+    var z=zMode==='zero'?0:(zMode==='copy'?(a.z||0):(((a.z||0)+(b.z||0))/2));
+    var I1={x:mx+ox,y:my-oy,z:z}, I2={x:mx-ox,y:my+oy,z:z};
+    [I1,I2].forEach(function(p){ p.wgs=gridsOK?HEPOS.toWGS84(p.x,p.y,p.z):{lat:0,lon:0,h:z}; });
+    isCand=[I1,I2];
+    isCandidates.clearLayers();
+    ['A','B'].forEach(function(lb,i){ var p=isCand[i];
+      L.circleMarker([p.wgs.lat,p.wgs.lon],{radius:9,color:'#ff9800',weight:3,fillColor:'#ffb74d',fillOpacity:.95})
+        .bindTooltip(lb,{permanent:true,direction:'right'}).addTo(isCandidates);
+    });
+    document.getElementById('isResult').innerHTML=
+      '<div class="hint" style="margin-top:12px">Βρέθηκαν 2 τομές (A, B) — διάλεξε ποια θέλεις:</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'+
+      '<button class="btn green" onclick="keepIntersect(0)">✓ Τομή A</button>'+
+      '<button class="btn green" onclick="keepIntersect(1)">✓ Τομή B</button></div>'+
+      '<div class="hint" style="margin-top:8px;font-family:ui-monospace,Consolas,monospace">A: '+I1.x.toFixed(3)+', '+I1.y.toFixed(3)+'<br>B: '+I2.x.toFixed(3)+', '+I2.y.toFixed(3)+'</div>';
+    map.fitBounds(L.latLngBounds([[a.lat,a.lon],[b.lat,b.lon],[I1.wgs.lat,I1.wgs.lon],[I2.wgs.lat,I2.wgs.lon]]),{padding:[45,45],maxZoom:19});
+  }
+  function keepIntersect(i){
+    var p=isCand[i]; if(!p) return;
+    addComputed('T_'+pick.p1.id+'_'+pick.p2.id, p.x, p.y, p.z, 'Intersect '+(i===0?'A':'B'));
+    clearCand();
+    document.getElementById('isD1').value=''; document.getElementById('isD2').value='';
+  }
+  function exportStakeCSV(){
+    if(!computed.length){ alert('Δεν υπάρχουν σημεία χάραξης.'); return; }
+    var withDesc=document.getElementById('chkStakeDesc').checked;
+    var out=computed.map(function(c){
+      var h=(c.h!=null)?c.h:(gridsOK?HEPOS.toWGS84(c.x,c.y,c.z||0).h:(c.z||0));
+      var b=c.id+','+c.lat.toFixed(8)+','+c.lon.toFixed(8)+','+(+h).toFixed(3);
+      return withDesc?(b+','+(c.remarks||'')):b;
+    });
+    download(out.join('\n'),'stakeout_WGS84.csv');
+  }
+  function clearAllData(){
+    if(!model && !computed.length) return;
+    if(!confirm('Καθαρισμός ΟΛΩΝ (φορτωμένα δεδομένα + σημεία χάραξης);')) return;
+    model=null; computed=[]; pick={p1:null,p2:null};
+    document.getElementById('btnDxf').disabled=true; document.getElementById('btnCsv').disabled=true;
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('καθαρίστηκε','ok');
+  }
+  function addManual(){
+    var x=parseFloat(document.getElementById('mX').value), y=parseFloat(document.getElementById('mY').value), z=parseFloat(document.getElementById('mZ').value)||0;
+    if(isNaN(x)||isNaN(y)){ alert('Δώσε X και Y (ΕΓΣΑ87).'); return; }
+    var id=document.getElementById('mID').value.trim()||('M'+(computed.length+1));
+    var desc=document.getElementById('mDesc').value.trim()||'Manual';
+    addComputedSilent(id,x,y,z,desc,'Manual'); renderMap();
+    ['mID','mDesc','mX','mY','mZ'].forEach(function(k){ document.getElementById(k).value=''; });
+    setStatus('προστέθηκε '+id,'ok');
+  }
+  document.getElementById('fileEgsa').addEventListener('change',function(e){
+    var file=e.target.files[0]; if(!file) return;
+    var lyr=(file.name||'').replace(/\.[^.]+$/,'')||'TXT';
+    var r=new FileReader();
+    r.onload=function(ev){
+      var lines=ev.target.result.split(/\r?\n/), n=0, i=0;
+      lines.forEach(function(ln){ ln=ln.trim(); if(!ln) return; var p=ln.split(/[,\t;]/); if(p.length<3) return;
+        var x=parseFloat(p[1]), y=parseFloat(p[2]), z=parseFloat(p[3])||0; if(isNaN(x)||isNaN(y)) return;
+        var disc=(p[4]!==undefined && p[4].trim()!=='')?p[4].trim():'EGSA';   // 5η στήλη = περιγραφή, παραπάνω αγνοούνται
+        i++; addComputedSilent((p[0].trim()||('E'+i)), x,y,z,disc,lyr); n++;
+      });
+      renderMap();
+      if(!n) alert('Δεν βρέθηκαν έγκυρες γραμμές (pt,x,y[,z]).'); else setStatus('φορτώθηκαν '+n+' σημεία ΕΓΣΑ ✓','ok');
+    };
+    r.readAsText(file); e.target.value='';
+  });
+
+  document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
+
+  // --- DXF export (ΕΓΣΑ87) ---
+  function aci(hex){ // hex -> nearest AutoCAD color index (βασικά χρώματα)
+    var pal={1:[255,0,0],2:[255,255,0],3:[0,255,0],4:[0,255,255],5:[0,0,255],6:[255,0,255],7:[255,255,255]};
+    var r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16),best=7,bd=1e9;
+    for(var k in pal){ var p=pal[k],d=(p[0]-r)*(p[0]-r)+(p[1]-g)*(p[1]-g)+(p[2]-b)*(p[2]-b); if(d<bd){bd=d;best=+k;} }
+    return best;
+  }
+  function exportDXF(){
+    if(!model && !computed.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    if(!gridsOK){ if(!confirm('Τα grids ΕΓΣΑ δεν φορτώθηκαν — οι συντεταγμένες θα είναι ανακριβείς. Συνέχεια;')) return; }
+    var scale=0.5;
+    var poly3d=document.getElementById('dxf3d').checked, flat=document.getElementById('dxfFlat').checked;
+    // --- συλλογή layers (γεωμετρία + sub-layers κειμένων για σημεία) ---
+    var lyr={};
+    function addLyr(name,c){ if(!(name in lyr)) lyr[name]=c; }
+    function ptLayers(base,col){ addLyr(base,col); addLyr(base+'_ID',2); addLyr(base+'_Z',4); addLyr(base+'_Desc',3); }
+    if(model) model.features.forEach(function(f){ var base=dxfName(f.layer), col=aci(f.color);
+      if(f.geomType==='POINT') ptLayers(base,col); else addLyr(base,col);
+    });
+    computed.forEach(function(c){ ptLayers(dxfName(c.layer||'StakeOut'),1); });
+    // --- HEADER + TABLES (LAYER) ---
+    var d='0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
+    Object.keys(lyr).forEach(function(name){ d+='0\nLAYER\n2\n'+name+'\n70\n0\n62\n'+lyr[name]+'\n6\nCONTINUOUS\n'; });
+    d+='0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+    // --- helper: σημείο + κειμενάκια (αριθμός/υψόμετρο/περιγραφή σε sub-layers) ---
+    function emitPoint(base,col,id,x,y,z,rem){
+      var pz=flat?0:z;
+      d+='0\nPOINT\n8\n'+base+'\n62\n'+col+'\n10\n'+num(x)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n';
+      if(id) d+='0\nTEXT\n8\n'+base+'_ID\n62\n2\n10\n'+num(x+scale)+'\n20\n'+num(y+scale)+'\n30\n'+num(pz)+'\n40\n'+scale+'\n1\n'+dxfText(id)+'\n';
+      d+='0\nTEXT\n8\n'+base+'_Z\n62\n4\n10\n'+num(x+scale)+'\n20\n'+num(y-scale)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+num(z)+'\n';
+      if(rem) d+='0\nTEXT\n8\n'+base+'_Desc\n62\n3\n10\n'+num(x+scale*1.7)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+dxfText(rem)+'\n';
+    }
+    // --- entities ---
+    if(model) model.features.forEach(function(f){
+      var base=dxfName(f.layer), col=aci(f.color);
+      if(f.geomType==='POINT'){
+        f.pts.forEach(function(p){ emitPoint(base,col,(p.__id||f.name),p.x,p.y,p.z,f.remarks); });
+      } else {
+        var closed=f.geomType==='POLYGON';
+        var pflag=(poly3d?8:0)|(closed?1:0);
+        d+='0\nPOLYLINE\n8\n'+base+'\n62\n'+col+'\n66\n1\n70\n'+pflag+'\n';
+        f.pts.forEach(function(p){ d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(p.x)+'\n20\n'+num(p.y)+'\n30\n'+num(poly3d?p.z:0)+'\n'; });
+        d+='0\nSEQEND\n8\n'+base+'\n';
+      }
+    });
+    computed.forEach(function(c){ emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,c.x,c.y,c.z,c.remarks); });
+    d+='0\nENDSEC\n0\nEOF\n';
+    download(d,'SW_Maps_EGSA87.dxf');
+  }
+  function dxfName(s){ s=String(s==null?'':s).trim().replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_'); return s||'0'; }
+  function dxfText(s){ return String(s==null?'':s).replace(/[\r\n]+/g,' '); }
+  function num(v){ return (v==null||isNaN(v))?'0.000':(+v).toFixed(3); }
+
+  // --- TXT export: όλα τα σημεία των σχημάτων -> ΕΓΣΑ87, ανά layer (id,X,Y,Z,περιγραφή,layer) ---
+  function exportTXT(){
+    if(!model && !computed.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    var out=[];
+    if(model){
+      model.features.forEach(function(f){
+        f.pts.forEach(function(p,i){
+          if(p.x==null) return;
+          var id = (f.geomType==='POINT') ? p.__id : ((f.name||f.layer)+'_'+(i+1));
+          out.push(id+','+p.x.toFixed(3)+','+p.y.toFixed(3)+','+p.z.toFixed(3)+','+(f.remarks||'')+','+(p.fix!=null?p.fix:'')+','+f.layer);
+        });
+      });
+    }
+    computed.forEach(function(c){ out.push(c.id+','+c.x.toFixed(3)+','+c.y.toFixed(3)+','+c.z.toFixed(3)+','+(c.remarks||'')+','+(c.fix!=null?c.fix:4)+','+(c.layer||'StakeOut')); });
+    if(!out.length){ alert('Δεν υπάρχουν σημεία.'); return; }
+    download(out.join('\n'),'SW_Maps_EGSA87_points.txt');
+  }
+
+  function download(text,name){
+    var mime = /\.dxf$/i.test(name) ? 'application/octet-stream'
+             : /\.csv$/i.test(name) ? 'text/csv' : 'text/plain';
+    var blob=new Blob([text],{type:mime+';charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name; a.rel='noopener';
+    a.style.display='none'; document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ try{document.body.removeChild(a);}catch(e){} URL.revokeObjectURL(url); }, 2000);
+  }
+</script>
+<script>
+/*  Ιστορικό εργασιών — δένει τη σελίδα με το lib/jobs.js.
+ *
+ *  Στιγμιότυπο = φορτωμένο μοντέλο + σημεία χάραξης + κατάσταση layers.
+ *  Οι συντεταγμένες ΕΓΣΑ87 δεν αποθηκεύονται· υπολογίζονται ξανά στην
+ *  επαναφορά, ώστε μια διόρθωση στα grids να περνά και στις παλιές εργασίες.
+ */
+(function(){
+  'use strict';
+  var TOOL='sw-maps-gr';
+
+  function when(ts){
+    var d=new Date(ts);
+    return d.toLocaleDateString('el-GR')+' '+d.toLocaleTimeString('el-GR',{hour:'2-digit',minute:'2-digit'});
+  }
+  function esc2(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+  function jobSnapshot(){
+    var feats=(model&&model.features)?model.features.length:0;
+    if(!feats && !computed.length) return {empty:true};
+    return {
+      v:1,
+      model: model?{layers:model.layers, features:model.features, __fname:model.__fname}:null,
+      computed: computed,
+      layerState: layerState,
+      geoid: document.getElementById('chkGeoid').checked,
+      info: {feats:feats, comp:computed.length, fname:(model&&model.__fname)||''}
+    };
+  }
+
+  function jobRestore(s){
+    if(!s) return;
+    document.getElementById('chkGeoid').checked = (s.geoid!==false);
+    computed = s.computed||[];
+    layerState = s.layerState||{};
+    model = s.model||null;
+    if(model) transformModel();
+    var any = !!model || computed.length>0;
+    document.getElementById('btnDxf').disabled=!any;
+    document.getElementById('btnCsv').disabled=!any;
+    pick={p1:null,p2:null};
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('επαναφορά εργασίας ✓','ok');
+  }
+
+  function label(m){
+    var i=m.info||{};
+    var p=[];
+    if(i.feats) p.push(i.feats+' features');
+    if(i.comp) p.push(i.comp+' χάραξης');
+    if(i.fname) p.push(esc2(i.fname));
+    return p.join(' · ')||'—';
+  }
+
+  function renderJobs(){
+    return Jobs.list().then(function(rows){
+      var auto=null, saved=[];
+      rows.forEach(function(r){ if(r.id===Jobs.AUTO) auto=r; else saved.push(r); });
+
+      var ha=document.getElementById('jobAuto');
+      if(auto){
+        ha.innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.03)">'+
+          '<div style="font-size:13px;color:#f0f6ff"><b>Τελευταία εργασία</b> — '+when(auto.saved)+'</div>'+
+          '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+          '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Επαναφορά</button>'+
+          '<button class="btn ghost small" onclick="jobKeep()">\u2b50 Κράτησέ την</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
+          '</div></div>';
+      } else { ha.innerHTML=''; }
+
+      var h=document.getElementById('jobList');
+      if(!saved.length){ h.innerHTML='<div class="empty">Καμία αποθηκευμένη εργασία.</div>'; return; }
+      h.innerHTML=saved.map(function(m){
+        var nm=esc2(m.name);
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding:9px 0">'+
+          '<div style="flex:1;min-width:150px">'+
+            '<div style="font-size:13px;color:#f0f6ff">'+nm+'</div>'+
+            '<div style="font-size:11px;color:var(--mut)">'+when(m.saved)+' · '+label(m)+'</div>'+
+          '</div>'+
+          '<button class="btn small" onclick="jobOpen(\''+m.id+'\')">Άνοιγμα</button>'+
+          '<button class="btn ghost small" onclick="jobRename(\''+m.id+'\',\''+nm.replace(/'/g,"&#39;")+'\')">\u270e</button>'+
+          '<button class="btn ghost small" onclick="Jobs.exportFile(\''+m.id+'\')">\u2b07</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+m.id+'\',\''+nm.replace(/'/g,"&#39;")+'\')">\u2715</button>'+
+        '</div>';
+      }).join('');
+    }).catch(function(e){
+      document.getElementById('jobList').innerHTML='<div class="empty">Η αποθήκευση δεν είναι διαθέσιμη ('+esc2(e.message)+').</div>';
+    });
+  }
+
+  window.jobOpen=function(id){
+    if((model&&model.features&&model.features.length)||computed.length){
+      if(!confirm('Θα αντικατασταθούν τα δεδομένα που είναι ανοιχτά τώρα. Συνέχεια;')) return;
+    }
+    Jobs.load(id).then(jobRestore).catch(function(e){ alert('Δεν άνοιξε: '+e.message); });
+  };
+  window.jobSaveAs=function(){
+    var n=prompt('Όνομα εργασίας:', (model&&model.__fname)||('Εργασία '+new Date().toLocaleDateString('el-GR')));
+    if(n===null) return;
+    Jobs.saveAs(n).then(function(){ renderJobs(); setStatus('αποθηκεύτηκε ✓','ok'); })
+                  .catch(function(e){ alert(e.message); });
+  };
+  window.jobKeep=function(){
+    var n=prompt('Όνομα εργασίας:', 'Εργασία '+new Date().toLocaleDateString('el-GR'));
+    if(n===null) return;
+    Jobs.keepAuto(n).then(function(){ renderJobs(); setStatus('αποθηκεύτηκε ✓','ok'); })
+                    .catch(function(e){ alert(e.message); });
+  };
+  window.jobRename=function(id,cur){
+    var n=prompt('Νέο όνομα:', cur);
+    if(n===null) return;
+    Jobs.rename(id,n).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+  window.jobDel=function(id,nm){
+    if(!confirm('Διαγραφή «'+(nm||'τελευταίας εργασίας')+'»;')) return;
+    Jobs.remove(id).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+
+  document.getElementById('fileJob').addEventListener('change',function(e){
+    var f=e.target.files[0]; e.target.value='';
+    if(!f) return;
+    Jobs.importFile(f).then(function(m){ renderJobs(); setStatus('εισήχθη «'+m.name+'» ✓','ok'); })
+                      .catch(function(err){ alert(err.message); });
+  });
+
+  if(!window.indexedDB){
+    document.getElementById('jobList').innerHTML='<div class="empty">Ο browser δεν υποστηρίζει αποθήκευση.</div>';
+    return;
+  }
+  Jobs.init({tool:TOOL, snapshot:jobSnapshot, onSaved:function(){ renderJobs(); }})
+      .then(function(){ renderJobs(); });
+})();
+</script>
+<script>
+/*  Service worker: κάνει το εργαλείο να ανοίγει και χωρίς σήμα.
+ *  Βρίσκεται στη ρίζα του site και παίρνει αυτόματα εκείνη ως εμβέλεια,
+ *  ώστε να καλύπτει και το lib/ — ακόμη κι αν το site δεν είναι στη ρίζα
+ *  του τομέα (GitHub Pages: /zsgeolab/).
+ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('../sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
