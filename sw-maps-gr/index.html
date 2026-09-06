@@ -307,6 +307,26 @@
         </div>
         <div id="ixResult"></div>
       </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Παράλληλη μετατόπιση (offset)</h2>
+        <div class="hint">Πηγή: η <b>Γραμμή 1</b> που διάλεξες παραπάνω, ή τα <b>P1–P2</b>. Πρόσημο ίδιο με το SW Maps: <b>αρνητικό = αριστερά</b>, θετικό = δεξιά.</div>
+        <div class="fld" style="margin-top:12px"><label>Πηγή</label>
+          <select id="ofSrc">
+            <option value="feat">Όλη η Γραμμή 1</option>
+            <option value="seg">Μόνο το επιλεγμένο τμήμα</option>
+            <option value="pick">P1 → P2</option>
+          </select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Απόσταση (m)</label><input id="ofDist" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50 ή -2.50"></div>
+          <button class="btn" onclick="makeOffset()">↔ Offset</button>
+        </div>
+        <div id="ofResult"></div>
+        <div class="compbar" style="margin-top:14px">
+          <span class="pill">Γραμμές που φτιάχτηκαν: <b id="genN">0</b></span>
+          <button class="btn red small" onclick="clearGenLines()">🗑 Καθαρισμός</button>
+        </div>
+      </div>
     </section>
 
     <section class="pane" id="pane-out">
@@ -450,6 +470,7 @@
     }
     var comp={};
     computed.forEach(function(cp){ var ly=cp.layer||'StakeOut'; comp[ly]=(comp[ly]||0)+1; });
+    genLines.forEach(function(g){ addLayerRow(host,g.id,'LINE','#00e5a0',g.pts.length,false); rows++; });
     Object.keys(comp).forEach(function(name){ addLayerRow(host,name,'POINT','#ff8a8a',comp[name],false); rows++; });
     if(!rows) host.innerHTML='<div class="empty">Άνοιξε αρχείο SW Maps ή ανέβασε TXT για να δεις τα layers.</div>';
     fillVertexLayers();
@@ -520,12 +541,20 @@
       var hit=hitHalo(cp.lat,cp.lon,drawnLayer).bindPopup(popup);
       (function(pt){ hit.on('click',function(){ setPick(pt); }); })(cp);
     });
+    genLines.forEach(function(g){
+      if(layerState[g.layer]===false) return;
+      var ll=g.pts.map(function(p){ return [p.lat,p.lon]; });
+      L.polyline(ll,{color:'#00e5a0',weight:3,dashArray:'7,5'})
+        .bindPopup('<b>'+esc(g.id)+'</b><br>'+esc(g.remarks||'')).addTo(drawnLayer);
+      addLineHit(ll, {pts:g.pts, name:g.id, layer:g.layer, color:'#00e5a0'}, g.id);
+    });
     var b=drawnLayer.getBounds();
     if(b.isValid()) map.fitBounds(b,{padding:[30,30],maxZoom:18});
     renderPointsTable();
     renderLayers();
     updatePick();
     document.getElementById('compN').textContent=computed.length;
+    var gn=document.getElementById('genN'); if(gn) gn.textContent=genLines.length;
     if(window.Jobs) Jobs.touch();          // αυτόματη αποθήκευση μετά από κάθε αλλαγή
   }
 
@@ -677,7 +706,7 @@
   function clearAllData(){
     if(!model && !computed.length) return;
     if(!confirm('Καθαρισμός ΟΛΩΝ (φορτωμένα δεδομένα + σημεία χάραξης);')) return;
-    model=null; computed=[]; pick={p1:null,p2:null};
+    model=null; computed=[]; genLines=[]; pick={p1:null,p2:null};
     document.getElementById('btnDxf').disabled=true; document.getElementById('btnCsv').disabled=true;
     renderSummary(); renderLayers(); renderMap();
     setStatus('καθαρίστηκε','ok');
@@ -765,7 +794,7 @@
     if (best === null) return null;
     var p = pts[best], q = pts[best+1];
     if (p.x == null || q.x == null) return null;
-    return {name:(f.name||f.layer||'γραμμή'), layer:f.layer, i:best,
+    return {name:(f.name||f.layer||'γραμμή'), layer:f.layer, i:best, f:f,
             p:{x:p.x, y:p.y, z:p.z}, q:{x:q.x, y:q.y, z:q.z}};
   }
 
@@ -988,6 +1017,150 @@
     setStatus('αντιγράφηκαν ' + made + (dup ? (' · ' + dup + ' υπήρχαν ήδη') : '') + ' \u2713', 'ok');
   };
 
+
+  /* ==================== ΠΑΡΑΛΛΗΛΗ ΜΕΤΑΤΟΠΙΣΗ (OFFSET) ====================
+   *
+   *  Παράγει ΓΡΑΜΜΗ που μένει: φαίνεται στον χάρτη, αποθηκεύεται με την
+   *  εργασία και βγαίνει στο DXF. Το SW Maps κάνει offset μόνο ως στόχο
+   *  χάραξης — δεν φτιάχνει γεωμετρία που να κρατήσεις.
+   *
+   *  Πρόσημο ίδιο με το SW Maps: αρνητικό αριστερά, θετικό δεξιά.
+   */
+  var genLines = [];
+
+  /** Κάθετο μοναδιαίο προς τα ΔΕΞΙΑ της φοράς p→q (x ανατολικά, y βόρεια). */
+  function rightNormal(p, q){
+    var dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy);
+    if (!L) return null;
+    return {x: dy / L, y: -dx / L, L: L};
+  }
+
+  /** Τομή δύο ευθειών σε παραμετρική μορφή· null αν είναι παράλληλες. */
+  function lineCross(a1, a2, b1, b2){
+    var d1 = {x:a2.x - a1.x, y:a2.y - a1.y};
+    var d2 = {x:b2.x - b1.x, y:b2.y - b1.y};
+    var den = d1.x*d2.y - d1.y*d2.x;
+    if (Math.abs(den) < 1e-9) return null;
+    var w = {x:b1.x - a1.x, y:b1.y - a1.y};
+    var t = (w.x*d2.y - w.y*d2.x) / den;
+    return {x: a1.x + t*d1.x, y: a1.y + t*d1.y};
+  }
+
+  /**
+   *  Μετατοπίζει πολυγραμμή. Κάθε τμήμα μετακινείται κάθετα και τα διαδοχικά
+   *  τέμνονται, ώστε οι γωνίες να μένουν μυτερές. Σε πολύ κλειστή γωνία η
+   *  τομή φεύγει μακριά και η γραμμή αυτοτέμνεται — αυτό ΔΕΝ διορθώνεται
+   *  σιωπηλά, επιστρέφεται προειδοποίηση.
+   */
+  function offsetPolyline(pts, d){
+    if (pts.length < 2) return {err:'Χρειάζονται τουλάχιστον 2 κορυφές.'};
+    var segs = [];
+    for (var i = 0; i < pts.length - 1; i++){
+      var n = rightNormal(pts[i], pts[i+1]);
+      if (!n) continue;                       // διπλή κορυφή: αγνοείται
+      segs.push({a:{x:pts[i].x + d*n.x,   y:pts[i].y + d*n.y},
+                 b:{x:pts[i+1].x + d*n.x, y:pts[i+1].y + d*n.y},
+                 z1:pts[i].z||0, z2:pts[i+1].z||0, L:n.L});
+    }
+    if (!segs.length) return {err:'Μηδενικό μήκος γραμμής.'};
+
+    var out = [{x:segs[0].a.x, y:segs[0].a.y, z:segs[0].z1}];
+    var warn = [];
+    for (var k = 0; k < segs.length - 1; k++){
+      var c = lineCross(segs[k].a, segs[k].b, segs[k+1].a, segs[k+1].b);
+      if (!c){ c = {x:segs[k].b.x, y:segs[k].b.y}; }      // ευθυγραμμισμένα
+      // Αν η τομή έφυγε πιο μακριά από τα ίδια τα τμήματα, η γωνία «έσκασε».
+      var far = Math.hypot(c.x - segs[k].b.x, c.y - segs[k].b.y);
+      if (far > Math.min(segs[k].L, segs[k+1].L)) warn.push(k + 2);
+      out.push({x:c.x, y:c.y, z:segs[k].z2});
+    }
+    var last = segs[segs.length - 1];
+    out.push({x:last.b.x, y:last.b.y, z:last.z2});
+    return {pts:out, warn:warn};
+  }
+
+  /** Οι κορυφές της πηγής, ανάλογα με την επιλογή. */
+  function offsetSource(){
+    var mode = document.getElementById('ofSrc').value;
+    if (mode === 'pick'){
+      if (!pick.p1 || !pick.p2) return {err:'Διάλεξε P1 και P2.'};
+      return {name:'P1P2', pts:[{x:pick.p1.x, y:pick.p1.y, z:pick.p1.z||0},
+                                {x:pick.p2.x, y:pick.p2.y, z:pick.p2.z||0}]};
+    }
+    if (!LSEL.a) return {err:'Διάλεξε πρώτα Γραμμή 1 πατώντας τη στον χάρτη.'};
+    if (mode === 'seg'){
+      return {name:LSEL.a.name + '_τμ' + (LSEL.a.i + 1),
+              pts:[{x:LSEL.a.p.x, y:LSEL.a.p.y, z:LSEL.a.p.z||0},
+                   {x:LSEL.a.q.x, y:LSEL.a.q.y, z:LSEL.a.q.z||0}]};
+    }
+    var f = LSEL.a.f;
+    if (!f || !f.pts) return {err:'Η γραμμή δεν βρέθηκε.'};
+    var v = f.pts.filter(function(p){ return p.x != null; })
+                 .map(function(p){ return {x:p.x, y:p.y, z:p.z||0}; });
+    if (v.length < 2) return {err:'Η γραμμή δεν έχει συντεταγμένες ΕΓΣΑ87.'};
+    return {name:LSEL.a.name, pts:v};
+  }
+
+  window.makeOffset = function(){
+    var host = document.getElementById('ofResult');
+    var d = parseFloat(document.getElementById('ofDist').value);
+    if (!Number.isFinite(d) || d === 0){
+      host.innerHTML = '<div class="warnbox">Δώσε απόσταση διάφορη του μηδενός.</div>';
+      return;
+    }
+    var src = offsetSource();
+    if (src.err){ host.innerHTML = '<div class="warnbox">' + esc(src.err) + '</div>'; return; }
+    var res = offsetPolyline(src.pts, d);
+    if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
+
+    var id = src.name + '_off' + (d > 0 ? '+' : '') + d.toFixed(2);
+    var pts = res.pts.map(function(p){
+      var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, p.z || 0) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:p.z || 0, lat:w.lat, lon:w.lon};
+    });
+    genLines.push({id:id, layer:id, remarks:'offset ' + d.toFixed(2) + ' m από ' + src.name,
+                   pts:pts});
+    renderSummary(); renderLayers(); renderMap();
+
+    var len = 0;
+    for (var i = 0; i < pts.length - 1; i++) len += Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
+    var html = '<div class="resline"><div style="color:var(--mut);font-size:12px">Έγινε</div>' +
+      '<div class="big">' + esc(id) + '</div>' +
+      '<div style="color:var(--mut);font-size:12px;margin-top:6px">' +
+        pts.length + ' κορυφές · μήκος ' + len.toFixed(2) + ' m · ' +
+        (d < 0 ? 'αριστερά' : 'δεξιά') + ' ' + Math.abs(d).toFixed(2) + ' m</div>';
+    if (res.warn.length){
+      html += '<div class="warnbox"><b>⚠ Η γραμμή πιθανόν αυτοτέμνεται</b> στις κορυφές ' +
+        res.warn.join(', ') + '. Η γωνία είναι πολύ κλειστή για τόση μετατόπιση — ' +
+        'έλεγξέ την στον χάρτη πριν τη χρησιμοποιήσεις.</div>';
+    }
+    html += '<div class="btns" style="margin-top:10px">' +
+      '<button class="btn ghost" onclick="genVertexPoints(\'' + id.replace(/'/g,"\\'") + '\')">📍 Σημεία στις κορυφές της</button>' +
+      '</div></div>';
+    host.innerHTML = html;
+    setStatus('έγινε ' + id + ' \u2713', 'ok');
+  };
+
+  window.genVertexPoints = function(id){
+    var g = genLines.filter(function(x){ return x.id === id; })[0];
+    if (!g) return;
+    var made = 0, dup = 0;
+    g.pts.forEach(function(p, i){
+      var n = addVertex(id + '_' + (i + 1), p, 'offset', 'Κορυφές');
+      if (n) made++; else dup++;
+    });
+    renderMap();
+    setStatus('έγιναν ' + made + ' σημεία' + (dup ? (' · ' + dup + ' υπήρχαν ήδη') : '') + ' \u2713', 'ok');
+  };
+
+  window.clearGenLines = function(){
+    if (!genLines.length) return;
+    if (!confirm('Διαγραφή ' + genLines.length + ' γραμμών που φτιάχτηκαν;')) return;
+    genLines.forEach(function(g){ delete layerState[g.layer]; });
+    genLines = [];
+    renderSummary(); renderLayers(); renderMap();
+  };
+
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
 
   // --- DXF export (ΕΓΣΑ87) ---
@@ -998,7 +1171,7 @@
     return best;
   }
   function exportDXF(){
-    if(!model && !computed.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    if(!model && !computed.length && !genLines.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
     if(!gridsOK){ if(!confirm('Τα grids ΕΓΣΑ δεν φορτώθηκαν — οι συντεταγμένες θα είναι ανακριβείς. Συνέχεια;')) return; }
     var scale=0.5;
     var poly3d=document.getElementById('dxf3d').checked, flat=document.getElementById('dxfFlat').checked;
@@ -1010,6 +1183,7 @@
       if(f.geomType==='POINT') ptLayers(base,col); else addLyr(base,col);
     });
     computed.forEach(function(c){ ptLayers(dxfName(c.layer||'StakeOut'),1); });
+    genLines.forEach(function(g){ addLyr(dxfName(g.layer),3); });
     // --- HEADER + TABLES (LAYER) ---
     var d='0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
     Object.keys(lyr).forEach(function(name){ d+='0\nLAYER\n2\n'+name+'\n70\n0\n62\n'+lyr[name]+'\n6\nCONTINUOUS\n'; });
@@ -1036,6 +1210,12 @@
       }
     });
     computed.forEach(function(c){ emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,c.x,c.y,c.z,c.remarks); });
+    genLines.forEach(function(g){
+      var base=dxfName(g.layer);
+      d+='0\nPOLYLINE\n8\n'+base+'\n62\n3\n66\n1\n70\n'+(poly3d?8:0)+'\n';
+      g.pts.forEach(function(p){ d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(p.x)+'\n20\n'+num(p.y)+'\n30\n'+num(poly3d?(p.z||0):0)+'\n'; });
+      d+='0\nSEQEND\n8\n'+base+'\n';
+    });
     d+='0\nENDSEC\n0\nEOF\n';
     download(d,'SW_Maps_EGSA87.dxf');
   }
@@ -1092,14 +1272,16 @@
 
   function jobSnapshot(){
     var feats=(model&&model.features)?model.features.length:0;
-    if(!feats && !computed.length) return {empty:true};
+    if(!feats && !computed.length && !genLines.length) return {empty:true};
     return {
       v:1,
       model: model?{layers:model.layers, features:model.features, __fname:model.__fname}:null,
       computed: computed,
+      genLines: genLines,
       layerState: layerState,
       geoid: document.getElementById('chkGeoid').checked,
-      info: {feats:feats, comp:computed.length, fname:(model&&model.__fname)||''}
+      info: {feats:feats, comp:computed.length, gen:genLines.length,
+             fname:(model&&model.__fname)||''}
     };
   }
 
@@ -1107,6 +1289,7 @@
     if(!s) return;
     document.getElementById('chkGeoid').checked = (s.geoid!==false);
     computed = s.computed||[];
+    genLines = s.genLines||[];
     layerState = s.layerState||{};
     model = s.model||null;
     if(model) transformModel();
@@ -1121,6 +1304,7 @@
     var i=m.info||{}, p=[];
     if(i.feats) p.push(i.feats+' features');
     if(i.comp) p.push(i.comp+' χάραξης');
+    if(i.gen) p.push(i.gen+' γραμμές');
     if(i.fname) p.push(esc2(i.fname));
     return p.join(' \u00b7 ')||'\u2014';
   }
@@ -1211,6 +1395,7 @@
       msg = 'Νέα εργασία.';
     }
     computed = [];                     // η νέα ξεκινά καθαρή, ΠΑΝΤΑ
+    genLines = [];
     pick = {p1:null, p2:null};
     if(window.clearLines) clearLines();
     setTimeout(function(){ renderJobs(); setStatus(msg,'ok'); }, 400);
