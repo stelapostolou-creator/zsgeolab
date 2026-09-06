@@ -21,6 +21,7 @@
 <script src="../lib/hepos_grids.js"></script>
 <script src="../lib/swmaps.js?v=20260906i"></script>
 <script src="../lib/jobs.js?v=20260906i"></script>
+<script src="../lib/volume.js?v=20260906j"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -118,6 +119,8 @@
   .resline{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;}
   .resline .big{font-family:ui-monospace,Consolas,monospace;font-size:16px;color:#8ff0b6;}
   .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.5;}
+  .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.5;}
+  .vbig{font-family:ui-monospace,Consolas,monospace;font-size:19px;margin:3px 0;}
 </style>
 </head>
 <body>
@@ -194,6 +197,7 @@
       <button class="tb active" data-pane="data" onclick="showPane('data')">📂 Δεδομένα</button>
       <button class="tb" data-pane="stake" onclick="showPane('stake')">🎯 Χάραξη</button>
       <button class="tb" data-pane="calc" onclick="showPane('calc')">📐 Υπολογισμοί</button>
+      <button class="tb" data-pane="vol" onclick="showPane('vol')">⛰ Όγκοι</button>
       <button class="tb" data-pane="out" onclick="showPane('out')">📤 Εξαγωγές</button>
     </div>
     <section class="pane show" id="pane-data">
@@ -423,6 +427,41 @@
           <span class="pill">Γραμμές που φτιάχτηκαν: <b id="genN">0</b></span>
           <button class="btn red small" onclick="clearGenLines()">🗑 Καθαρισμός</button>
         </div>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-vol">
+      <div class="card">
+        <h2><span class="c"></span>Περιοχή &amp; επιφάνεια</h2>
+        <div class="hint">Ο όγκος βγαίνει από τα σημεία που είναι <b>ήδη φορτωμένα</b> — δεν χρειάζεται άλλο αρχείο. Χρειάζεται όμως ένα <b>κλειστό πολύγωνο</b>, για να ξέρουμε ποια περιοχή μετράει.</div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Περιοχή (πολύγωνο)</label><select id="vlRing"></select></div>
+          <button class="btn ghost" onclick="vlScan()">🔄 Ανανέωση</button>
+        </div>
+        <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους</label><select id="vlSurf"></select></div>
+        <div class="fld" style="margin-top:10px"><label>Σύγκριση με</label>
+          <select id="vlMode" onchange="vlRender()">
+            <option value="ref">Σταθερό τελικό υψόμετρο</option>
+            <option value="surf2">Δεύτερη επιφάνεια</option>
+          </select></div>
+        <div class="fld" id="vlRefWrap" style="margin-top:10px"><label>Τελικό υψόμετρο (m)</label>
+          <input id="vlRef" type="text" inputmode="decimal" placeholder="π.χ. 797,500"></div>
+        <div class="fld" id="vlSurf2Wrap" hidden style="margin-top:10px"><label>Δεύτερη επιφάνεια</label>
+          <select id="vlSurf2"></select></div>
+        <div id="vlInfo"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Υπολογισμός</h2>
+        <div class="row2">
+          <div class="fld"><label>Βήμα κανάβου (m) — μικρότερο = ακριβέστερο, πιο αργό</label>
+            <input id="vlStep" type="text" inputmode="decimal" value="0,50"></div>
+          <button class="btn" id="vlGo" onclick="vlCompute()">📊 Υπολογισμός</button>
+        </div>
+        <div class="fld" style="margin-top:10px"><label>Μέγιστη πλευρά τριγώνου (m) — κενό = αυτόματο</label>
+          <input id="vlMaxEdge" type="text" inputmode="decimal" placeholder="αυτόματο"></div>
+        <div class="hint">Τρίγωνα με μεγαλύτερη πλευρά θεωρούνται <b>χωρίς μέτρηση</b>. Χωρίς αυτό, ο τριγωνισμός γεφυρώνει τα κενά και εφευρίσκει επιφάνεια εκεί που δεν πάτησε κανείς.</div>
+        <div id="vlOut"></div>
       </div>
     </section>
 
@@ -863,7 +902,7 @@
   /*  Καρτέλες. Ο χάρτης είναι ΕΞΩ από αυτές και μένει πάντα ορατός: η επιλογή
    *  σημείων γίνεται πάνω του και θα ήταν άχρηστη κρυμμένη. Η επιλογή
    *  θυμάται, ώστε το refresh στο χωράφι να μη σε γυρίζει στην αρχή. */
-  var PANES = ['data','stake','calc','out'];
+  var PANES = ['data','stake','calc','vol','out'];
   function showPane(name){
     if(PANES.indexOf(name) < 0) name = 'data';
     PANES.forEach(function(p){
@@ -877,6 +916,7 @@
     // εκεί φορτώνεται η βάση — που είναι η πρώτη κίνηση κάθε φορά.
     // Ο χάρτης πρέπει να ξαναμετρήσει: μπορεί να άλλαξε το ύψος της σελίδας.
     if(window.map) setTimeout(function(){ map.invalidateSize(); }, 60);
+    if(name === 'vol' && window.vlScan) vlScan();
   }
   showPane('data');
   try{ localStorage.removeItem('zs_pane:sw-maps-gr'); }catch(e){}   // παλιά ρύθμιση
@@ -2011,6 +2051,206 @@
     a.style.display='none'; document.body.appendChild(a);
     a.click();
     setTimeout(function(){ try{document.body.removeChild(a);}catch(e){} URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /* ====================== ΟΓΚΟΙ ΧΩΜΑΤΟΥΡΓΙΚΩΝ ==========================
+   *
+   *  Ο υπολογισμός ζει στο lib/volume.js και δεν ξέρει τίποτα για την οθόνη.
+   *  Εδώ γίνεται μόνο η μετάφραση: τι έχει φορτώσει ο χρήστης -> σημεία και
+   *  περίγραμμα, και μετά το αποτέλεσμα -> κείμενο.
+   *
+   *  ΓΙΑΤΙ ΣΤΟΝ BROWSER ΚΑΙ ΟΧΙ ΣΤΟΝ SERVER
+   *  Στο εργοτάξιο δεν υπάρχει σήμα. Το εργαλείο βασίζεται σε δεδομένα που
+   *  είναι ήδη στο κινητό, οπότε ο δρόμος μέχρι τον server δεν προσέθετε
+   *  τίποτα εκτός από την ανάγκη για σύνδεση.
+   *
+   *  ΤΑ ΣΗΜΕΙΑ ΔΕΝ ΠΕΙΡΑΖΟΝΤΑΙ. Διαβάζονται μόνο· τίποτα δεν γράφεται πίσω.
+   */
+  var VOLSETS = [], VOLRINGS = [];
+
+  /** Οι διαθέσιμες επιφάνειες: τι σύνολα σημείων με υψόμετρο υπάρχουν. */
+  function vlPointSets(){
+    var byPoint = {}, byVertex = {}, all = [], sets = [];
+
+    function take(dst, key, p){
+      // Κριτήριο το ΠΗΓΑΙΟ ύψος: το SW Maps γράφει 0 όταν δεν έχει μέτρηση,
+      // και μετά τον μετασχηματισμό το 0 γίνεται −32 m (γεωειδές).
+      if (p.x == null || !hasRealZ(p)) return;
+      var q = { x: p.x, y: p.y, z: p.z };
+      (dst[key] || (dst[key] = [])).push(q);
+      all.push(q);
+    }
+
+    if (model) model.features.forEach(function(f){
+      var dst = (f.geomType === 'POINT') ? byPoint : byVertex;
+      f.pts.forEach(function(p){ take(dst, f.layer, p); });
+    });
+
+    var mine = [];
+    computed.forEach(function(c){
+      if (c.x == null || !hasRealZ(c)) return;
+      var q = { x: c.x, y: c.y, z: c.z };
+      mine.push(q); all.push(q);
+    });
+
+    Object.keys(byPoint).sort().forEach(function(k){
+      sets.push({ key: 'L:' + k, label: k + ' — ' + byPoint[k].length + ' σημεία', pts: byPoint[k] });
+    });
+    Object.keys(byVertex).sort().forEach(function(k){
+      sets.push({ key: 'V:' + k, label: k + ' (κορυφές) — ' + byVertex[k].length, pts: byVertex[k] });
+    });
+    if (mine.length) sets.push({ key: 'C', label: 'Υπολογισμένα σημεία — ' + mine.length, pts: mine });
+    if (sets.length > 1) sets.push({ key: 'A', label: 'Όλα μαζί — ' + all.length + ' σημεία', pts: all });
+    return sets;
+  }
+
+  /** Τα κλειστά πολύγωνα που μπορούν να ορίσουν την περιοχή. */
+  function vlPolygons(){
+    var out = [];
+    if (!model) return out;
+    model.features.forEach(function(f, i){
+      if (f.geomType !== 'POLYGON') return;
+      var r = [];
+      f.pts.forEach(function(p){ if (p.x != null) r.push({ x: p.x, y: p.y }); });
+      // Το κλείσιμο επαναλαμβάνει την πρώτη κορυφή· δεν μετριέται δύο φορές.
+      if (r.length > 2){
+        var a = r[0], b = r[r.length - 1];
+        if (Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9) r.pop();
+      }
+      if (r.length < 3) return;
+      out.push({ key: 'f' + i, ring: r,
+                 name: (f.name || f.layer || 'πολύγωνο') ,
+                 area: Math.abs(Vol.ringArea(r)) });
+    });
+    return out;
+  }
+
+  function vlOpts(list, textOf){
+    return list.map(function(o, i){
+      return '<option value="' + i + '">' + esc(textOf(o)) + '</option>';
+    }).join('');
+  }
+
+  window.vlScan = function(){
+    VOLSETS = vlPointSets();
+    VOLRINGS = vlPolygons();
+    var info = document.getElementById('vlInfo');
+
+    document.getElementById('vlSurf').innerHTML =
+      vlOpts(VOLSETS, function(s){ return s.label; }) || '<option value="">(κανένα)</option>';
+    document.getElementById('vlSurf2').innerHTML =
+      vlOpts(VOLSETS, function(s){ return s.label; }) || '<option value="">(κανένα)</option>';
+    if (VOLSETS.length > 1) document.getElementById('vlSurf2').selectedIndex = 1;
+    document.getElementById('vlRing').innerHTML =
+      vlOpts(VOLRINGS, function(p){ return p.name + ' · ' + p.area.toFixed(1) + ' m²'; })
+      || '<option value="">(κανένα)</option>';
+
+    var msg = '';
+    if (!model && !computed.length){
+      msg = '<div class="warnbox">Δεν υπάρχουν φορτωμένα δεδομένα. Άνοιξε πρώτα βάση ή Excel από τα <b>Δεδομένα</b>.</div>';
+    } else {
+      if (!VOLSETS.length)
+        msg += '<div class="warnbox">Κανένα σημείο <b>με πραγματικό υψόμετρο</b>. Το SW Maps γράφει 0 όπου δεν μέτρησε ύψος, και αυτά δεν μετράνε ως επιφάνεια.</div>';
+      if (!VOLRINGS.length)
+        msg += '<div class="warnbox">Δεν βρέθηκε <b>κλειστό πολύγωνο</b>. Χρειάζεται ένα για να οριστεί η περιοχή — σχεδίασέ το στο SW Maps ή φόρτωσέ το από DXF.</div>';
+    }
+    info.innerHTML = msg;
+    vlRender();
+  };
+
+  window.vlRender = function(){
+    var two = document.getElementById('vlMode').value === 'surf2';
+    document.getElementById('vlRefWrap').hidden = two;
+    document.getElementById('vlSurf2Wrap').hidden = !two;
+  };
+
+  function vlNum(v){ return v.toLocaleString('el-GR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function vlWarn(html){ document.getElementById('vlOut').innerHTML = '<div class="warnbox">' + html + '</div>'; }
+
+  window.vlCompute = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length || !VOLRINGS.length){ vlScan(); vlWarn('Λείπουν σημεία ή πολύγωνο.'); return; }
+
+    var ring = VOLRINGS[+document.getElementById('vlRing').value];
+    var sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (!ring || !sa){ vlWarn('Διάλεξε περιοχή και επιφάνεια.'); return; }
+
+    var opts = { points: sa.pts, ring: ring.ring, spacing: numIn('vlStep') };
+    if (!(opts.spacing > 0)){ vlWarn('Δώσε βήμα κανάβου σε μέτρα.'); return; }
+
+    var lbl2 = null;
+    if (document.getElementById('vlMode').value === 'surf2'){
+      var sb = VOLSETS[+document.getElementById('vlSurf2').value];
+      if (!sb || sb.key === sa.key){ vlWarn('Διάλεξε <b>δύο διαφορετικές</b> επιφάνειες.'); return; }
+      opts.points2 = sb.pts; lbl2 = sb.label;
+    } else {
+      opts.refZ = numIn('vlRef');
+      if (!Number.isFinite(opts.refZ)){ vlWarn('Δώσε το τελικό υψόμετρο.'); return; }
+    }
+    var me = numIn('vlMaxEdge');
+    if (Number.isFinite(me) && me > 0) opts.maxEdge = me;
+
+    var btn = document.getElementById('vlGo');
+    btn.disabled = true;
+    out.innerHTML = '<div class="hint" style="margin-top:12px">Υπολογισμός…</div>';
+
+    /*  Ο υπολογισμός κρατά το νήμα απασχολημένο, οπότε χωρίς αυτή την
+     *  αναμονή το «Υπολογισμός…» δεν προλαβαίνει να ζωγραφιστεί και η οθόνη
+     *  φαίνεται κολλημένη. */
+    setTimeout(function(){
+      var t0 = Date.now();
+      var r;
+      try { r = Vol.computeChecked(opts); }
+      catch (ex){ r = { err: ex.message }; }
+      btn.disabled = false;
+      if (r.err){ vlWarn(esc(r.err)); return; }
+      r.__ms = Date.now() - t0;
+      vlShow(r, ring, sa, lbl2, opts);
+    }, 30);
+  };
+
+  function vlShow(r, ring, sa, lbl2, opts){
+    var strem = r.areaPolygon / 1000;
+    var h = '<div class="resline">' +
+      '<div class="vbig" style="color:#ff9ea0">Εκσκαφή&nbsp; ' + vlNum(r.cut) + ' m³</div>' +
+      '<div class="vbig" style="color:#8ff0b6">Επίχωση&nbsp; ' + vlNum(r.fill) + ' m³</div>' +
+      '<div class="vbig">Καθαρό&nbsp;&nbsp;&nbsp; ' + (r.net >= 0 ? '+' : '') + vlNum(r.net) + ' m³' +
+        ' <span style="font-size:12px;color:var(--mut)">(' + (r.net >= 0 ? 'περισσεύει' : 'λείπει') + ' χώμα)</span></div>' +
+      '<div class="tblwrap"><table><tbody>' +
+        '<tr><td>Περιοχή</td><td>' + esc(ring.name) + ' · ' + r.areaPolygon.toFixed(1) + ' m² · ' + strem.toFixed(3) + ' στρ.</td></tr>' +
+        '<tr><td>Επιφάνεια</td><td>' + esc(sa.label) + (lbl2 ? ' &nbsp;→&nbsp; ' + esc(lbl2) : ' &nbsp;→&nbsp; ' + opts.refZ.toFixed(3) + ' m') + '</td></tr>' +
+        '<tr><td>Μετρημένο εμβαδόν</td><td>' + r.areaCovered.toFixed(1) + ' m²</td></tr>' +
+        '<tr><td>Σημεία</td><td>' + r.points + ' · ' + (r.points / Math.max(strem, 1e-9)).toFixed(0) + ' ανά στρέμμα</td></tr>' +
+        '<tr><td>Τρίγωνα</td><td>' + r.triangles +
+          (r.trianglesDropped ? (' · ' + r.trianglesDropped + ' απορρίφθηκαν ως γέφυρες') : '') + '</td></tr>' +
+        '<tr><td>Μέγιστη πλευρά</td><td>' + r.maxEdge.toFixed(2) + ' m</td></tr>' +
+        // Αναφέρεται σκέτη. Το εργαλείο δεν ξέρει αν είναι πρανές ή σκαλοπάτι
+        // που δεν μετρήθηκε· αυτό το κρίνει όποιος πάτησε εκεί.
+        '<tr><td>Μέγιστη κλίση</td><td>' + r.slopeMax.toFixed(1) + '°</td></tr>' +
+        '<tr><td>Κάνναβος</td><td>' + r.spacing + ' m · ' + r.cells + ' κελιά · ' + r.__ms + ' ms</td></tr>' +
+      '</tbody></table></div>';
+
+    if (r.areaUncovered > 0.5){
+      var pc = r.areaUncovered / Math.max(r.areaCells, 1e-9) * 100;
+      h += '<div class="warnbox"><b>⚠ ' + r.areaUncovered.toFixed(1) + ' m² (' + pc.toFixed(1) +
+        '%) της περιοχής δεν έχουν μέτρηση.</b><br>Ο όγκος αφορά μόνο το μετρημένο κομμάτι. ' +
+        'Το υπόλοιπο <b>δεν</b> συμπληρώθηκε με εικασία — αν το θέλεις μέσα, χρειάζονται σημεία εκεί.</div>';
+    }
+    if (r.driftPct != null && r.driftPct > 1){
+      h += '<div class="warnbox"><b>⚠ Ο αριθμός δεν έχει σταθεροποιηθεί: ' + r.driftPct.toFixed(2) + '%.</b><br>' +
+        'Με μισό βήμα (' + r.half.spacing + ' m) βγαίνει ' + vlNum(r.half.net) + ' m³ αντί για ' +
+        vlNum(r.net) + ' m³. Για αυτό το ανάγλυφο τα σημεία είναι αραιά ή ο κάνναβος χονδρός.</div>';
+    } else if (r.driftPct != null){
+      h += '<div class="okbox">Έλεγχος ευστάθειας: με μισό βήμα η διαφορά είναι <b>' +
+        r.driftPct.toFixed(2) + '%</b> — ο αριθμός στέκει.</div>';
+    }
+    if (r.areaCovered > 0){
+      h += '<div class="hint">Μέση διαφορά ύψους στη μετρημένη περιοχή: <b>' +
+        (r.net / r.areaCovered >= 0 ? '+' : '') + (r.net / r.areaCovered).toFixed(3) + ' m</b></div>';
+    }
+    h += '</div>';
+    document.getElementById('vlOut').innerHTML = h;
+    setStatus('όγκος ' + vlNum(r.net) + ' m³ ✓', 'ok');
   }
 </script>
 <script>
