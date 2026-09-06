@@ -102,6 +102,13 @@
   .tabbar .tb{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s;}
   .tabbar .tb.active{background:var(--navy2);border-color:var(--navy2);color:#fff;}
   .pane{display:none;} .pane.show{display:block;}
+  .lnpick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .lp{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--mut);background:var(--bg2);}
+  .lp.l1{border-color:#ff3df0;} .lp.l2{border-color:#ffcc00;}
+  .lp b{display:block;color:#f0f6ff;font-size:13px;}
+  .resline{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;}
+  .resline .big{font-family:ui-monospace,Consolas,monospace;font-size:16px;color:#8ff0b6;}
+  .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -205,6 +212,12 @@
       <h2><span class="c"></span>Layers</h2>
       <div class="sum" id="summary"></div>
       <div id="layers"><div class="empty">Άνοιξε ένα αρχείο SW Maps για να δεις τα layers.</div></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="fld" style="flex:1;min-width:150px"><label>Κορυφές γραμμών &amp; πολυγώνων</label>
+          <select id="vxLayer"><option value="*">Όλα τα layers</option></select></div>
+        <button class="btn" onclick="makeVertexPoints()">📍 Σημεία στις κορυφές</button>
+      </div>
+      <div class="hint">Φτιάχνει σημείο χάραξης σε κάθε κορυφή. Τα πρωτότυπα δεν πειράζονται — τα αντίγραφα είναι που επεξεργάζεσαι.</div>
     </div>
 
     <div class="card">
@@ -267,8 +280,18 @@
 
     <section class="pane" id="pane-calc">
       <div class="card">
-        <h2><span class="c"></span>Υπολογισμοί</h2>
-        <div class="empty">Έρχονται: τομή ευθειών, offset, μηκοτομή.</div>
+        <h2><span class="c"></span>Τομή δύο ευθειών</h2>
+        <div class="hint">Πάτησε δύο γραμμές (ή πλευρές πολυγώνου) στον χάρτη. Πιάνεται <b>το τμήμα πιο κοντά στο δάχτυλό σου</b>. Η τομή υπολογίζεται και στην προέκταση.</div>
+        <div class="lnpick" style="margin-top:12px">
+          <div class="lp l1" id="lp1">Γραμμή 1<b>—</b></div>
+          <div class="lp l2" id="lp2">Γραμμή 2<b>—</b></div>
+          <button class="btn ghost small" onclick="swapLines()">⇄</button>
+          <button class="btn ghost small" onclick="clearLines()">✕</button>
+        </div>
+        <div class="btns" style="margin-bottom:4px">
+          <button class="btn ghost" onclick="segEndPoints()">📍 Σημεία στα άκρα των επιλεγμένων</button>
+        </div>
+        <div id="ixResult"></div>
       </div>
     </section>
 
@@ -412,6 +435,21 @@
     computed.forEach(function(cp){ var ly=cp.layer||'StakeOut'; comp[ly]=(comp[ly]||0)+1; });
     Object.keys(comp).forEach(function(name){ addLayerRow(host,name,'POINT','#ff8a8a',comp[name],false); rows++; });
     if(!rows) host.innerHTML='<div class="empty">Άνοιξε αρχείο SW Maps ή ανέβασε TXT για να δεις τα layers.</div>';
+    fillVertexLayers();
+  }
+
+  /** Στο dropdown μπαίνουν μόνο layers που ΕΧΟΥΝ κορυφές — όχι σημειακά. */
+  function fillVertexLayers(){
+    var sel=document.getElementById('vxLayer'); if(!sel) return;
+    var keep=sel.value, names={};
+    if(model) model.features.forEach(function(f){
+      if(f.geomType==='LINE'||f.geomType==='POLYGON') names[f.layer]=1;
+    });
+    var list=Object.keys(names).sort();
+    sel.innerHTML='<option value="*">Όλα τα layers</option>'+
+      list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+    if(keep && (keep==='*' || names[keep])) sel.value=keep;
+    sel.disabled = !list.length;
   }
   function deleteComputedLayer(name){
     var n=computed.filter(function(c){ return (c.layer||'StakeOut')===name; }).length;
@@ -450,9 +488,11 @@
           (function(pt){ hit.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon});
         });
       } else if(f.geomType==='LINE'){
-        L.polyline(latlngs,{color:f.color,weight:3}).bindPopup(lbl).addTo(drawnLayer);
+        L.polyline(latlngs,{color:f.color,weight:3}).addTo(drawnLayer);
+        addLineHit(latlngs, f, lbl);
       } else {
         L.polygon(latlngs,{color:f.color,weight:2,fillColor:f.color,fillOpacity:.18}).bindPopup(lbl).addTo(drawnLayer);
+        addLineHit(latlngs, f, lbl);          // η περίμετρος πιάνεται σαν γραμμή
       }
     });
     computed.forEach(function(cp){
@@ -671,6 +711,224 @@
     try{ last = localStorage.getItem('zs_pane:sw-maps-gr'); }catch(e){}
     if(last) showPane(last);
   })();
+
+
+  /* ==================== ΤΟΜΗ ΔΥΟ ΕΥΘΕΙΩΝ ====================
+   *
+   *  Επιλέγεται ΤΜΗΜΑ, όχι ολόκληρη πολυγραμμή: μια πολυγραμμή με δέκα
+   *  τμήματα δεν έχει μία «ευθεία», και το ποιο τμήμα προεκτείνεται θα ήταν
+   *  μαντεψιά. Πιάνεται αυτό που είναι πιο κοντά στο σημείο που πατήθηκε.
+   *
+   *  Οι υπολογισμοί γίνονται σε ΕΓΣΑ87 (επίπεδο), όχι σε μοίρες.
+   */
+  var LSEL = {a:null, b:null};
+  var lineHL = L.layerGroup().addTo(map);
+
+  function addLineHit(latlngs, f, lbl){
+    // Αόρατη, χοντρή γραμμή από πάνω: 3 pixel δεν πιάνονται με δάχτυλο.
+    var hit = L.polyline(latlngs, {color:f.color, weight: COARSE?26:14,
+                                   opacity:0, interactive:true}).addTo(drawnLayer);
+    hit.bindPopup(lbl);
+    hit.on('click', function(ev){ pickSegment(f, ev.latlng); });
+  }
+
+  /** Το τμήμα της γεωμετρίας που είναι πιο κοντά στο σημείο που πατήθηκε. */
+  function nearestSegment(f, latlng){
+    var pts = f.pts, best = null, bd = Infinity;
+    var c = map.latLngToLayerPoint(latlng);
+    for (var i = 0; i < pts.length - 1; i++){
+      var A = map.latLngToLayerPoint([pts[i].lat, pts[i].lon]);
+      var B = map.latLngToLayerPoint([pts[i+1].lat, pts[i+1].lon]);
+      var d = L.LineUtil.pointToSegmentDistance(c, A, B);
+      if (d < bd){ bd = d; best = i; }
+    }
+    if (best === null) return null;
+    var p = pts[best], q = pts[best+1];
+    if (p.x == null || q.x == null) return null;
+    return {name:(f.name||f.layer||'γραμμή'), layer:f.layer, i:best,
+            p:{x:p.x, y:p.y, z:p.z}, q:{x:q.x, y:q.y, z:q.z}};
+  }
+
+  function pickSegment(f, latlng){
+    var seg = nearestSegment(f, latlng);
+    if (!seg){ setStatus('Το τμήμα δεν έχει συντεταγμένες ΕΓΣΑ87.','err'); return; }
+    if (!LSEL.a) LSEL.a = seg;
+    else if (!LSEL.b) LSEL.b = seg;
+    else { LSEL.a = seg; LSEL.b = null; }
+    renderLines();
+  }
+
+  window.swapLines = function(){ var t=LSEL.a; LSEL.a=LSEL.b; LSEL.b=t; renderLines(); };
+  window.clearLines = function(){ LSEL.a=LSEL.b=null; renderLines(); };
+
+  function segLabel(s){
+    if (!s) return '—';
+    var d = Math.hypot(s.q.x - s.p.x, s.q.y - s.p.y);
+    return s.name + ' · τμήμα ' + (s.i+1) + ' · ' + d.toFixed(2) + ' m';
+  }
+
+  function renderLines(){
+    document.getElementById('lp1').innerHTML = 'Γραμμή 1<b>' + esc(segLabel(LSEL.a)) + '</b>';
+    document.getElementById('lp2').innerHTML = 'Γραμμή 2<b>' + esc(segLabel(LSEL.b)) + '</b>';
+    lineHL.clearLayers();
+    [[LSEL.a,'#ff3df0'],[LSEL.b,'#ffcc00']].forEach(function(pair){
+      var s = pair[0]; if (!s) return;
+      var w1 = gridsOK ? HEPOS.toWGS84(s.p.x, s.p.y, s.p.z||0) : null;
+      var w2 = gridsOK ? HEPOS.toWGS84(s.q.x, s.q.y, s.q.z||0) : null;
+      if (w1 && w2) L.polyline([[w1.lat,w1.lon],[w2.lat,w2.lon]],
+                               {color:pair[1], weight:5, opacity:.95}).addTo(lineHL);
+    });
+    computeIntersection();
+  }
+
+  /** Τομή των ΕΥΘΕΙΩΝ που ορίζουν τα δύο τμήματα (και στην προέκταση). */
+  function intersectSegments(A, B){
+    var d1 = {x:A.q.x - A.p.x, y:A.q.y - A.p.y};
+    var d2 = {x:B.q.x - B.p.x, y:B.q.y - B.p.y};
+    var den = d1.x*d2.y - d1.y*d2.x;
+    var L1 = Math.hypot(d1.x, d1.y), L2 = Math.hypot(d2.x, d2.y);
+    if (!L1 || !L2) return {err:'Μηδενικό μήκος τμήματος.'};
+    // Γωνία τομής: κάτω από λίγες μοίρες η τομή είναι πρακτικά άχρηστη.
+    var ang = Math.abs(Math.atan2(den, d1.x*d2.x + d1.y*d2.y)) * 180/Math.PI;
+    if (ang > 90) ang = 180 - ang;
+    if (Math.abs(den) < 1e-12 * L1 * L2) return {err:'Οι ευθείες είναι παράλληλες.', ang:ang};
+    var w = {x:B.p.x - A.p.x, y:B.p.y - A.p.y};
+    var t = (w.x*d2.y - w.y*d2.x) / den;
+    var u = (w.x*d1.y - w.y*d1.x) / den;
+    return {
+      x: A.p.x + t*d1.x, y: A.p.y + t*d1.y,
+      z1: (A.p.z||0) + t*((A.q.z||0) - (A.p.z||0)),
+      z2: (B.p.z||0) + u*((B.q.z||0) - (B.p.z||0)),
+      t:t, u:u, L1:L1, L2:L2, ang:ang
+    };
+  }
+
+  function whereOn(t, len){
+    if (t >= 0 && t <= 1) return {ok:true, txt:'επί του τμήματος'};
+    if (t < 0)  return {ok:false, txt:'στην προέκταση, ' + (-t*len).toFixed(2) + ' m πριν την αρχή'};
+    return {ok:false, txt:'στην προέκταση, ' + ((t-1)*len).toFixed(2) + ' m μετά το τέλος'};
+  }
+
+  var lastIx = null;
+  function computeIntersection(){
+    var host = document.getElementById('ixResult');
+    lastIx = null;
+    if (!LSEL.a || !LSEL.b){ host.innerHTML=''; return; }
+    var r = intersectSegments(LSEL.a, LSEL.b);
+    if (r.err){
+      host.innerHTML = '<div class="warnbox"><b>Δεν υπάρχει τομή.</b><br>' + esc(r.err) +
+        (r.ang!=null ? ('<br>Γωνία μεταξύ τους: ' + r.ang.toFixed(3) + '°') : '') + '</div>';
+      return;
+    }
+    lastIx = r;
+    var w1 = whereOn(r.t, r.L1), w2 = whereOn(r.u, r.L2);
+    var dz = Math.abs(r.z1 - r.z2);
+    var html = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">Τομή (ΕΓΣΑ87)</div>' +
+      '<div class="big">X = ' + r.x.toFixed(3) + '</div>' +
+      '<div class="big">Y = ' + r.y.toFixed(3) + '</div>' +
+      '<div style="color:var(--mut);font-size:12px;margin-top:8px">' +
+        'Γωνία τομής <b style="color:#f0f6ff">' + r.ang.toFixed(3) + '°</b><br>' +
+        'Γραμμή 1: ' + esc(w1.txt) + '<br>' +
+        'Γραμμή 2: ' + esc(w2.txt) + '</div>';
+
+    if (r.ang < 15){
+      html += '<div class="warnbox"><b>⚠ Πολύ μικρή γωνία τομής (' + r.ang.toFixed(2) + '°).</b><br>' +
+        'Σε τόσο ανοιχτή τομή, λίγα εκατοστά σφάλμα στα σημεία μετακινούν την τομή ' +
+        'μέτρα. Το αποτέλεσμα είναι μαθηματικά σωστό αλλά πρακτικά αναξιόπιστο.</div>';
+    }
+    if (dz > 0.02){
+      html += '<div class="warnbox">Οι δύο γραμμές δεν τέμνονται στον χώρο: ' +
+        'Z από τη γραμμή 1 = ' + r.z1.toFixed(3) + ' m, από τη γραμμή 2 = ' + r.z2.toFixed(3) +
+        ' m, διαφορά <b>' + dz.toFixed(3) + ' m</b>. Είναι τομή σε <b>κάτοψη</b>.</div>';
+    }
+    html += '<div class="btns" style="margin-top:12px">' +
+      '<button class="btn green" onclick="keepIx()">➕ Προσθήκη στα σημεία χάραξης</button></div></div>';
+    host.innerHTML = html;
+  }
+
+  window.keepIx = function(){
+    if (!lastIx) return;
+    var z = (lastIx.z1 + lastIx.z2) / 2;
+    var id = 'TOMH_' + (computed.filter(function(c){ return c.layer==='Τομές'; }).length + 1);
+    addComputedSilent(id, lastIx.x, lastIx.y, z, 'τομή ' + lastIx.ang.toFixed(1) + '°', 'Τομές');
+    renderMap();
+    setStatus('προστέθηκε ' + id, 'ok');
+  };
+
+
+  /* ==================== ΣΗΜΕΙΑ ΣΤΙΣ ΚΟΡΥΦΕΣ ====================
+   *
+   *  Τα μετρημένα σημεία δεν πειράζονται ποτέ: φτιάχνονται ΑΝΤΙΓΡΑΦΑ ως
+   *  σημεία χάραξης, και εκεί μπαίνουν υψόμετρα και ονόματα. Έτσι το αρχείο
+   *  της μέτρησης μένει ανέπαφο.
+   */
+  var VXLAYER = 'Κορυφές';
+
+  /** Το ίδιο σημείο δεν μπαίνει δεύτερη φορά αν πατηθεί ξανά το κουμπί. */
+  function alreadyThere(x, y){
+    for (var i = 0; i < computed.length; i++){
+      if (Math.abs(computed[i].x - x) < 0.0005 && Math.abs(computed[i].y - y) < 0.0005) return true;
+    }
+    return false;
+  }
+
+  function addVertex(id, p, rem, layer){
+    if (p.x == null) return 0;
+    if (alreadyThere(p.x, p.y)) return 0;
+    var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, p.z || 0) : {lat:p.lat, lon:p.lon, h:p.z || 0};
+    computed.push({id:id, x:p.x, y:p.y, z:p.z || 0,
+                   lat:(p.lat != null ? p.lat : w.lat), lon:(p.lon != null ? p.lon : w.lon),
+                   h:w.h, remarks:rem, fix:4, layer:layer || VXLAYER});
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    return 1;
+  }
+
+  window.makeVertexPoints = function(){
+    if (!model){ alert('Δεν υπάρχουν φορτωμένα δεδομένα.'); return; }
+    var want = document.getElementById('vxLayer').value;
+    var made = 0, dup = 0, skipped = 0, feats = 0;
+    model.features.forEach(function(f){
+      if (f.geomType !== 'LINE' && f.geomType !== 'POLYGON') return;
+      if (want !== '*' && f.layer !== want) return;
+      if (layerState[f.layer] === false) return;     // κρυμμένο layer δεν παράγει σημεία
+      var pts = f.pts.slice();
+      // Το κλείσιμο πολυγώνου επαναλαμβάνει την πρώτη κορυφή· δεν διπλασιάζεται.
+      if (f.geomType === 'POLYGON' && pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.lat-b.lat) < 1e-12 && Math.abs(a.lon-b.lon) < 1e-12) pts.pop();
+      }
+      feats++;
+      var base = (f.name || f.layer || 'V');
+      pts.forEach(function(p, i){
+        if (p.x == null){ skipped++; return; }
+        var n = addVertex(base + '_' + (i+1), p, 'κορυφή', VXLAYER);
+        if (n) made++; else dup++;
+      });
+    });
+    renderMap();
+    if (!feats){ setStatus('Δεν βρέθηκαν γραμμές ή πολύγωνα σε αυτή την επιλογή.','warn'); return; }
+    var msg = 'έγιναν ' + made + ' σημεία από ' + feats + ' αντικείμενα';
+    if (dup) msg += ' · ' + dup + ' υπήρχαν ήδη';
+    if (skipped) msg += ' · ' + skipped + ' χωρίς συντεταγμένες';
+    setStatus(msg + ' \u2713', 'ok');
+  };
+
+  /** Τα δύο άκρα των τμημάτων που έχουν επιλεγεί για τομή. */
+  window.segEndPoints = function(){
+    if (!LSEL.a && !LSEL.b){ alert('Διάλεξε πρώτα γραμμή στον χάρτη.'); return; }
+    var made = 0, dup = 0;
+    [LSEL.a, LSEL.b].forEach(function(sg){
+      if (!sg) return;
+      [[sg.p, sg.i + 1], [sg.q, sg.i + 2]].forEach(function(pair){
+        var n = addVertex(sg.name + '_' + pair[1], pair[0], 'άκρο τμήματος', VXLAYER);
+        if (n) made++; else dup++;
+      });
+    });
+    renderMap();
+    setStatus('έγιναν ' + made + ' σημεία' + (dup ? (' · ' + dup + ' υπήρχαν ήδη') : '') + ' \u2713', 'ok');
+  };
 
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
 
