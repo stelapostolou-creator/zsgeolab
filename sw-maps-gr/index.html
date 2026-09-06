@@ -17,10 +17,10 @@
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
-<script src="../lib/hepos.js?v=20260906f"></script>
+<script src="../lib/hepos.js?v=20260906g"></script>
 <script src="../lib/hepos_grids.js"></script>
-<script src="../lib/swmaps.js?v=20260906f"></script>
-<script src="../lib/jobs.js?v=20260906f"></script>
+<script src="../lib/swmaps.js?v=20260906g"></script>
+<script src="../lib/jobs.js?v=20260906g"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -219,7 +219,7 @@
       <div style="margin-top:10px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
       <div style="margin-top:8px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileDxf').click()">📐 Εισαγωγή σχεδίου DXF (ΕΓΣΑ87)</button></div>
       <div id="dxfPanel"></div>
-      <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Καθαρισμός όλων (δεδομένα + σημεία)</button>
+
     </div>
 
     <div class="card">
@@ -254,6 +254,17 @@
         <button class="btn red small" onclick="deleteSelected()">🗑 Διαγραφή επιλεγμένων</button>
       </div>
       <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Περιγραφή</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Καθαρισμός</h2>
+      <div class="hint">Κάθε layer σβήνεται και χωριστά, από το 🗑 δίπλα του στη λίστα Layers.</div>
+      <div class="btns" style="margin-top:12px">
+        <button class="btn ghost" onclick="clearComputed()">🗑 Σημεία χάραξης (<span id="cntComp">0</span>)</button>
+        <button class="btn ghost" onclick="clearGenLines()">🗑 Γραμμές (<span id="cntGen">0</span>)</button>
+      </div>
+      <button class="btn ghost" style="width:100%;margin-top:8px" onclick="clearModelOnly()">🗑 Μόνο τα φορτωμένα δεδομένα (<span id="cntFeat">0</span> features)</button>
+      <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Καθαρισμός όλων</button>
     </div>
     </section>
 
@@ -526,8 +537,13 @@
     sel.disabled = !list.length;
   }
   function deleteComputedLayer(name){
+    // Στη λίστα των layers μπαίνουν και οι γραμμές που φτιάχτηκαν. Χωρίς αυτό,
+    // το 🗑 σε μια τέτοια γραμμή δεν έσβηνε τίποτα.
     var n=computed.filter(function(c){ return (c.layer||'StakeOut')===name; }).length;
-    if(!confirm('Διαγραφή του layer «'+name+'» ('+n+' σημεία);')) return;
+    var g=genLines.filter(function(x){ return x.layer===name; }).length;
+    var what = g ? (g===1 ? 'μία γραμμή' : g+' γραμμές') : (n+' σημεία');
+    if(!confirm('Διαγραφή του layer «'+name+'» ('+what+');')) return;
+    genLines=genLines.filter(function(x){ return x.layer!==name; });
     computed=computed.filter(function(c){ return (c.layer||'StakeOut')!==name; });
     delete layerState[name]; renderSummary(); renderLayers(); renderMap();
   }
@@ -591,6 +607,10 @@
     updatePick();
     document.getElementById('compN').textContent=computed.length;
     var gn=document.getElementById('genN'); if(gn) gn.textContent=genLines.length;
+    [['cntComp',computed.length],['cntGen',genLines.length],
+     ['cntFeat',(model&&model.features)?model.features.length:0]].forEach(function(p){
+      var e=document.getElementById(p[0]); if(e) e.textContent=p[1];
+    });
     if(window.Jobs) Jobs.touch();          // αυτόματη αποθήκευση μετά από κάθε αλλαγή
   }
 
@@ -690,7 +710,23 @@
   }
   function addComputedSilent(id,x,y,z,rem,lyr){ var w=gridsOK?HEPOS.toWGS84(x,y,z):{lat:0,lon:0,h:z}; computed.push({id:id,x:x,y:y,z:z,lat:w.lat,lon:w.lon,h:w.h,remarks:rem,fix:4,layer:lyr||'StakeOut'}); document.getElementById('btnCsv').disabled=false; document.getElementById('btnDxf').disabled=false; }
   function addComputed(id,x,y,z,rem){ addComputedSilent(id,x,y,z,rem); renderMap(); }
-  function clearComputed(){ if(computed.length && confirm('Διαγραφή '+computed.length+' σημείων χάραξης;')){ computed=[]; renderMap(); } }
+  function clearComputed(){
+    if(!computed.length){ setStatus('Δεν υπάρχουν σημεία χάραξης.','warn'); return; }
+    if(confirm('Διαγραφή '+computed.length+' σημείων χάραξης;')){
+      computed=[]; pick={p1:null,p2:null}; renderSummary(); renderLayers(); renderMap();
+    }
+  }
+
+  /*  Σβήνει ΜΟΝΟ τη φορτωμένη βάση. Τα σημεία χάραξης και οι γραμμές που
+   *  έφτιαξε ο χρήστης είναι δική του δουλειά και δεν χάνονται μαζί. */
+  function clearModelOnly(){
+    if(!model){ setStatus('Δεν υπάρχουν φορτωμένα δεδομένα.','warn'); return; }
+    if(!confirm('Να αφαιρεθούν τα φορτωμένα δεδομένα; Τα σημεία χάραξης και οι γραμμές μένουν.')) return;
+    model=null; LSEL={a:null,b:null};
+    if(window.lineHL) lineHL.clearLayers();
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('αφαιρέθηκαν τα δεδομένα','ok');
+  }
 
   // ---- ΤΟΜΗ ΑΠΟΣΤΑΣΕΩΝ (distance-distance intersection) ----
   var isCandidates=L.layerGroup().addTo(map), isCand=[];
@@ -1216,7 +1252,7 @@
   };
 
   window.clearGenLines = function(){
-    if (!genLines.length) return;
+    if (!genLines.length){ setStatus('Δεν υπάρχουν γραμμές.','warn'); return; }
     if (!confirm('Διαγραφή ' + genLines.length + ' γραμμών που φτιάχτηκαν;')) return;
     genLines.forEach(function(g){ delete layerState[g.layer]; });
     genLines = [];
