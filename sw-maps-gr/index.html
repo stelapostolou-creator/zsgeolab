@@ -17,10 +17,10 @@
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
-<script src="../lib/hepos.js?v=20260906b"></script>
+<script src="../lib/hepos.js?v=20260906d"></script>
 <script src="../lib/hepos_grids.js"></script>
-<script src="../lib/swmaps.js?v=20260906b"></script>
-<script src="../lib/jobs.js?v=20260906b"></script>
+<script src="../lib/swmaps.js?v=20260906d"></script>
+<script src="../lib/jobs.js?v=20260906d"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -204,6 +204,18 @@
         <button class="btn ghost" onclick="document.getElementById('fileXls').click()">📥 Excel (SW Maps)</button>
       </div>
       <div class="hint">Διαβάζει όλα τα σχήματα: σημεία, γραμμές, πολύγωνα — με σωστή γεωμετρία.</div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;color:var(--mut);font-size:12px">Πού είναι τα αρχεία του SW Maps στο κινητό;</summary>
+        <div class="hint" style="margin-top:6px">
+          Από Android 11 και μετά, όλα βρίσκονται μέσα στο<br>
+          <code style="color:#8ff0b6;font-size:11px;word-break:break-all">Android/media/np.com.softwel.swmaps/files/SW_Maps/</code><br>
+          <b>Projects</b> — οι βάσεις <code>.swm2</code><br>
+          <b>Export</b> — ό,τι εξάγει το SW Maps (Excel)<br>
+          <b>Imports</b> — εδώ πρέπει να αντιγραφεί το CSV για να το δει το SW Maps<br>
+          <span style="color:var(--warn)">Ο browser δεν επιτρέπεται να ανοίξει μόνος του συγκεκριμένο φάκελο.</span>
+          Την πρώτη φορά πλοηγήσου εκεί· το Android θυμάται και σε ξαναπηγαίνει.
+        </div>
+      </details>
       <div style="margin-top:10px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
       <div style="margin-top:8px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileDxf').click()">📐 Εισαγωγή σχεδίου DXF (ΕΓΣΑ87)</button></div>
       <div id="dxfPanel"></div>
@@ -253,9 +265,9 @@
         <div class="fld"><label>Περιγραφή</label><input id="mDesc" placeholder="προαιρετικό"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
-        <div class="fld"><label>X (E)</label><input id="mX" type="number" step="0.001" inputmode="decimal"></div>
-        <div class="fld"><label>Y (N)</label><input id="mY" type="number" step="0.001" inputmode="decimal"></div>
-        <div class="fld"><label>Z</label><input id="mZ" type="number" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>X (E)</label><input id="mX" type="text" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Y (N)</label><input id="mY" type="text" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Z</label><input id="mZ" type="text" step="0.001" inputmode="decimal"></div>
       </div>
       <button class="btn" style="width:100%;margin-top:12px" onclick="addManual()">➕ Προσθήκη σημείου</button>
     </div>
@@ -271,8 +283,8 @@
       <div class="hint">Επίλεξε δύο σημεία (στον χάρτη ή τον πίνακα): <b style="color:#ff3df0">P1</b> & <b style="color:#ffcc00">P2</b>.</div>
       <div class="fld" style="margin:12px 0"><label>Υψόμετρο νέων σημείων (Z)</label>
         <select id="stZ"><option value="interp">Γραμμική παρεμβολή</option><option value="copy">Ίδιο με P1</option><option value="zero">Μηδέν (0)</option></select></div>
-      <div class="row2"><div class="fld"><label>Προέκταση — απόσταση μετά το P2 (m)</label><input id="stDist" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div><button class="btn" onclick="stExtend()">📏 Προέκταση</button></div>
-      <div class="row2" style="margin-top:10px"><div class="fld"><label>Πύκνωση — βήμα (m)</label><input id="stStep" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50"></div><button class="btn" onclick="stDivide()">📍 Πύκνωση</button></div>
+      <div class="row2"><div class="fld"><label>Προέκταση — απόσταση μετά το P2 (m)</label><input id="stDist" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div><button class="btn" onclick="stExtend()">📏 Προέκταση</button></div>
+      <div class="row2" style="margin-top:10px"><div class="fld"><label>Πύκνωση — βήμα (m)</label><input id="stStep" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50"></div><button class="btn" onclick="stDivide()">📍 Πύκνωση</button></div>
       <div class="compbar" style="margin-top:16px">
         <span class="pill">Σημεία χάραξης: <b id="compN">0</b></span>
         <button class="btn red small" onclick="clearComputed()">🗑 Καθαρισμός</button>
@@ -289,8 +301,8 @@
         </div>
         <div class="hint">Δώσε απόσταση από <b style="color:#ff3df0">P1</b> και <b style="color:#ffcc00">P2</b> → 2 τομές κύκλων (A/B), διάλεξε ποια.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-          <div class="fld"><label>Απόσταση από P1 (m)</label><input id="isD1" type="number" step="0.001" inputmode="decimal"></div>
-          <div class="fld"><label>Απόσταση από P2 (m)</label><input id="isD2" type="number" step="0.001" inputmode="decimal"></div>
+          <div class="fld"><label>Απόσταση από P1 (m)</label><input id="isD1" type="text" step="0.001" inputmode="decimal"></div>
+          <div class="fld"><label>Απόσταση από P2 (m)</label><input id="isD2" type="text" step="0.001" inputmode="decimal"></div>
         </div>
         <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Υπολογισμός τομών</button>
         <div id="isResult"></div>
@@ -322,11 +334,11 @@
         <button class="btn ghost" style="width:100%;margin-top:10px" onclick="pfLoad()">📥 Φόρτωση κορυφών</button>
         <div id="pfTable"></div>
         <div class="row2" style="margin-top:12px">
-          <div class="fld"><label>Συμπλήρωση από σημεία σε ακτίνα (m)</label><input id="pfNear" type="number" step="0.1" value="2" inputmode="decimal"></div>
+          <div class="fld"><label>Συμπλήρωση από σημεία σε ακτίνα (m)</label><input id="pfNear" type="text" step="0.1" value="2" inputmode="decimal"></div>
           <button class="btn ghost" onclick="pfFromPoints()">⛏ Από σημεία</button>
         </div>
         <div class="row2" style="margin-top:10px">
-          <div class="fld"><label>Βήμα πύκνωσης (m)</label><input id="pfStep" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div>
+          <div class="fld"><label>Βήμα πύκνωσης (m)</label><input id="pfStep" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div>
           <button class="btn" onclick="pfCompute()">📐 Υπολογισμός</button>
         </div>
         <div id="pfResult"></div>
@@ -342,7 +354,7 @@
             <option value="pick">P1 → P2</option>
           </select></div>
         <div class="row2" style="margin-top:10px">
-          <div class="fld"><label>Απόσταση (m)</label><input id="ofDist" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50 ή -2.50"></div>
+          <div class="fld"><label>Απόσταση (m)</label><input id="ofDist" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50 ή -2.50"></div>
           <button class="btn" onclick="makeOffset()">↔ Offset</button>
         </div>
         <div id="ofResult"></div>
@@ -660,7 +672,7 @@
   function zVal(a,b,d,L){ var m=document.getElementById('stZ').value; if(m==='copy')return a.z||0; if(m==='zero')return 0; return (a.z||0)+((b.z||0)-(a.z||0))*(d/L); }
   function stExtend(){
     if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2 (στον χάρτη ή τον πίνακα).'); return; }
-    var d=parseFloat(document.getElementById('stDist').value);
+    var d=numIn('stDist');
     if(isNaN(d)){ alert('Δώσε απόσταση προέκτασης.'); return; }
     var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Τα σημεία συμπίπτουν.'); return; }
     addComputed('E_'+a.id+'_'+b.id, b.x+d*(b.x-a.x)/L, b.y+d*(b.y-a.y)/L, zVal(a,b,L+d,L), 'Extend');
@@ -668,7 +680,7 @@
   }
   function stDivide(){
     if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2.'); return; }
-    var s=parseFloat(document.getElementById('stStep').value);
+    var s=numIn('stStep');
     if(isNaN(s)||s<=0){ alert('Δώσε βήμα > 0.'); return; }
     var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('Τα σημεία συμπίπτουν.'); return; }
     var ux=(b.x-a.x)/L, uy=(b.y-a.y)/L, c=0;
@@ -685,7 +697,7 @@
   function clearCand(){ isCandidates.clearLayers(); isCand=[]; document.getElementById('isResult').innerHTML=''; }
   function calcIntersect(){
     if(!pick.p1||!pick.p2){ alert('Διάλεξε P1 και P2 (στον χάρτη ή τον πίνακα).'); return; }
-    var r1=parseFloat(document.getElementById('isD1').value), r2=parseFloat(document.getElementById('isD2').value);
+    var r1=numIn('isD1'), r2=numIn('isD2');
     if(isNaN(r1)||isNaN(r2)||r1<=0||r2<=0){ alert('Δώσε αποστάσεις > 0.'); return; }
     var a=pick.p1, b=pick.p2, dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
     if(d===0){ alert('Τα σημεία P1/P2 συμπίπτουν.'); return; }
@@ -736,7 +748,7 @@
     setStatus('καθαρίστηκε','ok');
   }
   function addManual(){
-    var x=parseFloat(document.getElementById('mX').value), y=parseFloat(document.getElementById('mY').value), z=parseFloat(document.getElementById('mZ').value)||0;
+    var x=numIn('mX'), y=numIn('mY'), z=numIn('mZ')||0;
     if(isNaN(x)||isNaN(y)){ alert('Δώσε X και Y (ΕΓΣΑ87).'); return; }
     var id=document.getElementById('mID').value.trim()||('M'+(computed.length+1));
     var desc=document.getElementById('mDesc').value.trim()||'Manual';
@@ -775,15 +787,13 @@
     [].slice.call(document.querySelectorAll('.tabbar .tb')).forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-pane') === name);
     });
-    try{ localStorage.setItem('zs_pane:sw-maps-gr', name); }catch(e){}
+    // Η καρτέλα ΔΕΝ θυμάται: το άνοιγμα ξεκινά πάντα από τα Δεδομένα, γιατί
+    // εκεί φορτώνεται η βάση — που είναι η πρώτη κίνηση κάθε φορά.
     // Ο χάρτης πρέπει να ξαναμετρήσει: μπορεί να άλλαξε το ύψος της σελίδας.
     if(window.map) setTimeout(function(){ map.invalidateSize(); }, 60);
   }
-  (function(){
-    var last = null;
-    try{ last = localStorage.getItem('zs_pane:sw-maps-gr'); }catch(e){}
-    if(last) showPane(last);
-  })();
+  showPane('data');
+  try{ localStorage.removeItem('zs_pane:sw-maps-gr'); }catch(e){}   // παλιά ρύθμιση
 
 
   /* ==================== ΤΟΜΗ ΔΥΟ ΕΥΘΕΙΩΝ ====================
@@ -1023,6 +1033,15 @@
   };
 
 
+  /*  Το ελληνικό πληκτρολόγιο δίνει ΚΟΜΜΑ για δεκαδικά. Με <input type=number>
+   *  ο browser απέρριπτε την τιμή και επέστρεφε κενό — ο αριθμός χανόταν
+   *  σιωπηλά. Τα πεδία είναι πλέον κειμένου και διαβάζονται από εδώ. */
+  function numIn(id){
+    var el = document.getElementById(id);
+    if (!el) return NaN;
+    return parseFloat(String(el.value || '').trim().replace(',', '.'));
+  }
+
   /** Δύο σημεία είναι το ίδιο αν συμπίπτουν στο χιλιοστό. */
   function samePt(a, b){
     return !!(a && b && a.x != null && b.x != null &&
@@ -1146,7 +1165,7 @@
 
   window.makeOffset = function(){
     var host = document.getElementById('ofResult');
-    var d = parseFloat(document.getElementById('ofDist').value);
+    var d = numIn('ofDist');
     if (!Number.isFinite(d) || d === 0){
       host.innerHTML = '<div class="warnbox">Δώσε απόσταση διάφορη του μηδενός.</div>';
       return;
@@ -1254,7 +1273,7 @@
     pfV.forEach(function(v, k){
       h += '<tr><td>' + v.i + '</td><td>' + v.ch.toFixed(2) + '</td>' +
            '<td>' + v.x.toFixed(2) + '</td><td>' + v.y.toFixed(2) + '</td>' +
-           '<td><input type="number" step="0.001" inputmode="decimal" style="width:92px" ' +
+           '<td><input type="text" inputmode="decimal" style="width:92px" ' +
            'value="' + (v.z == null ? '' : v.z.toFixed(3)) + '" ' +
            'oninput="pfSetZ(' + k + ',this.value)"></td></tr>';
     });
@@ -1272,7 +1291,7 @@
   /** Παίρνει υψόμετρο από το κοντινότερο υπάρχον σημείο, μέσα σε ακτίνα. */
   window.pfFromPoints = function(){
     if (!pfV.length){ alert('Φόρτωσε πρώτα τις κορυφές.'); return; }
-    var rad = parseFloat(document.getElementById('pfNear').value);
+    var rad = numIn('pfNear');
     if (!Number.isFinite(rad) || rad <= 0){ alert('Δώσε ακτίνα σε μέτρα.'); return; }
     var pool = [];
     if (model) model.features.forEach(function(f){
@@ -1333,12 +1352,13 @@
         'Με ένα μόνο, δεν υπάρχει κλίση να παρεμβληθεί.</div>';
       return;
     }
-    var step = parseFloat(document.getElementById('pfStep').value);
+    var step = numIn('pfStep');
+    var noStep = !Number.isFinite(step) || step <= 0;
     var total = pfV[pfV.length-1].ch;
 
     // Χ.Θ. εξόδου: πάντα οι κορυφές, συν το βήμα από την αρχή.
     var chs = pfV.map(function(v){ return v.ch; });
-    if (Number.isFinite(step) && step > 0){
+    if (!noStep){
       for (var c = step; c < total; c += step) chs.push(c);
     }
     chs.sort(function(a, b){ return a - b; });
@@ -1377,6 +1397,10 @@
       '</tbody></table></div>' +
       '<div class="hint" style="margin-top:10px">Έγιναν <b>' + made + '</b> σημεία στο layer «' +
       lyr + '» · συνολικό μήκος ' + total.toFixed(2) + ' m</div>';
+    if (noStep){
+      html += '<div class="warnbox">Δεν δόθηκε <b>βήμα πύκνωσης</b>, οπότε έγιναν σημεία ' +
+        'μόνο στις κορυφές. Γράψε π.χ. 5 και ξαναπάτησε Υπολογισμό για ενδιάμεσα ανά 5 m.</div>';
+    }
     if (outside){
       html += '<div class="warnbox"><b>' + outside + ' θέσεις έμειναν χωρίς υψόμετρο.</b><br>' +
         'Είναι εκτός των γνωστών υψομέτρων (πριν την πρώτη ή μετά την τελευταία κορυφή με τιμή). ' +
@@ -1803,7 +1827,7 @@
           '<div style="font-size:13px;color:#f0f6ff"><b>Τελευταία εργασία (χωρίς όνομα)</b> \u2014 '+when(auto.saved)+'</div>'+
           '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Φόρτωσέ την πίσω</button>'+
+            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Συνέχισε τη δουλειά</button>'+
             '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
           '</div>');
       } else { ha.innerHTML=''; }
