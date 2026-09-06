@@ -1,0 +1,422 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ισοϋψείς &amp; ψηφιακό μοντέλο | ZS-GeoLab</title>
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" type="image/png" sizes="32x32" href="../sw-maps-gr/favicon-32.png">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  body{background:var(--bg);color:var(--ink);min-height:100vh;}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg2);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
+  header .logo-img{height:34px;width:auto;display:block;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  header .pro{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.5px;
+    background:linear-gradient(135deg,#c9a227,#f0d264);color:#231a00;padding:4px 10px;border-radius:6px;}
+  main{max-width:1400px;margin:0 auto;padding:14px;display:grid;grid-template-columns:380px 1fr;gap:14px;align-items:start;}
+  @media(max-width:1000px){main{grid-template-columns:1fr;}}
+  .col{display:flex;flex-direction:column;gap:14px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;}
+  .card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
+  .card h2 .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
+  .hint{color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:6px;}
+  .fld label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px;}
+  .fld input,.fld select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);font-size:14px;}
+  .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .btn{padding:10px 14px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;
+    color:#fff;background:var(--navy2);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn.green{background:#1d7a4a;}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .tblwrap{overflow:auto;max-height:38vh;border:1px solid var(--line);border-radius:8px;margin-top:10px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;}
+  td select{background:var(--bg2);border:1px solid var(--line);border-radius:6px;color:var(--ink);
+    font-size:11.5px;padding:3px 5px;}
+  .mono{font-family:ui-monospace,Consolas,monospace;}
+  .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;
+    padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;
+    padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .cv-wrap{position:relative;background:#080d18;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  #cv{display:block;width:100%;height:74vh;cursor:grab;}
+  #cv.drag{cursor:grabbing;}
+  .cv-bar{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;}
+  .cv-bar button{background:rgba(19,29,51,.92);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:5px 9px;font-size:12px;cursor:pointer;}
+  .cv-info{position:absolute;right:10px;bottom:10px;background:rgba(8,13,24,.85);border:1px solid var(--line);
+    border-radius:7px;padding:5px 9px;font-size:11.5px;color:var(--mut);
+    font-family:ui-monospace,Consolas,monospace;}
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:18px;}
+  footer a{color:inherit;}
+</style>
+
+<header>
+  <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center">
+    <img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+  <div class="htitle">Ισοϋψείς<span> &amp; μοντέλο</span></div>
+  <span class="pro">PRO</span>
+</header>
+
+<input type="file" id="file" accept=".dxf,.txt,.csv" style="display:none">
+
+<main>
+  <div class="col">
+    <div class="card">
+      <h2><span class="c"></span>1. Σχέδιο</h2>
+      <div class="hint">Δέχεται <b>DXF</b> (σημεία, γραμμές, blocks) ή <b>TXT/CSV</b> με «x y z». Ανέβασε όσα αρχεία θέλεις — τα layers μαζεύονται όλα μαζί.</div>
+      <button class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('file').click()">📂 Άνοιγμα αρχείου</button>
+      <div id="info"></div>
+    </div>
+
+    <div class="card" id="cLayers" hidden>
+      <h2><span class="c"></span>2. Ρόλοι των layers</h2>
+      <div class="hint">Πες ποιο layer είναι τι. Δεν μαντεύεται τίποτα από τα ονόματα. Ό,τι μείνει «φόντο» απλώς ζωγραφίζεται.</div>
+      <div class="tblwrap"><table>
+        <thead><tr><th>👁</th><th>Layer</th><th>Ρόλος</th><th>Σημ.</th><th>Γρ.</th><th>Z</th></tr></thead>
+        <tbody id="lyTbl"></tbody>
+      </table></div>
+      <div id="lyNote"></div>
+    </div>
+
+    <div class="card" id="cCalc" hidden>
+      <h2><span class="c"></span>3. Υπολογισμός</h2>
+      <div class="row2">
+        <div class="fld"><label>Ισοδιάστημα (m)</label>
+          <input id="iv" type="text" inputmode="decimal" value="0,50"></div>
+        <button class="btn" id="go" onclick="build()">📈 Υπολογισμός</button>
+      </div>
+      <div class="fld" style="margin-top:10px"><label><input type="checkbox" id="clip" checked> Κοπή στην περιοχή μελέτης</label></div>
+      <div class="fld"><label><input type="checkbox" id="wmesh" checked> Ψηφιακό μοντέλο (τρίγωνα)</label></div>
+      <div id="out"></div>
+    </div>
+
+    <div class="card" id="cOut" hidden>
+      <h2><span class="c"></span>4. Εξαγωγή</h2>
+      <div class="fld"><label><input type="checkbox" id="dBrk"> Να μπουν και οι γραμμές αλλαγής κλίσης</label></div>
+      <div class="fld"><label><input type="checkbox" id="dPts"> Να μπουν και τα σημεία</label></div>
+      <button class="btn green" style="width:100%;margin-top:8px" onclick="dxf()">📐 Λήψη DXF</button>
+      <div id="dxfOut"></div>
+    </div>
+  </div>
+
+  <div class="cv-wrap">
+    <canvas id="cv"></canvas>
+    <div class="cv-bar">
+      <button onclick="fit()">⤢ Όλα</button>
+      <button onclick="zoom(1.4)">＋</button>
+      <button onclick="zoom(1/1.4)">−</button>
+      <button id="bMesh" onclick="tog('mesh')">Τρίγωνα</button>
+      <button id="bIso" onclick="tog('iso')">Ισοϋψείς</button>
+      <button id="bTxt" onclick="tog('txt')">Κείμενα</button>
+    </div>
+    <div class="cv-info" id="cvInfo">—</div>
+  </div>
+</main>
+
+<footer>ZS-GeoLab · Έδαφος &amp; Επιφάνειες · Αποστόλου Φ. Στυλιανός · <a href="../index.html">Επιστροφή</a></footer>
+
+<script src="../lib/server-check.js?v=20260906i"></script>
+<script>
+/*  Οι υπολογισμοί γίνονται στον server σε Python: είναι δουλειά γραφείου —
+ *  ανεβάζεις σχέδιο, άρα υπάρχει σύνδεση — και ο κώδικας δεν φεύγει στον
+ *  browser. Εδώ μένει μόνο η οθόνη: τι δείχνει και τι στέλνει.
+ *
+ *  Ο καμβάς είναι σκέτο 2D context και όχι χάρτης: οι συντεταγμένες είναι
+ *  προβολικές (ΕΓΣΑ87) και δεν χρειάζεται υπόβαθρο — μόνο pan, zoom και
+ *  διακόπτες ανά layer.
+ */
+'use strict';
+var GEOM = {};          // layer -> {points, lines, texts}
+var META = {};          // layer -> γραμμή της αναφοράς
+var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
+var VIS = {};           // layer -> boolean
+var RES = null;         // αποτέλεσμα του server
+var SHOW = {mesh:true, iso:true, txt:false};
+var T = {s:1, x:0, y:0};
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function numIn(id){ var e=document.getElementById(id); return parseFloat(String(e.value||'').trim().replace(',','.')); }
+function fmt(v,d){ return v==null?'—':Number(v).toFixed(d==null?2:d); }
+function warn(id,h){ document.getElementById(id).innerHTML='<div class="warnbox">'+h+'</div>'; }
+
+// ------------------------------------------------------------ ανέβασμα ---
+
+document.getElementById('file').addEventListener('change', function(ev){
+  var f = ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  var info = document.getElementById('info');
+  info.innerHTML = '<div class="hint">Διάβασμα…</div>';
+  var fd = new FormData(); fd.append('file', f);
+  fetch('/api/dtm/read', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok){ info.innerHTML = '<div class="warnbox">'+esc(j.error)+'</div>'; return; }
+      // Τα layers μαζεύονται: ο χρήστης μπορεί να δώσει σημεία από TXT και
+      // γραμμές από DXF, όπως το ζήτησε.
+      j.layers.forEach(function(r){
+        var n = r.name;
+        if (GEOM[n]){ n = r.name + ' (' + j.file + ')'; }
+        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[]};
+        META[n] = r; ROLE[n] = ROLE[n] || ''; VIS[n] = true;
+      });
+      info.innerHTML = '<div class="okbox"><b>'+esc(j.file)+'</b> — '+j.layers.length+' layers</div>';
+      guessRoles();
+      renderLayers(); fit();
+      document.getElementById('cLayers').hidden = false;
+      document.getElementById('cCalc').hidden = false;
+    })
+    .catch(function(e){ info.innerHTML = '<div class="warnbox">Ο server δεν απάντησε: '+esc(e.message)+'</div>'; });
+});
+
+/*  Προτείνεται ρόλος μόνο όταν είναι ΑΔΙΑΜΦΙΣΒΗΤΗΤΟ: ένα μόνο layer έχει
+ *  σημεία με υψόμετρα. Ό,τι άλλο το λέει ο χρήστης — τα ονόματα των layers δεν
+ *  σημαίνουν το ίδιο σε δύο γραφεία. */
+function guessRoles(){
+  var cand = Object.keys(GEOM).filter(function(n){
+    return META[n].points >= 3 && !META[n].flat;
+  });
+  if (cand.length === 1 && !Object.keys(ROLE).some(function(k){ return ROLE[k]==='pts'; }))
+    ROLE[cand[0]] = 'pts';
+}
+
+function renderLayers(){
+  var h = '';
+  Object.keys(GEOM).forEach(function(n){
+    var m = META[n];
+    h += '<tr>' +
+      '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;draw()"></td>' +
+      '<td title="'+esc(n)+'">'+esc(n.length>18?n.slice(0,17)+'…':n)+'</td>' +
+      '<td><select onchange="ROLE[\''+esc(n)+'\']=this.value;renderLayers();draw()">' +
+        ['','pts','brk','bnd'].map(function(v){
+          var lbl = {'':'φόντο','pts':'📍 σημεία','brk':'📐 breaklines','bnd':'▣ όριο'}[v];
+          return '<option value="'+v+'"'+(ROLE[n]===v?' selected':'')+'>'+lbl+'</option>';
+        }).join('') + '</select></td>' +
+      '<td class="mono">'+m.points+(m.inserts?('+'+m.inserts+'b'):'')+'</td>' +
+      '<td class="mono">'+m.lines+'</td>' +
+      '<td class="mono">'+(m.zmin==null?'—':(m.flat?'επίπεδο':fmt(m.zmin,1)+'–'+fmt(m.zmax,1)))+'</td>' +
+    '</tr>';
+  });
+  document.getElementById('lyTbl').innerHTML = h;
+
+  var note = '', p = sel('pts'), b = sel('bnd');
+  var np = p.reduce(function(s,n){ return s + META[n].points; }, 0);
+  if (!p.length) note += '<div class="warnbox">Διάλεξε ποιο layer έχει τα <b>σημεία</b>.</div>';
+  else if (p.some(function(n){ return META[n].flat; }))
+    note += '<div class="warnbox">Το layer των σημείων είναι <b>επίπεδο</b> — όλα τα υψόμετρα ίδια. Το σχέδιο είναι δισδιάστατο· δώσε υψόμετρα από αρχείο κειμένου.</div>';
+  else note += '<div class="okbox">'+np+' σημεία · '+sel('brk').length+' layers με breaklines'+(b.length?' · όριο ✓':'')+'</div>';
+  document.getElementById('lyNote').innerHTML = note;
+}
+function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]===role; }); }
+
+// ------------------------------------------------------- τι στέλνεται ---
+
+function payload(){
+  var pts = [];
+  sel('pts').forEach(function(n){ GEOM[n].points.forEach(function(p){ pts.push(p); }); });
+  // Οι κορυφές γραμμών σε layer σημείων μετράνε κι αυτές ως μετρημένα σημεία.
+  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(function(p){ pts.push(p); }); }); });
+
+  var brk = [];
+  sel('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) brk.push(L); }); });
+
+  var bnd = null, best = -1;
+  sel('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
+    if (L.length < 4) return;
+    // Το μεγαλύτερο κλειστό σχήμα είναι η περιοχή μελέτης.
+    var a = 0; for (var i=0,j=L.length-1;i<L.length;j=i++) a += (L[j][0]+L[i][0])*(L[j][1]-L[i][1]);
+    a = Math.abs(a/2);
+    if (a > best){ best = a; bnd = L.map(function(p){ return [p[0],p[1]]; }); }
+  }); });
+
+  return {points:pts, breaklines:brk, boundary:bnd,
+          interval:numIn('iv'), clip:document.getElementById('clip').checked,
+          mesh:document.getElementById('wmesh').checked};
+}
+
+function build(){
+  var b = payload();
+  if (b.points.length < 3){ warn('out','Χρειάζονται τουλάχιστον 3 σημεία με υψόμετρο.'); return; }
+  if (!(b.interval > 0)){ warn('out','Δώσε ισοδιάστημα σε μέτρα.'); return; }
+  var btn = document.getElementById('go'); btn.disabled = true;
+  document.getElementById('out').innerHTML = '<div class="hint">Υπολογισμός…</div>';
+  fetch('/api/dtm/build', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      btn.disabled = false;
+      if (!j.ok){ warn('out', esc(j.error)); return; }
+      RES = j; show(j); draw();
+      document.getElementById('cOut').hidden = false;
+    })
+    .catch(function(e){ btn.disabled = false; warn('out','Ο server δεν απάντησε: '+esc(e.message)); });
+}
+
+function show(j){
+  var r = j.report, c = j.contours;
+  var h = '<div class="tblwrap" style="max-height:none"><table><tbody>' +
+    '<tr><td>Σημεία</td><td class="mono">'+r.points+(r.added_by_breaklines?(' +'+r.added_by_breaklines+' από γραμμές'):'')+'</td></tr>' +
+    '<tr><td>Τρίγωνα</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' έξω από το όριο'):'')+'</td></tr>' +
+    '<tr><td>Περιορισμοί</td><td class="mono">'+r.constraints+(r.constraints_failed?(' · '+r.constraints_failed+' ανεκπλήρωτοι'):' ✓')+'</td></tr>' +
+    '<tr><td>Εμβαδόν</td><td class="mono">'+fmt(r.area,1)+' m² · '+fmt(r.area/1000,3)+' στρ.</td></tr>' +
+    '<tr><td>Υψόμετρα</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m</td></tr>';
+  if (c) h += '<tr><td>Ισοϋψείς</td><td class="mono">'+c.count+' στάθμες ανά '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
+  h += '</tbody></table></div>';
+  if (j.warning) h += '<div class="warnbox">⚠ '+esc(j.warning)+'</div>';
+  if (r.snapped) h += '<div class="hint">'+r.snapped+' κορυφές γραμμών έπεσαν πάνω σε υπάρχοντα σημεία και ενώθηκαν μαζί τους.</div>';
+  document.getElementById('out').innerHTML = h;
+}
+
+function dxf(){
+  var b = payload();
+  b.with_breaklines = document.getElementById('dBrk').checked;
+  b.with_points = document.getElementById('dPts').checked;
+  b.name = 'DTM';
+  document.getElementById('dxfOut').innerHTML = '<div class="hint">Γράφεται…</div>';
+  fetch('/api/dtm/dxf', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'σφάλμα'); }); })
+    .then(function(txt){
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], {type:'application/octet-stream'}));
+      a.download = 'DTM_EGSA87.dxf'; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+      document.getElementById('dxfOut').innerHTML = '<div class="okbox">DTM_EGSA87.dxf — '+(txt.length/1024).toFixed(0)+' KB</div>';
+    })
+    .catch(function(e){ warn('dxfOut', esc(e.message)); });
+}
+
+// ---------------------------------------------------------- ο καμβάς ----
+
+var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+function resize(){
+  var r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  cv.width = Math.round(r.width*d); cv.height = Math.round(r.height*d);
+  ctx.setTransform(d,0,0,d,0,0); draw();
+}
+window.addEventListener('resize', resize);
+
+function bounds(){
+  var b = [Infinity,Infinity,-Infinity,-Infinity], any = false;
+  function ext(p){ any = true;
+    if(p[0]<b[0])b[0]=p[0]; if(p[1]<b[1])b[1]=p[1];
+    if(p[0]>b[2])b[2]=p[0]; if(p[1]>b[3])b[3]=p[1]; }
+  Object.keys(GEOM).forEach(function(n){
+    if (!VIS[n]) return;
+    GEOM[n].points.forEach(ext);
+    GEOM[n].lines.forEach(function(L){ L.forEach(ext); });
+  });
+  return any ? b : null;
+}
+function fit(){
+  var b = bounds(); if (!b) return;
+  var r = cv.getBoundingClientRect();
+  var w = Math.max(b[2]-b[0], 1e-6), h = Math.max(b[3]-b[1], 1e-6);
+  T.s = Math.min(r.width/w, r.height/h) * 0.92;
+  T.x = r.width/2 - (b[0]+b[2])/2*T.s;
+  T.y = r.height/2 + (b[1]+b[3])/2*T.s;   // ο y κοιτά προς τα πάνω
+  draw();
+}
+function zoom(k, cx, cy){
+  var r = cv.getBoundingClientRect();
+  cx = cx==null ? r.width/2 : cx; cy = cy==null ? r.height/2 : cy;
+  T.x = cx - (cx - T.x)*k; T.y = cy - (cy - T.y)*k; T.s *= k; draw();
+}
+function tog(k){ SHOW[k] = !SHOW[k]; draw(); }
+var SX = function(x){ return x*T.s + T.x; };
+var SY = function(y){ return -y*T.s + T.y; };
+
+var drag = null;
+cv.addEventListener('mousedown', function(e){ drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; cv.classList.add('drag'); });
+window.addEventListener('mouseup', function(){ drag = null; cv.classList.remove('drag'); });
+window.addEventListener('mousemove', function(e){
+  var r = cv.getBoundingClientRect();
+  if (drag){ T.x = drag.tx + (e.clientX-drag.x); T.y = drag.ty + (e.clientY-drag.y); draw(); }
+  var wx = (e.clientX - r.left - T.x)/T.s, wy = -(e.clientY - r.top - T.y)/T.s;
+  document.getElementById('cvInfo').textContent =
+    'X ' + wx.toFixed(2) + '   Y ' + wy.toFixed(2) + '   1:' + Math.round(1/T.s*1000);
+});
+cv.addEventListener('wheel', function(e){
+  e.preventDefault();
+  var r = cv.getBoundingClientRect();
+  zoom(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX-r.left, e.clientY-r.top);
+}, {passive:false});
+
+function poly(L, close){
+  ctx.beginPath();
+  for (var i=0;i<L.length;i++){ var x=SX(L[i][0]), y=SY(L[i][1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  if (close) ctx.closePath();
+  ctx.stroke();
+}
+
+function draw(){
+  var r = cv.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  ctx.fillStyle = '#080d18'; ctx.fillRect(0,0,r.width,r.height);
+
+  // 1. Φόντο: ό,τι δεν έχει ρόλο. Σβηστό, μόνο για προσανατολισμό.
+  ctx.lineWidth = 1; ctx.strokeStyle = '#33456a';
+  Object.keys(GEOM).forEach(function(n){
+    if (!VIS[n] || ROLE[n]) return;
+    GEOM[n].lines.forEach(function(L){ poly(L); });
+    ctx.fillStyle = '#2c3d5e';
+    GEOM[n].points.forEach(function(p){ ctx.fillRect(SX(p[0])-1, SY(p[1])-1, 2, 2); });
+  });
+  if (SHOW.txt && T.s > 3){
+    ctx.fillStyle = '#5d7099'; ctx.font = '10px Consolas,monospace';
+    Object.keys(GEOM).forEach(function(n){
+      if (!VIS[n]) return;
+      GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
+    });
+  }
+
+  // 2. Τρίγωνα του μοντέλου.
+  if (RES && RES.mesh && SHOW.mesh){
+    ctx.strokeStyle = 'rgba(90,150,120,.30)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    RES.mesh.forEach(function(t){
+      ctx.moveTo(SX(t[0][0]),SY(t[0][1])); ctx.lineTo(SX(t[1][0]),SY(t[1][1]));
+      ctx.lineTo(SX(t[2][0]),SY(t[2][1])); ctx.closePath();
+    });
+    ctx.stroke();
+  }
+
+  // 3. Ισοϋψείς. Κάθε πέμπτη πιο έντονη, όπως στο σχέδιο.
+  if (RES && RES.contours && SHOW.iso){
+    var iv = RES.contours.interval;
+    RES.contours.levels.forEach(function(lv){
+      var q = lv.z/(iv*5), main = Math.abs(q - Math.round(q)) < 1e-6;
+      ctx.strokeStyle = main ? '#ffd166' : '#4fd18b';
+      ctx.lineWidth = main ? 1.8 : 1;
+      lv.lines.forEach(function(L){ poly(L); });
+    });
+  }
+
+  // 4. Ό,τι διάλεξε ο χρήστης, από πάνω.
+  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
+  sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ poly(L); }); });
+  ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2;
+  sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ poly(L); }); });
+  ctx.fillStyle = '#ff6b6e';
+  sel('pts').forEach(function(n){
+    if (!VIS[n]) return;
+    var s = T.s > 8 ? 3 : 2;
+    GEOM[n].points.forEach(function(p){ ctx.fillRect(SX(p[0])-s/2, SY(p[1])-s/2, s, s); });
+  });
+}
+
+['mesh','iso','txt'].forEach(function(k){
+  var b = document.getElementById({mesh:'bMesh',iso:'bIso',txt:'bTxt'}[k]);
+  var upd = function(){ b.style.opacity = SHOW[k] ? 1 : .45; };
+  b.addEventListener('click', function(){ setTimeout(upd, 0); }); upd();
+});
+resize();
+
+ZSServer.banner('<b>⚠ Το εργαλείο χρειάζεται τον server.</b><br>' +
+  'Οι υπολογισμοί γίνονται σε Python — τριγωνισμός με περιορισμούς, ισοϋψείς, ' +
+  'ψηφιακό μοντέλο — ώστε να μη φεύγει ο κώδικας στον browser. ' +
+  'Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση· το εργαλείο θα ' +
+  'ενεργοποιηθεί μόνο του μόλις ανέβει.');
+</script>
