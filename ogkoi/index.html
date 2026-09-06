@@ -1,0 +1,238 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Όγκοι χωματουργικών | ZS-GeoLab</title>
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" type="image/png" sizes="32x32" href="../sw-maps-gr/favicon-32.png">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  body{background:var(--bg);color:var(--ink);min-height:100vh;}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg2);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
+  header .logo-img{height:34px;width:auto;display:block;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  header .pro{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.5px;
+    background:linear-gradient(135deg,#c9a227,#f0d264);color:#231a00;padding:4px 10px;border-radius:6px;}
+  main{max-width:900px;margin:0 auto;padding:16px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;}
+  .card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
+  .card h2 .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
+  .hint{color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:6px;}
+  .fld label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px;}
+  .fld input,.fld select{width:100%;padding:10px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);font-size:14px;}
+  .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .btn{padding:11px 16px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;
+    color:#fff;background:var(--navy2);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .big{font-family:ui-monospace,Consolas,monospace;font-size:19px;margin:3px 0;}
+  .tblwrap{overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:var(--bg2);color:#f0f6ff;}
+  .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;
+    padding:10px 12px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;
+    padding:10px 12px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .pill{display:inline-block;background:var(--bg2);border:1px solid var(--line);border-radius:20px;
+    padding:4px 11px;font-size:11.5px;color:var(--mut);margin:0 6px 6px 0;}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:20px;}
+  footer a{color:inherit;}
+</style>
+
+<header>
+  <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center">
+    <img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+  <div class="htitle">Όγκοι<span> χωματουργικών</span></div>
+  <span class="pro">PRO</span>
+</header>
+
+<input type="file" id="file" accept=".dxf,.xlsx,.xlsm,.txt,.csv" style="display:none">
+
+<main>
+  <div class="card">
+    <h2><span class="c"></span>1. Δεδομένα</h2>
+    <div class="hint">Δέχεται <b>DXF</b> (σημεία και κλειστά περιγράμματα), <b>Excel</b> εξαγωγής SW Maps, ή <b>TXT/CSV</b> με «x y z». Τα πάντα πρέπει να είναι στο <b>ίδιο</b> σύστημα συντεταγμένων — ποιο, δεν έχει σημασία, αρκεί να είναι μετρικό.</div>
+    <button class="btn" style="width:100%;margin-top:12px" onclick="document.getElementById('file').click()">📂 Άνοιγμα αρχείου</button>
+    <div id="info"></div>
+  </div>
+
+  <div class="card" id="setup" hidden>
+    <h2><span class="c"></span>2. Τι υπολογίζουμε</h2>
+    <div class="fld" style="margin-top:8px"><label>Περιοχή (πολύγωνο)</label>
+      <select id="ring"></select></div>
+    <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους — layer σημείων</label>
+      <select id="surf"></select></div>
+    <div class="fld" style="margin-top:10px"><label>Σύγκριση με</label>
+      <select id="mode" onchange="render()">
+        <option value="ref">Σταθερό τελικό υψόμετρο</option>
+        <option value="surf2">Δεύτερη επιφάνεια (άλλο layer)</option>
+      </select></div>
+    <div class="fld" id="refWrap" style="margin-top:10px"><label>Τελικό υψόμετρο (m)</label>
+      <input id="ref" type="text" inputmode="decimal" placeholder="π.χ. 797.500"></div>
+    <div class="fld" id="surf2Wrap" hidden style="margin-top:10px"><label>Δεύτερη επιφάνεια</label>
+      <select id="surf2"></select></div>
+
+    <div class="row2" style="margin-top:14px">
+      <div class="fld"><label>Βήμα κανάβου (m) — μικρότερο = ακριβέστερο, πιο αργό</label>
+        <input id="step" type="text" inputmode="decimal" value="0.5"></div>
+      <button class="btn" id="go" onclick="go()">📊 Υπολογισμός</button>
+    </div>
+    <div class="fld" style="margin-top:10px"><label>Μέγιστη πλευρά τριγώνου (m) — κενό = αυτόματο</label>
+      <input id="maxedge" type="text" inputmode="decimal" placeholder="αυτόματο"></div>
+    <div class="hint">Τρίγωνα με μεγαλύτερη πλευρά θεωρούνται <b>χωρίς μέτρηση</b>. Χωρίς αυτό, ο τριγωνισμός γεφυρώνει τα κενά και εφευρίσκει επιφάνεια εκεί που δεν πάτησε κανείς.</div>
+  </div>
+
+  <div id="out"></div>
+</main>
+
+<footer>ZS-GeoLab · Αποστόλου Φ. Στυλιανός · <a href="../index.html">Επιστροφή</a></footer>
+
+<script src="../lib/server-check.js?v=20260906i"></script>
+<script>
+/*  Οι υπολογισμοί γίνονται στον server: είναι δουλειά γραφείου, δεν χρειάζεται
+ *  να τρέχει χωρίς σήμα, και ο κώδικας δεν φεύγει στον browser. */
+'use strict';
+var DATA = null;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function numIn(id){ var e=document.getElementById(id); return parseFloat(String(e.value||'').trim().replace(',','.')); }
+function m3(v){ return v.toLocaleString('el-GR',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+
+function render(){
+  var two = document.getElementById('mode').value === 'surf2';
+  document.getElementById('refWrap').hidden = two;
+  document.getElementById('surf2Wrap').hidden = !two;
+}
+
+document.getElementById('file').addEventListener('change', function(ev){
+  var f = ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  var info = document.getElementById('info');
+  info.innerHTML = '<div class="hint">Διάβασμα…</div>';
+  var fd = new FormData(); fd.append('file', f);
+  fetch('/api/vol/read', {method:'POST', body:fd})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok){ info.innerHTML = '<div class="warnbox">' + esc(j.error) + '</div>'; return; }
+      DATA = j;
+      var h = '<div style="margin-top:12px"><b>' + esc(j.file) + '</b></div><div style="margin-top:8px">';
+      j.layers.forEach(function(l){
+        h += '<span class="pill">' + esc(l.name) + ' · ' + l.n + ' σημεία · Z ' +
+             l.zmin.toFixed(2) + '–' + l.zmax.toFixed(2) + '</span>';
+      });
+      j.polygons.forEach(function(p){
+        h += '<span class="pill">▣ ' + esc(p.name) + ' · ' + p.area.toFixed(1) + ' m²</span>';
+      });
+      h += '</div>';
+      if (j.crs){
+        h += '<div class="okbox">Σύστημα συντεταγμένων: <b>' + esc(j.crs.name) + '</b> (EPSG:' +
+             j.crs.epsg + '). Εντοπίστηκε από τα ίδια τα δεδομένα, με υπόλοιπο ' +
+             j.crs.residual.toFixed(4) + ' m — δεν έγινε υπόθεση.</div>';
+      }
+      if (!j.polygons.length){
+        h += '<div class="warnbox">Δεν βρέθηκε <b>κλειστό πολύγωνο</b>. Χρειάζεται ένα, για να ξέρουμε ποια περιοχή μετράει.</div>';
+      }
+      info.innerHTML = h;
+
+      var opts = j.layers.map(function(l){
+        return '<option value="' + esc(l.name) + '">' + esc(l.name) + ' (' + l.n + ')</option>';
+      }).join('');
+      document.getElementById('surf').innerHTML = opts;
+      document.getElementById('surf2').innerHTML = opts;
+      if (j.layers.length > 1) document.getElementById('surf2').selectedIndex = 1;
+      document.getElementById('ring').innerHTML = j.polygons.map(function(p){
+        return '<option value="' + p.id + '">' + esc(p.name) + ' · ' + p.area.toFixed(1) + ' m²</option>';
+      }).join('') || '<option value="">(κανένα)</option>';
+      document.getElementById('setup').hidden = !(j.layers.length && j.polygons.length);
+      render();
+    })
+    .catch(function(e){ info.innerHTML = '<div class="warnbox">Ο server δεν απάντησε: ' + esc(e.message) + '</div>'; });
+});
+
+function go(){
+  var out = document.getElementById('out');
+  if (!DATA) return;
+  var byName = {};
+  DATA.layers.forEach(function(l){ byName[l.name] = l.points; });
+  var ring = (DATA.polygons.filter(function(p){ return String(p.id) === document.getElementById('ring').value; })[0] || {}).ring;
+  if (!ring){ out.innerHTML = '<div class="card"><div class="warnbox">Διάλεξε πολύγωνο.</div></div>'; return; }
+
+  var body = {points: byName[document.getElementById('surf').value], ring: ring, spacing: numIn('step')};
+  if (document.getElementById('mode').value === 'surf2'){
+    var n2 = document.getElementById('surf2').value;
+    if (n2 === document.getElementById('surf').value){
+      out.innerHTML = '<div class="card"><div class="warnbox">Διάλεξε δύο διαφορετικά layers.</div></div>'; return;
+    }
+    body.points2 = byName[n2];
+  } else {
+    body.refZ = numIn('ref');
+    if (!Number.isFinite(body.refZ)){
+      out.innerHTML = '<div class="card"><div class="warnbox">Δώσε το τελικό υψόμετρο.</div></div>'; return;
+    }
+  }
+  var me = numIn('maxedge');
+  if (Number.isFinite(me) && me > 0) body.maxEdge = me;
+
+  var btn = document.getElementById('go');
+  btn.disabled = true;
+  out.innerHTML = '<div class="card"><div class="hint">Υπολογισμός…</div></div>';
+  fetch('/api/vol/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      btn.disabled = false;
+      if (!j.ok){ out.innerHTML = '<div class="card"><div class="warnbox">' + esc(j.error) + '</div></div>'; return; }
+      show(j.result, body);
+    })
+    .catch(function(e){
+      btn.disabled = false;
+      out.innerHTML = '<div class="card"><div class="warnbox">Ο server δεν απάντησε: ' + esc(e.message) + '</div></div>';
+    });
+}
+
+function show(r, body){
+  var n = body.points.length;
+  var strem = r.area_polygon / 1000;
+  var h = '<div class="card"><h2><span class="c"></span>Αποτέλεσμα</h2>' +
+    '<div class="big" style="color:#ff9ea0">Εκσκαφή&nbsp; ' + m3(r.cut) + ' m³</div>' +
+    '<div class="big" style="color:#8ff0b6">Επίχωση&nbsp; ' + m3(r.fill) + ' m³</div>' +
+    '<div class="big">Καθαρό&nbsp;&nbsp;&nbsp; ' + (r.net >= 0 ? '+' : '') + m3(r.net) + ' m³' +
+      ' <span style="font-size:12px;color:var(--mut)">(' + (r.net >= 0 ? 'περισσεύει' : 'λείπει') + ' χώμα)</span></div>' +
+    '<div class="tblwrap"><table><tbody>' +
+      '<tr><td>Εμβαδόν περιοχής</td><td>' + r.area_polygon.toFixed(1) + ' m² · ' + strem.toFixed(3) + ' στρ.</td></tr>' +
+      '<tr><td>Μετρημένο εμβαδόν</td><td>' + r.area_covered.toFixed(1) + ' m²</td></tr>' +
+      '<tr><td>Σημεία επιφάνειας</td><td>' + n + ' · ' + (n / Math.max(strem, 1e-9)).toFixed(0) + ' ανά στρέμμα</td></tr>' +
+      '<tr><td>Τρίγωνα</td><td>' + r.triangles + (r.triangles_dropped ? (' (' + r.triangles_dropped + ' απορρίφθηκαν ως γέφυρες)') : '') + '</td></tr>' +
+      '<tr><td>Μέγιστη πλευρά</td><td>' + r.max_edge.toFixed(2) + ' m</td></tr>' +
+      '<tr><td>Βήμα κανάβου</td><td>' + r.spacing + ' m · ' + r.cells + ' κελιά</td></tr>' +
+    '</tbody></table></div>';
+
+  if (r.area_uncovered > 0.5){
+    var pc = r.area_uncovered / Math.max(r.area_cells, 1e-9) * 100;
+    h += '<div class="warnbox"><b>⚠ ' + r.area_uncovered.toFixed(1) + ' m² (' + pc.toFixed(1) +
+      '%) της περιοχής δεν έχουν μέτρηση.</b><br>Ο όγκος αφορά μόνο το μετρημένο κομμάτι. ' +
+      'Το υπόλοιπο <b>δεν</b> συμπληρώθηκε με εικασία — αν το θέλεις μέσα, χρειάζονται σημεία εκεί.</div>';
+  }
+  if (r.drift_pct != null && r.drift_pct > 1){
+    h += '<div class="warnbox"><b>⚠ Ο αριθμός δεν έχει σταθεροποιηθεί: ' + r.drift_pct.toFixed(2) + '%.</b><br>' +
+      'Με μισό βήμα (' + r.half.spacing + ' m) βγαίνει ' + m3(r.half.net) + ' m³ αντί για ' + m3(r.net) +
+      ' m³. Για αυτό το ανάγλυφο τα σημεία είναι αραιά ή ο κάνναβος χονδρός.</div>';
+  } else if (r.drift_pct != null){
+    h += '<div class="okbox">Έλεγχος ευστάθειας: με μισό βήμα η διαφορά είναι <b>' +
+      r.drift_pct.toFixed(2) + '%</b> — ο αριθμός στέκει.</div>';
+  }
+  if (r.area_covered > 0){
+    h += '<div class="hint">Μέση διαφορά ύψους στην μετρημένη περιοχή: <b>' +
+      (r.net / r.area_covered >= 0 ? '+' : '') + (r.net / r.area_covered).toFixed(3) + ' m</b></div>';
+  }
+  h += '</div>';
+  document.getElementById('out').innerHTML = h;
+}
+
+render();
+ZSServer.banner('<b>⚠ Το εργαλείο χρειάζεται τον server.</b><br>' +
+  'Οι υπολογισμοί γίνονται σε Python, ώστε να μη φεύγει ο κώδικας στον browser. ' +
+  'Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση — το εργαλείο θα ενεργοποιηθεί μόνο του μόλις ανέβει.');
+</script>
