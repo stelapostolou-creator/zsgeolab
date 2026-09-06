@@ -21,7 +21,7 @@
 <script src="../lib/hepos_grids.js"></script>
 <script src="../lib/swmaps.js?v=20260906i"></script>
 <script src="../lib/jobs.js?v=20260906i"></script>
-<script src="../lib/volume.js?v=20260906k"></script>
+<script src="../lib/volume.js?v=20260907a"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -465,10 +465,27 @@
             <input id="vlStep" type="text" inputmode="decimal" value="0,50"></div>
           <button class="btn" id="vlGo" onclick="vlCompute()">📊 Υπολογισμός</button>
         </div>
-        <div class="fld" style="margin-top:10px"><label>Μέγιστη πλευρά τριγώνου (m) — κενό = αυτόματο</label>
-          <input id="vlMaxEdge" type="text" inputmode="decimal" placeholder="αυτόματο"></div>
-        <div class="hint">Τρίγωνα με μεγαλύτερη πλευρά θεωρούνται <b>χωρίς μέτρηση</b>. Χωρίς αυτό, ο τριγωνισμός γεφυρώνει τα κενά και εφευρίσκει επιφάνεια εκεί που δεν πάτησε κανείς.</div>
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;color:var(--mut);font-size:12px">Για προχωρημένους: όριο πλευράς τριγώνου</summary>
+          <div class="fld" style="margin-top:8px"><label>Μέγιστη πλευρά τριγώνου (m) — κενό = χωρίς όριο</label>
+            <input id="vlMaxEdge" type="text" inputmode="decimal" placeholder="χωρίς όριο"></div>
+          <div class="hint">Την περιοχή την ορίζει το <b>πολύγωνο</b>, και ό,τι πέφτει έξω δεν μετριέται — γι' αυτό κανονικά δεν χρειάζεται τίποτα εδώ. Χρειάζεται μόνο όταν το πολύγωνο είναι <b>μεγαλύτερο</b> από τη μέτρηση, π.χ. ένα ΚΑΕΚ που μετρήθηκε εν μέρει: τότε τρίγωνα με μεγαλύτερη πλευρά θεωρούνται χωρίς μέτρηση.</div>
+        </details>
         <div id="vlOut"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Εξαγωγή DXF</h2>
+        <div class="hint">Ισοϋψείς και ψηφιακό μοντέλο σε <b>ΕΓΣΑ87</b>, για κάθε επιφάνεια που διάλεξες. Οι ισοϋψείς βγαίνουν από τα ίδια τα τρίγωνα, οπότε περνούν <b>ακριβώς</b> από τα μετρημένα υψόμετρα — χωρίς εξομάλυνση.</div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Ισοδιάστημα (m)</label>
+            <input id="vlIso" type="text" inputmode="decimal" value="0,25"></div>
+          <button class="btn green" onclick="vlExportDxf()">📐 DXF</button>
+        </div>
+        <div class="opt" style="margin-top:10px"><input type="checkbox" id="vlDxfIso" checked><label for="vlDxfIso">Ισοϋψείς (κάθε 5η σε δικό της layer, με υψόμετρο)</label></div>
+        <div class="opt"><input type="checkbox" id="vlDxfDtm" checked><label for="vlDxfDtm">Ψηφιακό μοντέλο — τρίγωνα 3DFACE</label></div>
+        <div class="opt"><input type="checkbox" id="vlDxfClip" checked><label for="vlDxfClip">Κοπή ισοϋψών στο πολύγωνο</label></div>
+        <div class="hint">Αν έχεις διαλέξει <b>δεύτερη επιφάνεια</b>, μπαίνουν και οι δύο σε ξεχωριστά layers.</div>
       </div>
     </section>
 
@@ -2329,6 +2346,129 @@
     out.innerHTML = msg;
     setStatus('περίγραμμα ' + h.area.toFixed(1) + ' m² ✓', 'ok');
   };
+
+  /*  Εξαγωγή DXF: ισοϋψείς και ψηφιακό μοντέλο.
+   *
+   *  Οι ισοϋψείς βγαίνουν από τα ίδια τα τρίγωνα — κάθε τρίγωνο είναι επίπεδο,
+   *  οπότε η τομή του με οριζόντιο επίπεδο είναι ευθύγραμμο τμήμα. Δεν υπάρχει
+   *  παρεμβολή σε κάνναβο ούτε εξομάλυνση: οι γραμμές περνούν ΑΚΡΙΒΩΣ από τα
+   *  μετρημένα υψόμετρα, και σε επίπεδο πρανές βγαίνουν ευθείες.
+   *
+   *  Το μοντέλο γράφεται ως 3DFACE, που είναι ο τρόπος που ένα CAD δέχεται
+   *  τριγωνισμένη επιφάνεια χωρίς να χρειάζεται δικό του format.
+   */
+  function vlDxfLayers(){
+    var out = [], sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (sa) out.push({ tag: 'A', set: sa, col: 3 });
+    if (document.getElementById('vlMode').value === 'surf2'){
+      var sb = VOLSETS[+document.getElementById('vlSurf2').value];
+      if (sb && sb.key !== sa.key) out.push({ tag: 'B', set: sb, col: 4 });
+    }
+    return out;
+  }
+
+  window.vlExportDxf = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('Δεν υπάρχουν σημεία με υψόμετρο.'); return; }
+    var surfaces = vlDxfLayers();
+    if (!surfaces.length){ vlWarn('Διάλεξε επιφάνεια.'); return; }
+
+    var wantIso = document.getElementById('vlDxfIso').checked;
+    var wantDtm = document.getElementById('vlDxfDtm').checked;
+    if (!wantIso && !wantDtm){ vlWarn('Διάλεξε ισοϋψείς ή μοντέλο — αλλιώς το αρχείο θα ήταν άδειο.'); return; }
+
+    var step = numIn('vlIso');
+    if (wantIso && !(step > 0)){ vlWarn('Δώσε ισοδιάστημα σε μέτρα.'); return; }
+    var clip = document.getElementById('vlDxfClip').checked;
+    var ring = VOLRINGS.length ? VOLRINGS[+document.getElementById('vlRing').value] : null;
+    if (clip && !ring){ vlWarn('Δεν υπάρχει πολύγωνο για κοπή — ξετσέκαρέ το ή φτιάξε περίγραμμα.'); return; }
+
+    var maxEdge = numIn('vlMaxEdge');
+    if (!(Number.isFinite(maxEdge) && maxEdge > 0)) maxEdge = 0;
+
+    var lyr = {}, ents = '', report = [];
+    function addLyr(n, c){ if (!(n in lyr)) lyr[n] = c; }
+
+    for (var s = 0; s < surfaces.length; s++){
+      var S = surfaces[s];
+      var nm = dxfName(S.set.label.split(' —')[0]);
+      var note = S.tag + ' · ' + nm + ': ';
+
+      if (wantDtm){
+        var m = Vol.mesh(S.set.pts, maxEdge);
+        if (m.err){ vlWarn(esc(m.err)); return; }
+        var Ld = 'DTM_' + nm;
+        addLyr(Ld, S.col);
+        m.tris.forEach(function(t){
+          // Το 3DFACE θέλει τέσσερις κορυφές· η τρίτη επαναλαμβάνεται.
+          ents += '0\n3DFACE\n8\n' + Ld + '\n' +
+            '10\n' + num(t[0].x) + '\n20\n' + num(t[0].y) + '\n30\n' + num(t[0].z) + '\n' +
+            '11\n' + num(t[1].x) + '\n21\n' + num(t[1].y) + '\n31\n' + num(t[1].z) + '\n' +
+            '12\n' + num(t[2].x) + '\n22\n' + num(t[2].y) + '\n32\n' + num(t[2].z) + '\n' +
+            '13\n' + num(t[2].x) + '\n23\n' + num(t[2].y) + '\n33\n' + num(t[2].z) + '\n';
+        });
+        note += m.tris.length + ' τρίγωνα';
+      }
+
+      if (wantIso){
+        var c = Vol.contours(S.set.pts, { interval: step, maxEdge: maxEdge,
+                                          ring: clip ? ring.ring : null });
+        if (c.err){ vlWarn(esc(S.set.label) + ': ' + esc(c.err)); return; }
+        // Κάθε πέμπτη σε δικό της layer: έτσι πάχυνε ο τοπογράφος τις κύριες.
+        var Li = 'ISOY_' + nm, L5 = 'ISOY_' + nm + '_KYRIES', Lt = 'ISOY_' + nm + '_TEXT';
+        addLyr(Li, S.col); addLyr(L5, 1); addLyr(Lt, 2);
+        var nl = 0;
+        c.levels.forEach(function(L){
+          var main = Math.abs(L.z / (step * 5) - Math.round(L.z / (step * 5))) < 1e-6;
+          var lay = main ? L5 : Li;
+          L.lines.forEach(function(P){
+            if (P.length < 2) return;
+            nl++;
+            ents += '0\nPOLYLINE\n8\n' + lay + '\n66\n1\n70\n8\n';
+            P.forEach(function(p){
+              ents += '0\nVERTEX\n8\n' + lay + '\n70\n32\n10\n' + num(p.x) +
+                      '\n20\n' + num(p.y) + '\n30\n' + num(L.z) + '\n';
+            });
+            ents += '0\nSEQEND\n8\n' + lay + '\n';
+            // Ετικέτα στη μέση, μόνο σε γραμμές που χωράνε να διαβαστούν.
+            if (main && P.length >= 4){
+              var q = P[Math.floor(P.length / 2)];
+              ents += '0\nTEXT\n8\n' + Lt + '\n10\n' + num(q.x) + '\n20\n' + num(q.y) +
+                      '\n30\n' + num(L.z) + '\n40\n0.400\n1\n' + num(L.z) + '\n';
+            }
+          });
+        });
+        note += (wantDtm ? ' · ' : '') + c.count + ' στάθμες (' +
+          c.zmin.toFixed(2) + '–' + c.zmax.toFixed(2) + ' m) · ' + nl + ' γραμμές · ' +
+          c.length.toFixed(0) + ' m';
+      }
+      report.push(note);
+    }
+
+    if (ring){
+      addLyr('ORIO', 6);
+      ents += '0\nPOLYLINE\n8\nORIO\n66\n1\n70\n1\n';
+      ring.ring.forEach(function(p){
+        ents += '0\nVERTEX\n8\nORIO\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n0.000\n';
+      });
+      ents += '0\nSEQEND\n8\nORIO\n';
+      report.push('όριο · ' + ring.ring.length + ' κορυφές · ' + ring.area.toFixed(1) + ' m²');
+    }
+
+    var d = '0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
+    Object.keys(lyr).forEach(function(n){
+      d += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
+    });
+    d += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
+
+    var fname = 'Ogkoi_EGSA87' + (wantIso ? '_isoypseis' : '') + (wantDtm ? '_dtm' : '') + '.dxf';
+    download(d, fname);
+    out.innerHTML = '<div class="okbox"><b>' + esc(fname) + '</b><br>' +
+      report.map(esc).join('<br>') + '<br>Layers: ' + Object.keys(lyr).map(esc).join(', ') +
+      '</div>';
+    setStatus('DXF ✓', 'ok');
+  };
+
 
 </script>
 <script>
