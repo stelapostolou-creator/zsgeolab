@@ -17,10 +17,10 @@
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
-<script src="../lib/hepos.js?v=20260906g"></script>
+<script src="../lib/hepos.js?v=20260906i"></script>
 <script src="../lib/hepos_grids.js"></script>
-<script src="../lib/swmaps.js?v=20260906g"></script>
-<script src="../lib/jobs.js?v=20260906g"></script>
+<script src="../lib/swmaps.js?v=20260906i"></script>
+<script src="../lib/jobs.js?v=20260906i"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -332,6 +332,56 @@
           <button class="btn ghost" onclick="segEndPoints()">📍 Σημεία στα άκρα των επιλεγμένων</button>
         </div>
         <div id="ixResult"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Πολικά — γωνία &amp; απόσταση</h2>
+        <div class="hint">Διάλεξε σημεία στον χάρτη ή τον πίνακα. <b style="color:#ff3df0">P1</b> είναι πάντα η <b>στάση</b>· στη δεύτερη μέθοδο το <b style="color:#ffcc00">P2</b> είναι η <b>οπισθοσκόπευση</b>.</div>
+        <div class="pick" style="margin-top:10px">
+          <div class="pk p1" id="pk1c">P1: —</div>
+          <div class="pk p2" id="pk2c">P2: —</div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Μέθοδος</label>
+          <select id="poMode" onchange="poRender()">
+            <option value="az">Αζιμούθιο &amp; απόσταση (από P1)</option>
+            <option value="ang">Δεξιόστροφη γωνία από οπισθοσκόπευση (P1→P2)</option>
+          </select></div>
+
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label id="poAngLbl">Αζιμούθιο</label><input id="poAng" type="text" inputmode="decimal" placeholder="π.χ. 127.4530"></div>
+          <div class="fld"><label>Μονάδα</label>
+            <select id="poUnit" onchange="poRender()">
+              <option value="deg">Μοίρες δεκαδικές</option>
+              <option value="dms">Μοίρες ΜΜΜ.ΛΛΔΔ</option>
+              <option value="gon">Βαθμοί (gon, 400)</option>
+            </select></div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Απόσταση</label>
+          <select id="poDistKind" onchange="poRender()">
+            <option value="hor">Οριζόντια</option>
+            <option value="slope">Κεκλιμένη + ζενίθια γωνία</option>
+          </select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label id="poDLbl">Απόσταση (m)</label><input id="poD" type="text" inputmode="decimal" placeholder="π.χ. 24.75"></div>
+          <div class="fld" id="poZenWrap" hidden><label>Ζενίθια γωνία</label><input id="poZen" type="text" inputmode="decimal" placeholder="90 = οριζόντια"></div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Υψόμετρο νέου σημείου</label>
+          <select id="poZMode" onchange="poRender()">
+            <option value="same">Ίδιο με τη στάση P1</option>
+            <option value="dz">Στάση + διαφορά ΔΖ</option>
+            <option value="abs">Απόλυτη τιμή</option>
+            <option value="zero">Μηδέν</option>
+          </select></div>
+        <div class="fld" id="poZWrap" hidden style="margin-top:10px"><label id="poZLbl">Τιμή (m)</label><input id="poZ" type="text" inputmode="decimal"></div>
+
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Όνομα σημείου</label><input id="poName" type="text" placeholder="αυτόματο"></div>
+          <button class="btn" onclick="poCompute()">🎯 Υπολογισμός</button>
+        </div>
+        <div id="poResult"></div>
       </div>
 
       <div class="card">
@@ -682,8 +732,8 @@
   function updatePick(){
     pickHL.clearLayers();
     var f=function(p){ return p?(p.id+'  ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+')'):'—'; };
-    ['pk1','pk1b'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P1: '+f(pick.p1); });
-    ['pk2','pk2b'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P2: '+f(pick.p2); });
+    ['pk1','pk1b','pk1c'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P1: '+f(pick.p1); });
+    ['pk2','pk2b','pk2c'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P2: '+f(pick.p2); });
     if(pick.p1) L.circleMarker([pick.p1.lat,pick.p1.lon],{radius:11,color:'#ff3df0',weight:3,fill:false}).addTo(pickHL);
     if(pick.p2) L.circleMarker([pick.p2.lat,pick.p2.lon],{radius:11,color:'#ffcc00',weight:3,fill:false}).addTo(pickHL);
   }
@@ -1741,6 +1791,136 @@
     renderSummary(); renderLayers(); renderMap();
     setStatus('DXF: ' + nl + ' γραμμές, ' + np + ' σημεία \u2713', 'ok');
   };
+
+
+  /* ==================== ΠΟΛΙΚΑ ====================
+   *
+   *  Αζιμούθιο μετριέται από τον ΒΟΡΡΑ, δεξιόστροφα. Με x ανατολικά και y
+   *  βόρεια: ανατολική συνιστώσα = sin(α), βόρεια = cos(α).
+   *
+   *  Οι μονάδες είναι ρητή επιλογή. Ένα όργανο ρυθμισμένο σε βαθμούς (gon)
+   *  και ένας υπολογισμός σε μοίρες δίνουν σημείο δεκάδες μέτρα αλλού, χωρίς
+   *  κανένα σημάδι ότι κάτι πήγε στραβά.
+   */
+  function poAngRad(v, unit){
+    if (!Number.isFinite(v)) return NaN;
+    if (unit === 'gon') return v * Math.PI / 200;
+    if (unit === 'dms'){
+      // Μορφή ΜΜΜ.ΛΛΔΔ όπως τη δίνουν τα όργανα: 127.4530 = 127° 45' 30"
+      var sg = v < 0 ? -1 : 1, a = Math.abs(v);
+      var d = Math.floor(a + 1e-9);
+      var rest = (a - d) * 100;
+      var m = Math.floor(rest + 1e-6);
+      var sec = (rest - m) * 100;
+      if (m >= 60 || sec >= 60) return NaN;          // 127.7530 δεν είναι γωνία
+      return sg * (d + m / 60 + sec / 3600) * Math.PI / 180;
+    }
+    return v * Math.PI / 180;
+  }
+
+  function poUnitName(u){
+    return u === 'gon' ? 'gon' : (u === 'dms' ? '° ΜΜΜ.ΛΛΔΔ' : '°');
+  }
+
+  /** Αζιμούθιο από το a προς το b, σε ακτίνια, στο [0, 2π). */
+  function azimuthOf(a, b){
+    var t = Math.atan2(b.x - a.x, b.y - a.y);
+    return t < 0 ? t + 2 * Math.PI : t;
+  }
+  function degOf(rad, unit){
+    var v = unit === 'gon' ? rad * 200 / Math.PI : rad * 180 / Math.PI;
+    return v.toFixed(4) + ' ' + (unit === 'gon' ? 'gon' : '°');
+  }
+
+  window.poRender = function(){
+    var mode = document.getElementById('poMode').value;
+    var unit = document.getElementById('poUnit').value;
+    document.getElementById('poAngLbl').textContent =
+      (mode === 'az' ? 'Αζιμούθιο' : 'Δεξιόστροφη γωνία') + ' (' + poUnitName(unit) + ')';
+    var slope = document.getElementById('poDistKind').value === 'slope';
+    document.getElementById('poZenWrap').hidden = !slope;
+    document.getElementById('poDLbl').textContent = slope ? 'Κεκλιμένη (m)' : 'Οριζόντια (m)';
+    var zm = document.getElementById('poZMode').value;
+    // Με κεκλιμένη απόσταση το ΔΖ προκύπτει από τη μέτρηση, δεν δίνεται.
+    document.getElementById('poZMode').disabled = slope;
+    var needZ = !slope && (zm === 'dz' || zm === 'abs');
+    document.getElementById('poZWrap').hidden = !needZ;
+    document.getElementById('poZLbl').textContent = zm === 'dz' ? 'ΔΖ (m)' : 'Υψόμετρο (m)';
+  };
+
+  window.poCompute = function(){
+    var host = document.getElementById('poResult');
+    var fail = function(m){ host.innerHTML = '<div class="warnbox">' + esc(m) + '</div>'; };
+    var mode = document.getElementById('poMode').value;
+    var unit = document.getElementById('poUnit').value;
+
+    var A = pick.p1;
+    if (!A || A.x == null) return fail('Διάλεξε τη στάση ως P1.');
+
+    var ang = poAngRad(numIn('poAng'), unit);
+    if (!Number.isFinite(ang)) return fail('Δώσε έγκυρη γωνία στη μονάδα που επέλεξες.');
+
+    var az;
+    if (mode === 'az') az = ang;
+    else {
+      var B = pick.p2;
+      if (!B || B.x == null) return fail('Για γωνία από οπισθοσκόπευση χρειάζεται και P2.');
+      if (Math.hypot(B.x - A.x, B.y - A.y) < 0.001) return fail('Η στάση και η οπισθοσκόπευση συμπίπτουν.');
+      az = azimuthOf(A, B) + ang;
+    }
+    az = ((az % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+    var dIn = numIn('poD');
+    if (!Number.isFinite(dIn) || dIn <= 0) return fail('Δώσε απόσταση μεγαλύτερη του μηδενός.');
+
+    var slope = document.getElementById('poDistKind').value === 'slope';
+    var D, dz = null, zen = null;
+    if (slope){
+      zen = poAngRad(numIn('poZen'), unit);
+      if (!Number.isFinite(zen)) return fail('Δώσε ζενίθια γωνία (90° ή 100 gon = οριζόντια).');
+      D = dIn * Math.sin(zen);
+      dz = dIn * Math.cos(zen);
+      if (D <= 0) return fail('Η ζενίθια γωνία δίνει μηδενική οριζόντια απόσταση.');
+    } else D = dIn;
+
+    var x = A.x + D * Math.sin(az);
+    var y = A.y + D * Math.cos(az);
+
+    var z, zm = document.getElementById('poZMode').value;
+    if (slope) z = realZ(A) + dz;
+    else if (zm === 'same') z = realZ(A);
+    else if (zm === 'zero') z = 0;
+    else {
+      var v = numIn('poZ');
+      if (!Number.isFinite(v)) return fail('Δώσε την τιμή του υψομέτρου.');
+      z = (zm === 'dz') ? realZ(A) + v : v;
+    }
+
+    var nm = (document.getElementById('poName').value || '').trim() ||
+             ('P_' + (computed.filter(function(c){ return c.layer === 'Πολικά'; }).length + 1));
+    if (!addVertex(nm, {x:x, y:y, zGiven:z}, mode === 'az' ? 'πολικά' : 'γωνία/απόσταση', 'Πολικά')){
+      return fail('Υπάρχει ήδη σημείο σε αυτή τη θέση.');
+    }
+    renderMap();
+
+    var rows = '<tr><td>Αζιμούθιο</td><td>' + degOf(az, unit === 'gon' ? 'gon' : 'deg') + '</td></tr>' +
+               '<tr><td>Οριζόντια</td><td>' + D.toFixed(3) + ' m</td></tr>';
+    if (slope) rows += '<tr><td>ΔΖ από τη μέτρηση</td><td>' + (dz >= 0 ? '+' : '') + dz.toFixed(3) + ' m</td></tr>';
+    if (mode === 'ang') rows += '<tr><td>Αζιμούθιο P1→P2</td><td>' + degOf(azimuthOf(A, pick.p2), unit === 'gon' ? 'gon' : 'deg') + '</td></tr>';
+
+    host.innerHTML = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">Νέο σημείο ' + esc(nm) + ' (ΕΓΣΑ87)</div>' +
+      '<div class="big">X = ' + x.toFixed(3) + '</div>' +
+      '<div class="big">Y = ' + y.toFixed(3) + '</div>' +
+      '<div class="big">Z = ' + z.toFixed(3) + '</div>' +
+      '<div class="tblwrap" style="margin-top:10px"><table><tbody>' + rows + '</tbody></table></div>' +
+      (realZ(A) === 0 && !slope && (zm === 'same' || zm === 'dz')
+        ? '<div class="warnbox">Η στάση <b>δεν έχει υψόμετρο</b> — το νέο σημείο πήρε 0.</div>' : '') +
+      '</div>';
+    setStatus('έγινε ' + nm + ' \u2713', 'ok');
+  };
+
+  poRender();          // αρχικές ετικέτες — ΜΕΤΑ τον ορισμό της
 
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
 

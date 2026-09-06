@@ -15,9 +15,9 @@ var SHELL = [
   'sw-maps-gr/index.html', 'sw-maps/index.html',
   // Ίδιες διευθύνσεις με τις σελίδες, μαζί με την έκδοση: η μνήμη κρατά
   // κλειδί τη ΔΙΕΥΘΥΝΣΗ, οπότε χωρίς αυτήν θα κρατούσε άλλο αρχείο.
-  'lib/hepos.js?v=20260906g', 'lib/hepos_grids.js',
-  'lib/swmaps.js?v=20260906g', 'lib/jobs.js?v=20260906g',
-  'lib/server-check.js?v=20260906g',
+  'lib/hepos.js?v=20260906i', 'lib/hepos_grids.js',
+  'lib/swmaps.js?v=20260906i', 'lib/jobs.js?v=20260906i',
+  'lib/server-check.js?v=20260906i',
   'lib/vendor/leaflet.css', 'lib/vendor/leaflet.js', 'lib/vendor/proj4.js',
   'lib/vendor/xlsx.full.min.js', 'lib/vendor/sql-wasm.js', 'lib/vendor/sql-wasm.wasm',
   'assets/zsgeolab-logo.png', 'assets/zstop-logo.png',
