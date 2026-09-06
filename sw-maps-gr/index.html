@@ -185,6 +185,7 @@
   <input type="file" id="fileXls" accept=".xlsx,.xls" style="display:none">
   <input type="file" id="fileEgsa" accept=".txt,.csv" style="display:none">
   <input type="file" id="fileJob" accept=".zsj,.json" style="display:none">
+  <input type="file" id="fileDxf" accept=".dxf" style="display:none">
 
   <main>
     <div class="map-wrap"><div id="map"></div></div>
@@ -204,6 +205,8 @@
       </div>
       <div class="hint">Διαβάζει όλα τα σχήματα: σημεία, γραμμές, πολύγωνα — με σωστή γεωμετρία.</div>
       <div style="margin-top:10px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
+      <div style="margin-top:8px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileDxf').click()">📐 Εισαγωγή σχεδίου DXF (ΕΓΣΑ87)</button></div>
+      <div id="dxfPanel"></div>
       <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Καθαρισμός όλων (δεδομένα + σημεία)</button>
     </div>
 
@@ -1382,6 +1385,243 @@
     html += '</div>';
     host.innerHTML = html;
     setStatus('μηκοτομή: ' + made + ' σημεία \u2713', 'ok');
+  };
+
+
+  /* ==================== ΕΙΣΑΓΩΓΗ DXF ====================
+   *
+   *  Το DXF είναι ζεύγη (κωδικός, τιμή) σε εναλλασσόμενες γραμμές. Διαβάζονται
+   *  POINT, LINE, LWPOLYLINE και POLYLINE/VERTEX. Ό,τι άλλο (κείμενα, blocks,
+   *  κύκλοι, hatch) αναφέρεται ως παραλειπόμενο αντί να αγνοηθεί σιωπηλά.
+   *
+   *  ΥΨΟΜΕΤΡΑ: η τρισδιάστατη πολυγραμμή έχει Z ανά κορυφή. Η δισδιάστατη έχει
+   *  ΕΝΑ υψόμετρο για όλες (κωδικός 38 στη LWPOLYLINE) — που είναι εξίσου
+   *  έγκυρο υψόμετρο, απλώς ίδιο παντού.
+   */
+  var dxfPending = null;
+
+  function dxfPairs(text){
+    var L = text.split(/\r\n|\r|\n/);
+    var out = [];
+    for (var i = 0; i + 1 < L.length; i += 2){
+      var c = parseInt(L[i].trim(), 10);
+      if (isNaN(c)){
+        if (out.length < 4) return null;   // δυαδικό DXF ή χαλασμένο αρχείο
+        break;
+      }
+      out.push([c, L[i+1]]);
+    }
+    return out;
+  }
+
+  function dxfGet(pairs, code, dflt){
+    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === code) return pairs[i][1].trim();
+    return dflt;
+  }
+  function dxfNum(pairs, code, dflt){
+    var v = dxfGet(pairs, code, null);
+    var n = v == null ? NaN : parseFloat(v);
+    return Number.isFinite(n) ? n : dflt;
+  }
+
+  /** Οι κορυφές μιας LWPOLYLINE: ζεύγη 10/20 στη σειρά που εμφανίζονται. */
+  function lwVerts(pairs, elev){
+    var out = [], cx = null;
+    pairs.forEach(function(pr){
+      if (pr[0] === 10) cx = parseFloat(pr[1]);
+      else if (pr[0] === 20 && cx !== null){
+        out.push({x:cx, y:parseFloat(pr[1]), z:elev});
+        cx = null;
+      }
+    });
+    return out;
+  }
+
+  var BINARY_MSG = 'Δεν διαβάζεται: το αρχείο είναι δυαδικό DXF (binary). '
+                 + 'Αποθήκευσέ το ξανά ως ASCII DXF και ξαναδοκίμασε.';
+
+  function readDXF(text){
+    // Το δυαδικό DXF ξεκινά με συγκεκριμένη υπογραφή.
+    if (text.slice(0, 18) === 'AutoCAD Binary DXF') return {err:BINARY_MSG};
+    var P = dxfPairs(text);
+    if (!P || P.length < 4) return {err:BINARY_MSG};
+
+    var i = 0;
+    while (i < P.length && !(P[i][0] === 2 && P[i][1].trim() === 'ENTITIES')) i++;
+    if (i >= P.length) return {err:'Δεν βρέθηκε ενότητα ENTITIES στο αρχείο.'};
+
+    var ents = [], cur = null;
+    for (i++; i < P.length; i++){
+      var c = P[i][0], v = P[i][1];
+      if (c === 0){
+        var t = v.trim();
+        if (t === 'ENDSEC') break;
+        cur = {type:t, pairs:[]};
+        ents.push(cur);
+      } else if (cur) cur.pairs.push([c, v]);
+    }
+
+    var pts = [], lines = [], skipped = {}, k;
+    for (k = 0; k < ents.length; k++){
+      var e = ents[k], T = e.type, lyr = dxfGet(e.pairs, 8, '0');
+
+      if (T === 'POINT'){
+        pts.push({id:'', layer:lyr, x:dxfNum(e.pairs,10,NaN), y:dxfNum(e.pairs,20,NaN), z:dxfNum(e.pairs,30,0)});
+
+      } else if (T === 'LINE'){
+        lines.push({layer:lyr, closed:false, pts:[
+          {x:dxfNum(e.pairs,10,NaN), y:dxfNum(e.pairs,20,NaN), z:dxfNum(e.pairs,30,0)},
+          {x:dxfNum(e.pairs,11,NaN), y:dxfNum(e.pairs,21,NaN), z:dxfNum(e.pairs,31,0)}]});
+
+      } else if (T === 'LWPOLYLINE'){
+        var fl = dxfNum(e.pairs,70,0);
+        var v2 = lwVerts(e.pairs, dxfNum(e.pairs,38,0));   // 38 = ενιαίο υψόμετρο
+        if (v2.length >= 2) lines.push({layer:lyr, closed:!!(fl & 1), pts:v2});
+
+      } else if (T === 'POLYLINE'){
+        var flags = dxfNum(e.pairs,70,0);
+        var vv = [];
+        while (k + 1 < ents.length && ents[k+1].type === 'VERTEX'){
+          k++;
+          vv.push({x:dxfNum(ents[k].pairs,10,NaN), y:dxfNum(ents[k].pairs,20,NaN),
+                   z:dxfNum(ents[k].pairs,30,0)});
+        }
+        if (k + 1 < ents.length && ents[k+1].type === 'SEQEND') k++;
+        if (vv.length >= 2) lines.push({layer:lyr, closed:!!(flags & 1), pts:vv});
+
+      } else if (T !== 'SEQEND' && T !== 'VERTEX'){
+        skipped[T] = (skipped[T] || 0) + 1;
+      }
+    }
+
+    // Καθαρισμός από κορυφές χωρίς αριθμούς.
+    pts = pts.filter(function(p){ return Number.isFinite(p.x) && Number.isFinite(p.y); });
+    lines = lines.map(function(l){
+      l.pts = l.pts.filter(function(p){ return Number.isFinite(p.x) && Number.isFinite(p.y); });
+      return l;
+    }).filter(function(l){ return l.pts.length >= 2; });
+
+    return {pts:pts, lines:lines, skipped:skipped};
+  }
+
+  /*  Έλεγχος ότι το σχέδιο είναι όντως σε ΕΓΣΑ87. Ένα DXF σε HATT ή σε τοπικό
+   *  σύστημα θα φορτωνόταν κανονικά και θα προσγειωνόταν στη μέση του πουθενά. */
+  function egsaLooksOk(all){
+    var bad = 0;
+    all.forEach(function(p){
+      if (!(p.x > 90000 && p.x < 1000000 && p.y > 3800000 && p.y < 4700000)) bad++;
+    });
+    return {bad:bad, total:all.length};
+  }
+
+  document.getElementById('fileDxf').addEventListener('change', function(ev){
+    var file = ev.target.files[0]; ev.target.value = '';
+    if (!file) return;
+    var r = new FileReader();
+    r.onload = function(e){
+      var res = readDXF(e.target.result);
+      var host = document.getElementById('dxfPanel');
+      if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
+      if (!res.pts.length && !res.lines.length){
+        host.innerHTML = '<div class="warnbox">Δεν βρέθηκαν σημεία ή γραμμές. Υποστηρίζονται POINT, LINE, LWPOLYLINE, POLYLINE.</div>';
+        return;
+      }
+      dxfPending = {name:file.name.replace(/\.[^.]+$/, ''), res:res};
+
+      var all = res.pts.concat([]);
+      res.lines.forEach(function(l){ all = all.concat(l.pts); });
+      var chk = egsaLooksOk(all);
+      var withZ = all.filter(function(p){ return p.z !== 0; }).length;
+
+      var h = '<div class="resline" style="margin-top:12px">' +
+        '<div style="font-size:13px;color:#f0f6ff"><b>' + esc(file.name) + '</b></div>' +
+        '<div style="font-size:12px;color:var(--mut);margin:4px 0 10px">' +
+          res.pts.length + ' σημεία · ' + res.lines.length + ' γραμμές/πολύγωνα · ' +
+          withZ + ' από ' + all.length + ' κορυφές έχουν υψόμετρο</div>';
+      if (chk.bad){
+        h += '<div class="warnbox"><b>⚠ ' + chk.bad + ' από ' + chk.total +
+             ' κορυφές είναι εκτός των ορίων του ΕΓΣΑ87.</b><br>' +
+             'Μάλλον το σχέδιο δεν είναι σε ΕΓΣΑ87 (π.χ. HATT ή τοπικό σύστημα). ' +
+             'Αν συνεχίσεις, θα τοποθετηθεί λάθος στον χάρτη.</div>';
+      }
+      var sk = Object.keys(res.skipped);
+      if (sk.length){
+        h += '<div class="hint">Δεν διαβάστηκαν: ' +
+             sk.map(function(t){ return esc(t) + ' ×' + res.skipped[t]; }).join(', ') + '</div>';
+      }
+      h += '<div class="opt" style="margin-top:10px"><input type="checkbox" id="dxVx" checked>' +
+           '<label for="dxVx">Σημεία χάραξης σε κάθε κορυφή</label></div>' +
+           '<div class="fld" style="margin-top:8px"><label>Υψόμετρο σημείων</label>' +
+           '<select id="dxZ">' +
+             '<option value="dxf">Από το DXF</option>' +
+             '<option value="zero">Χωρίς υψόμετρο (0)</option>' +
+             '<option value="near">Από κοντινά μετρημένα σημεία (≤ 2 m)</option>' +
+           '</select></div>' +
+           '<div class="btns" style="margin-top:12px">' +
+             '<button class="btn green" onclick="dxfImport()">📥 Εισαγωγή</button>' +
+             '<button class="btn ghost" onclick="dxfPending=null;document.getElementById(\'dxfPanel\').innerHTML=\'\'">Άκυρο</button>' +
+           '</div></div>';
+      host.innerHTML = h;
+    };
+    r.onerror = function(){ alert('Δεν διαβάστηκε το αρχείο.'); };
+    r.readAsText(file);
+  });
+
+  window.dxfImport = function(){
+    if (!dxfPending) return;
+    var res = dxfPending.res, base = dxfPending.name;
+    var wantVx = document.getElementById('dxVx').checked;
+    var zMode = document.getElementById('dxZ').value;
+
+    function zOf(p){
+      if (zMode === 'zero') return 0;
+      if (zMode === 'near'){
+        var best = null, bd = Infinity;
+        computed.forEach(function(c){
+          var d = Math.hypot(c.x - p.x, c.y - p.y);
+          if (d < bd){ bd = d; best = c; }
+        });
+        if (model) model.features.forEach(function(f){
+          if (f.geomType !== 'POINT') return;
+          f.pts.forEach(function(q){
+            if (q.x == null || !hasRealZ(q)) return;
+            var d = Math.hypot(q.x - p.x, q.y - p.y);
+            if (d < bd){ bd = d; best = q; }
+          });
+        });
+        return (best && bd <= 2) ? (best.z || 0) : 0;
+      }
+      return p.z || 0;
+    }
+
+    function toLL(p, z){
+      var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, z) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:z, lat:w.lat, lon:w.lon};
+    }
+
+    var nl = 0, np = 0;
+    res.lines.forEach(function(l, k){
+      var pts = l.pts.map(function(p){ return toLL(p, zOf(p)); });
+      if (l.closed && pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.x-b.x) > 0.001 || Math.abs(a.y-b.y) > 0.001) pts.push(toLL(l.pts[0], zOf(l.pts[0])));
+      }
+      var id = base + '_' + l.layer + '_' + (k+1);
+      genLines.push({id:id, layer:id, remarks:'DXF · layer ' + l.layer, pts:pts});
+      nl++;
+      if (wantVx) pts.forEach(function(p, j){
+        if (addVertex(id + '_' + (j+1), {x:p.x, y:p.y, zGiven:p.z}, 'DXF κορυφή', 'DXF')) np++;
+      });
+    });
+    res.pts.forEach(function(p, k){
+      var z = zOf(p);
+      if (addVertex(base + '_P' + (k+1), {x:p.x, y:p.y, zGiven:z}, 'DXF σημείο', 'DXF')) np++;
+    });
+
+    dxfPending = null;
+    document.getElementById('dxfPanel').innerHTML = '';
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('DXF: ' + nl + ' γραμμές, ' + np + ' σημεία \u2713', 'ok');
   };
 
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
