@@ -21,7 +21,7 @@
 <script src="../lib/hepos_grids.js"></script>
 <script src="../lib/swmaps.js?v=20260906i"></script>
 <script src="../lib/jobs.js?v=20260906i"></script>
-<script src="../lib/volume.js?v=20260906j"></script>
+<script src="../lib/volume.js?v=20260906k"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -439,6 +439,13 @@
           <button class="btn ghost" onclick="vlScan()">🔄 Ανανέωση</button>
         </div>
         <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους</label><select id="vlSurf"></select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Σφίξιμο περιγράμματος — κενό = κυρτό (ασφαλές)</label>
+            <input id="vlTight" type="text" inputmode="decimal" placeholder="κενό"></div>
+          <button class="btn ghost" onclick="vlMakeHull()">▣ Περίγραμμα από τα σημεία</button>
+        </div>
+        <div class="hint">Φτιάχνει πολύγωνο από τα <b>εξωτερικά σημεία</b> της επιφάνειας που διάλεξες, και το δείχνει στον χάρτη. Κενό σφίξιμο = κυρτό περίβλημα, δεν σπάει ποτέ. Με σφίξιμο (δοκίμασε 2 ως 3) ακολουθεί σχήματα σαν Γ — αλλά σε ακανόνιστα σημεία μπορεί να κομματιάσει, και θα στο πει.</div>
+
         <div class="fld" style="margin-top:10px"><label>Σύγκριση με</label>
           <select id="vlMode" onchange="vlRender()">
             <option value="ref">Σταθερό τελικό υψόμετρο</option>
@@ -2107,6 +2114,19 @@
   /** Τα κλειστά πολύγωνα που μπορούν να ορίσουν την περιοχή. */
   function vlPolygons(){
     var out = [];
+
+    // Ό,τι έφτιαξε η εφαρμογή και κλείνει — π.χ. περίγραμμα από τα σημεία.
+    genLines.forEach(function(g){
+      var r = g.pts.filter(function(p){ return p.x != null; })
+                   .map(function(p){ return { x: p.x, y: p.y }; });
+      if (r.length > 3){
+        var a = r[0], b = r[r.length-1];
+        if (Math.abs(a.x-b.x) < 1e-9 && Math.abs(a.y-b.y) < 1e-9) r.pop(); else return;
+      } else return;
+      if (r.length >= 3)
+        out.push({ key: g.id, ring: r, name: g.id, area: Math.abs(Vol.ringArea(r)) });
+    });
+
     if (!model) return out;
     model.features.forEach(function(f, i){
       if (f.geomType !== 'POLYGON') return;
@@ -2152,7 +2172,7 @@
       if (!VOLSETS.length)
         msg += '<div class="warnbox">Κανένα σημείο <b>με πραγματικό υψόμετρο</b>. Το SW Maps γράφει 0 όπου δεν μέτρησε ύψος, και αυτά δεν μετράνε ως επιφάνεια.</div>';
       if (!VOLRINGS.length)
-        msg += '<div class="warnbox">Δεν βρέθηκε <b>κλειστό πολύγωνο</b>. Χρειάζεται ένα για να οριστεί η περιοχή — σχεδίασέ το στο SW Maps ή φόρτωσέ το από DXF.</div>';
+        msg += '<div class="warnbox">Δεν βρέθηκε <b>κλειστό πολύγωνο</b>. Πάτα <b>«Περίγραμμα από τα σημεία»</b> για να φτιαχτεί ένα από τη μέτρησή σου, ή σχεδίασέ το στο SW Maps.</div>';
     }
     info.innerHTML = msg;
     vlRender();
@@ -2252,6 +2272,64 @@
     document.getElementById('vlOut').innerHTML = h;
     setStatus('όγκος ' + vlNum(r.net) + ' m³ ✓', 'ok');
   }
+
+  /*  Περίγραμμα από τα ίδια τα σημεία.
+   *
+   *  Το πολύγωνο δεν λείπει από τεμπελιά — λείπει επειδή στο χωράφι μετράς
+   *  σημεία, δεν σχεδιάζεις όρια. Το περίγραμμα βγαίνει από τα εξωτερικά
+   *  σημεία του layer και μπαίνει στα σχήματα που έφτιαξε η εφαρμογή, οπότε
+   *  ζωγραφίζεται στον χάρτη, βγαίνει σε DXF και σώζεται με την εργασία.
+   *
+   *  Το κυρτό περίβλημα δεν έχει καμία ρύθμιση και δεν διαλύεται ποτέ. Το
+   *  σφίξιμο ακολουθεί καλύτερα ένα Γ, αλλά σε ακανόνιστα σημεία μπορεί να
+   *  κομματιάσει το περίγραμμα — γι' αυτό είναι προαιρετικό και ο αριθμός των
+   *  κομματιών αναφέρεται.
+   */
+  window.vlMakeHull = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('Δεν υπάρχουν σημεία με υψόμετρο.'); return; }
+    var sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (!sa){ vlWarn('Διάλεξε επιφάνεια.'); return; }
+
+    var tight = numIn('vlTight');
+    var h = Vol.hull(sa.pts, (Number.isFinite(tight) && tight > 0) ? tight : 0);
+    if (h.err){ vlWarn(esc(h.err)); return; }
+
+    var base = sa.label.split(' —')[0].replace(/\s+/g, '_');
+    var id = 'ORIO_' + base + (tight > 0 ? ('_' + tight) : '');
+    // Ίδιο όνομα δύο φορές θα έφτιαχνε δεύτερο σχήμα πάνω στο πρώτο.
+    genLines = genLines.filter(function(g){ return g.id !== id; });
+
+    // Κλειστό: η πρώτη κορυφή επαναλαμβάνεται στο τέλος, όπως στα πολύγωνα.
+    var ring = h.ring.concat([h.ring[0]]);
+    var pts = ring.map(function(p){
+      var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, p.z || 0) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:p.z || 0, lat:w.lat, lon:w.lon};
+    });
+    genLines.push({id:id, layer:id, pts:pts,
+      remarks:'περίγραμμα από ' + sa.label + (tight > 0 ? (' · σφίξιμο ' + tight) : ' · κυρτό')});
+
+    renderSummary(); renderLayers(); renderMap();
+    vlScan();
+    // Το νέο περίγραμμα επιλέγεται μόνο του: γι' αυτό πατήθηκε το κουμπί.
+    var sel = document.getElementById('vlRing');
+    for (var i = 0; i < VOLRINGS.length; i++){
+      if (VOLRINGS[i].name === id){ sel.selectedIndex = i; break; }
+    }
+
+    var msg = '<div class="okbox"><b>Έγινε το ' + esc(id) + '</b><br>' +
+      h.ring.length + ' κορυφές · <b>' + h.area.toFixed(1) + ' m²</b> · ' +
+      (h.area / 1000).toFixed(3) + ' στρ.<br>' +
+      'Τυπική απόσταση σημείων ' + h.spacing.toFixed(2) + ' m. ' +
+      'Είναι στον χάρτη με πράσινη διακεκομμένη — <b>κοίταξέ το</b> πριν υπολογίσεις.</div>';
+    if (h.rings > 1){
+      msg += '<div class="warnbox"><b>⚠ Βγήκαν ' + h.rings + ' χωριστά κομμάτια</b> και κρατήθηκε ' +
+        'το μεγαλύτερο. Το σφίξιμο είναι πολύ μικρό για αυτά τα σημεία — μεγάλωσέ το ή άφησέ το κενό.</div>';
+    }
+    out.innerHTML = msg;
+    setStatus('περίγραμμα ' + h.area.toFixed(1) + ' m² ✓', 'ok');
+  };
+
 </script>
 <script>
 /*  Ιστορικό εργασιών — δένει τη σελίδα με το lib/jobs.js.
