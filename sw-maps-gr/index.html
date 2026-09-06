@@ -17,10 +17,10 @@
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
-<script src="../lib/hepos.js?v=20260906d"></script>
+<script src="../lib/hepos.js?v=20260906f"></script>
 <script src="../lib/hepos_grids.js"></script>
-<script src="../lib/swmaps.js?v=20260906d"></script>
-<script src="../lib/jobs.js?v=20260906d"></script>
+<script src="../lib/swmaps.js?v=20260906f"></script>
+<script src="../lib/jobs.js?v=20260906f"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
@@ -1256,8 +1256,10 @@
     pfV = src.pts.map(function(p, i){
       if (i > 0) ch += Math.hypot(p.x - src.pts[i-1].x, p.y - src.pts[i-1].y);
       // Όποια κορυφή έχει πραγματικό υψόμετρο, μπαίνει μόνη της.
+      // «use» = χρησιμοποιείται ως ΓΝΩΣΤΟ. Ξετικάροντάς την, η τιμή μένει
+      // ορατή αλλά η κορυφή υπολογίζεται με παρεμβολή από τις υπόλοιπες.
       var z = hasRealZ(p) ? p.z : null;
-      return {i:i+1, ch:ch, x:p.x, y:p.y, z:z};
+      return {i:i+1, ch:ch, x:p.x, y:p.y, z:z, use:(z != null)};
     });
     pfRender();
     var auto = pfV.filter(function(v){ return v.z != null; }).length;
@@ -1269,23 +1271,39 @@
   function pfRender(){
     if (!pfV.length){ document.getElementById('pfTable').innerHTML = ''; return; }
     var h = '<div class="tblwrap" style="margin-top:12px"><table><thead><tr>' +
-            '<th>#</th><th>Χ.Θ.</th><th>X</th><th>Y</th><th>Υψόμετρο</th></tr></thead><tbody>';
+            '<th>#</th><th>Χ.Θ.</th><th>X</th><th>Y</th><th>Υψόμετρο</th><th title="Χρήση ως γνωστό">γν.</th></tr></thead><tbody>';
     pfV.forEach(function(v, k){
-      h += '<tr><td>' + v.i + '</td><td>' + v.ch.toFixed(2) + '</td>' +
+      h += '<tr' + (v.z != null && !v.use ? ' style="opacity:.55"' : '') + '>' +
+           '<td>' + v.i + '</td><td>' + v.ch.toFixed(2) + '</td>' +
            '<td>' + v.x.toFixed(2) + '</td><td>' + v.y.toFixed(2) + '</td>' +
            '<td><input type="text" inputmode="decimal" style="width:92px" ' +
            'value="' + (v.z == null ? '' : v.z.toFixed(3)) + '" ' +
-           'oninput="pfSetZ(' + k + ',this.value)"></td></tr>';
+           'oninput="pfSetZ(' + k + ',this.value)"></td>' +
+           '<td><input type="checkbox" ' + (v.use ? 'checked ' : '') +
+           (v.z == null ? 'disabled ' : '') + 'onchange="pfSetUse(' + k + ',this.checked)"></td></tr>';
     });
     h += '</tbody></table></div>';
+    var nUse = pfV.filter(function(v){ return v.z != null && v.use; }).length;
+    var nOff = pfV.filter(function(v){ return v.z != null && !v.use; }).length;
     h += '<div class="hint">Συνολικό μήκος: <b>' + pfV[pfV.length-1].ch.toFixed(2) + ' m</b> · ' +
-         pfV.length + ' κορυφές</div>';
+         pfV.length + ' κορυφές · <b>' + nUse + '</b> ως γνωστά' +
+         (nOff ? (' · <b>' + nOff + '</b> ξετικαρισμένα θα υπολογιστούν') : '') +
+         '<br>Ξετίκαρε μια κορυφή για να μη μετρήσει ως γνωστή: το υψόμετρό της ' +
+         'θα βγει με παρεμβολή από τις υπόλοιπες. <b>Δεν χρειάζεται βήμα</b> — ' +
+         'οι κορυφές βγαίνουν πάντα.</div>';
     document.getElementById('pfTable').innerHTML = h;
   }
 
   window.pfSetZ = function(k, val){
     var n = parseFloat(String(val).replace(',', '.'));
     pfV[k].z = Number.isFinite(n) ? n : null;
+    // Τιμή που γράφτηκε με το χέρι εννοείται ότι είναι γνωστή.
+    pfV[k].use = (pfV[k].z != null);
+  };
+
+  window.pfSetUse = function(k, on){
+    pfV[k].use = !!on;
+    pfRender();
   };
 
   /** Παίρνει υψόμετρο από το κοντινότερο υπάρχον σημείο, μέσα σε ακτίνα. */
@@ -1345,7 +1363,7 @@
   window.pfCompute = function(){
     var host = document.getElementById('pfResult');
     if (!pfV.length){ host.innerHTML = '<div class="warnbox">Φόρτωσε πρώτα τις κορυφές.</div>'; return; }
-    var known = pfV.filter(function(v){ return v.z != null; })
+    var known = pfV.filter(function(v){ return v.z != null && v.use; })
                    .map(function(v){ return {ch:v.ch, z:v.z, i:v.i}; });
     if (known.length < 2){
       host.innerHTML = '<div class="warnbox"><b>Χρειάζονται τουλάχιστον δύο υψόμετρα.</b><br>' +
@@ -1367,15 +1385,26 @@
       if (!uniq.length || Math.abs(c - uniq[uniq.length-1]) > 0.005) uniq.push(c);
     });
 
-    var made = 0, outside = 0;
+    var made = 0, outside = 0, out = [];
     var lyr = 'Μηκοτομή';
     uniq.forEach(function(c){
       var z = pfZat(known, c);
       if (z == null){ outside++; return; }
       var xy = pfXYat(c);
-      if (addVertex(pfName + '_' + c.toFixed(2), {x:xy.x, y:xy.y, zGiven:z}, 'Χ.Θ. ' + c.toFixed(2), lyr)) made++;
+      var id = pfName + '_' + c.toFixed(2);
+      out.push({id:id, ch:c, x:xy.x, y:xy.y, z:z});
+      if (addVertex(id, {x:xy.x, y:xy.y, zGiven:z}, 'Χ.Θ. ' + c.toFixed(2), lyr)) made++;
     });
     renderMap();
+
+    /*  Κορυφές που ξετικαρίστηκαν: δείχνεται πόσο διαφέρει η μετρημένη τιμή
+     *  από αυτή που δίνει η κλίση. Αυτή η διαφορά είναι το ζητούμενο. */
+    var redone = [];
+    pfV.forEach(function(v){
+      if (v.z == null || v.use) return;
+      var nz = pfZat(known, v.ch);
+      if (nz != null) redone.push({i:v.i, ch:v.ch, was:v.z, now:nz});
+    });
 
     // ---- αναφορά κλίσεων ανά τμήμα μεταξύ ΓΝΩΣΤΩΝ υψομέτρων ----
     var rows = '';
@@ -1398,13 +1427,42 @@
       '<div class="hint" style="margin-top:10px">Έγιναν <b>' + made + '</b> σημεία στο layer «' +
       lyr + '» · συνολικό μήκος ' + total.toFixed(2) + ' m</div>';
     if (noStep){
-      html += '<div class="warnbox">Δεν δόθηκε <b>βήμα πύκνωσης</b>, οπότε έγιναν σημεία ' +
-        'μόνο στις κορυφές. Γράψε π.χ. 5 και ξαναπάτησε Υπολογισμό για ενδιάμεσα ανά 5 m.</div>';
+      // Πληροφορία, όχι προειδοποίηση: το ξετικάρισμα κορυφών δουλεύει
+      // κανονικά χωρίς βήμα, και είναι συνηθισμένος τρόπος χρήσης.
+      html += '<div class="hint">Χωρίς βήμα πύκνωσης — σημεία μόνο στις κορυφές. ' +
+        'Για ενδιάμεσα, γράψε βήμα και ξαναπάτησε Υπολογισμό.</div>';
     }
     if (outside){
       html += '<div class="warnbox"><b>' + outside + ' θέσεις έμειναν χωρίς υψόμετρο.</b><br>' +
         'Είναι εκτός των γνωστών υψομέτρων (πριν την πρώτη ή μετά την τελευταία κορυφή με τιμή). ' +
         'Δεν παρεμβάλλονται — θα ήταν προέκταση κλίσης, δηλαδή μαντεψιά.</div>';
+    }
+
+    if (redone.length){
+      html += '<div style="color:var(--mut);font-size:12px;margin-top:14px">Κορυφές που υπολογίστηκαν ξανά</div>' +
+        '<div class="tblwrap" style="margin-top:6px"><table><thead><tr><th>#</th><th>Χ.Θ.</th>' +
+        '<th>Μετρημένο</th><th>Από κλίση</th><th>Διαφορά</th></tr></thead><tbody>' +
+        redone.map(function(r){
+          var d = r.now - r.was;
+          return '<tr><td>' + r.i + '</td><td>' + r.ch.toFixed(2) + '</td><td>' + r.was.toFixed(3) +
+                 '</td><td>' + r.now.toFixed(3) + '</td><td style="color:' +
+                 (Math.abs(d) < 0.05 ? '#8ff0b6' : '#ffcc00') + '">' +
+                 (d >= 0 ? '+' : '') + d.toFixed(3) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    /*  Τα σημεία μπαίνουν στα σημεία χάραξης, αλλά ο πίνακάς τους είναι σε
+     *  άλλη καρτέλα. Φαίνονται και εδώ, ώστε να ελέγχονται επί τόπου. */
+    if (out.length){
+      var show = out.slice(0, 60);
+      html += '<div style="color:var(--mut);font-size:12px;margin-top:14px">Σημεία που φτιάχτηκαν' +
+        (out.length > show.length ? (' — τα πρώτα ' + show.length + ' από ' + out.length) : '') + '</div>' +
+        '<div class="tblwrap" style="margin-top:6px"><table><thead><tr><th>Χ.Θ.</th><th>X</th>' +
+        '<th>Y</th><th>Z</th></tr></thead><tbody>' +
+        show.map(function(o){
+          return '<tr><td>' + o.ch.toFixed(2) + '</td><td>' + o.x.toFixed(3) + '</td><td>' +
+                 o.y.toFixed(3) + '</td><td>' + o.z.toFixed(3) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
     }
     html += '</div>';
     host.innerHTML = html;
