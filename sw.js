@@ -8,13 +8,16 @@
  *  τελευταία έκδοση· η μνήμη είναι μόνο για το χωράφι, όπου δεν υπάρχει σήμα.
  *  Σε κάθε αλλαγή αρχείων αυξάνεται το CACHE, αλλιώς μένουν παλιά αρχεία.
  */
-var CACHE = 'zsgeolab-v1';
+var CACHE = 'zsgeolab-v2';
 
 var SHELL = [
   './', 'index.html',
   'sw-maps-gr/index.html', 'sw-maps/index.html',
-  'lib/hepos.js', 'lib/hepos_grids.js', 'lib/swmaps.js', 'lib/jobs.js',
-  'lib/server-check.js',
+  // Ίδιες διευθύνσεις με τις σελίδες, μαζί με την έκδοση: η μνήμη κρατά
+  // κλειδί τη ΔΙΕΥΘΥΝΣΗ, οπότε χωρίς αυτήν θα κρατούσε άλλο αρχείο.
+  'lib/hepos.js?v=20260906b', 'lib/hepos_grids.js',
+  'lib/swmaps.js?v=20260906b', 'lib/jobs.js?v=20260906b',
+  'lib/server-check.js?v=20260906b',
   'lib/vendor/leaflet.css', 'lib/vendor/leaflet.js', 'lib/vendor/proj4.js',
   'lib/vendor/xlsx.full.min.js', 'lib/vendor/sql-wasm.js', 'lib/vendor/sql-wasm.wasm',
   'assets/zsgeolab-logo.png', 'assets/zstop-logo.png',
