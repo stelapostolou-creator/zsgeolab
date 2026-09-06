@@ -81,11 +81,20 @@
   .leaflet-control-layers-toggle{width:40px;height:40px;background-color:#0f1830;border:1px solid var(--line);border-radius:8px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e6ecf5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>");background-size:22px 22px;background-position:center;background-repeat:no-repeat;}
   .leaflet-control-layers-expanded{padding:8px 12px;}
   .leaflet-control-layers label{color:var(--ink);font-size:13px;margin:3px 0;}
-  .tblwrap{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;}
+  /* Η οριζόντια κύλιση του πίνακα δεν έπιανε με το δάχτυλο: χωρίς δήλωση
+     touch-action, το Android έδινε όλη τη χειρονομία στην κατακόρυφη κύλιση. */
+  .tblwrap{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;
+           -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain;}
   table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
   th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);}
   th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;}
   tr:hover td{background:rgba(224,53,58,.06);}
+  #ptsTbl tr.selp1 td{background:rgba(255,61,240,.13);} #ptsTbl tr.selp1 td:first-child{box-shadow:inset 3px 0 0 #ff3df0;}
+  #ptsTbl tr.selp2 td{background:rgba(255,204,0,.13);}  #ptsTbl tr.selp2 td:first-child{box-shadow:inset 3px 0 0 #ffcc00;}
+  @media (max-width:560px){
+    table{font-size:11.5px;}
+    th,td{padding:6px 7px;}
+  }
   .pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
   .pk{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;}
   .pk.p1{border-color:#ff3df0;} .pk.p2{border-color:#ffcc00;}
@@ -194,6 +203,7 @@
         <button class="btn ghost" onclick="document.getElementById('fileXls').click()">📥 Excel (SW Maps)</button>
       </div>
       <div class="hint">Διαβάζει όλα τα σχήματα: σημεία, γραμμές, πολύγωνα — με σωστή γεωμετρία.</div>
+      <div style="margin-top:10px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
       <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Καθαρισμός όλων (δεδομένα + σημεία)</button>
     </div>
 
@@ -224,6 +234,8 @@
       <h2><span class="c"></span>Σημεία <span style="color:var(--mut);font-weight:400">(ΕΓΣΑ87)</span></h2>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
         <button class="btn ghost small" onclick="toggleAllSel(this)">☑ Όλα/κανένα</button>
+        <button class="btn small" onclick="sendToTools()">➜ Στα εργαλεία (P1/P2)</button>
+        <button class="btn ghost small" onclick="copySelectedToStake()">📋 Αντιγραφή σε χάραξη</button>
         <button class="btn red small" onclick="deleteSelected()">🗑 Διαγραφή επιλεγμένων</button>
       </div>
       <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Περιγραφή</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
@@ -258,27 +270,29 @@
         <select id="stZ"><option value="interp">Γραμμική παρεμβολή</option><option value="copy">Ίδιο με P1</option><option value="zero">Μηδέν (0)</option></select></div>
       <div class="row2"><div class="fld"><label>Προέκταση — απόσταση μετά το P2 (m)</label><input id="stDist" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div><button class="btn" onclick="stExtend()">📏 Προέκταση</button></div>
       <div class="row2" style="margin-top:10px"><div class="fld"><label>Πύκνωση — βήμα (m)</label><input id="stStep" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50"></div><button class="btn" onclick="stDivide()">📍 Πύκνωση</button></div>
-      <h3 style="margin:20px 0 4px;font-size:14px;color:#f0f6ff">Τομή αποστάσεων</h3>
-      <div class="hint">Δώσε απόσταση από <b style="color:#ff3df0">P1</b> και <b style="color:#ffcc00">P2</b> → 2 τομές κύκλων (A/B), διάλεξε ποια. (Z από την παραπάνω επιλογή)</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-        <div class="fld"><label>Απόσταση από P1 (m)</label><input id="isD1" type="number" step="0.001" inputmode="decimal"></div>
-        <div class="fld"><label>Απόσταση από P2 (m)</label><input id="isD2" type="number" step="0.001" inputmode="decimal"></div>
-      </div>
-      <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Υπολογισμός τομών</button>
-      <div id="isResult"></div>
-
-      <hr style="border:0;border-top:1px solid var(--line);margin:20px 0 12px">
-      <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: να μπει και η περιγραφή (4η στήλη → στο SW «όνομα:περιγραφή»)</label></div>
-      <div class="compbar">
+      <div class="compbar" style="margin-top:16px">
         <span class="pill">Σημεία χάραξης: <b id="compN">0</b></span>
-        <button class="btn green small" onclick="exportStakeCSV()">📤 CSV χάραξης</button>
         <button class="btn red small" onclick="clearComputed()">🗑 Καθαρισμός</button>
       </div>
-      <div style="margin-top:14px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
     </div>
     </section>
 
     <section class="pane" id="pane-calc">
+      <div class="card">
+        <h2><span class="c"></span>Τομή αποστάσεων</h2>
+        <div class="pick">
+          <div class="pk p1" id="pk1b">P1: —</div>
+          <div class="pk p2" id="pk2b">P2: —</div>
+        </div>
+        <div class="hint">Δώσε απόσταση από <b style="color:#ff3df0">P1</b> και <b style="color:#ffcc00">P2</b> → 2 τομές κύκλων (A/B), διάλεξε ποια.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          <div class="fld"><label>Απόσταση από P1 (m)</label><input id="isD1" type="number" step="0.001" inputmode="decimal"></div>
+          <div class="fld"><label>Απόσταση από P2 (m)</label><input id="isD2" type="number" step="0.001" inputmode="decimal"></div>
+        </div>
+        <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Υπολογισμός τομών</button>
+        <div id="isResult"></div>
+      </div>
+
       <div class="card">
         <h2><span class="c"></span>Τομή δύο ευθειών</h2>
         <div class="hint">Πάτησε δύο γραμμές (ή πλευρές πολυγώνου) στον χάρτη. Πιάνεται <b>το τμήμα πιο κοντά στο δάχτυλό σου</b>. Η τομή υπολογίζεται και στην προέκταση.</div>
@@ -305,6 +319,9 @@
         <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF (ΕΓΣΑ87)</button>
         <button class="btn" id="btnCsv" onclick="exportTXT()" disabled>📄 TXT σημείων (ανά layer)</button>
       </div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:18px 0 12px">
+      <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: να μπει και η περιγραφή (4η στήλη → στο SW «όνομα:περιγραφή»)</label></div>
+      <button class="btn green" style="width:100%;margin-top:8px" onclick="exportStakeCSV()">📤 CSV χάραξης (για SW Maps)</button>
     </div>
     </section>
 
@@ -519,7 +536,10 @@
       var tr=document.createElement('tr');
       tr.innerHTML='<td><input type="checkbox" class="selchk"></td>'+
         '<td'+(comp?' style="color:#ff8a8a"':'')+'>'+esc(id)+'</td><td>'+x+'</td><td>'+y+'</td><td>'+z+'</td><td>'+esc(rem)+'</td><td style="color:var(--mut)">'+esc(layer)+'</td>';
-      var cb=tr.querySelector('.selchk'); cb.__ref=ref;
+      var cb=tr.querySelector('.selchk'); cb.__ref=ref; cb.__pt=ptObj;
+      // Η επιλογή P1/P2 πρέπει να φαίνεται ΚΑΙ στον πίνακα, όχι μόνο στον χάρτη.
+      if(ptObj && samePt(pick.p1, ptObj)) tr.className='selp1';
+      else if(ptObj && samePt(pick.p2, ptObj)) tr.className='selp2';
       cb.addEventListener('click',function(e){ e.stopPropagation(); });
       tr.style.cursor='pointer';
       tr.addEventListener('click',function(){ if(ptObj&&ptObj.x!=null){ setPick(ptObj); map.setView([ptObj.lat,ptObj.lon],Math.max(map.getZoom(),18)); } });
@@ -577,8 +597,8 @@
   function updatePick(){
     pickHL.clearLayers();
     var f=function(p){ return p?(p.id+'  ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+')'):'—'; };
-    document.getElementById('pk1').textContent='P1: '+f(pick.p1);
-    document.getElementById('pk2').textContent='P2: '+f(pick.p2);
+    ['pk1','pk1b'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P1: '+f(pick.p1); });
+    ['pk2','pk2b'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P2: '+f(pick.p2); });
     if(pick.p1) L.circleMarker([pick.p1.lat,pick.p1.lon],{radius:11,color:'#ff3df0',weight:3,fill:false}).addTo(pickHL);
     if(pick.p2) L.circleMarker([pick.p2.lat,pick.p2.lon],{radius:11,color:'#ffcc00',weight:3,fill:false}).addTo(pickHL);
   }
@@ -930,6 +950,44 @@
     setStatus('έγιναν ' + made + ' σημεία' + (dup ? (' · ' + dup + ' υπήρχαν ήδη') : '') + ' \u2713', 'ok');
   };
 
+
+  /** Δύο σημεία είναι το ίδιο αν συμπίπτουν στο χιλιοστό. */
+  function samePt(a, b){
+    return !!(a && b && a.x != null && b.x != null &&
+              Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001);
+  }
+
+  function checkedPts(){
+    return [].slice.call(document.querySelectorAll('#ptsTbl tbody input.selchk:checked'))
+             .map(function(c){ return c.__pt; })
+             .filter(function(p){ return p && p.x != null; });
+  }
+
+  /** Τα τσεκαρισμένα σημεία γίνονται P1/P2 και ανοίγει η Χάραξη. */
+  window.sendToTools = function(){
+    var pts = checkedPts();
+    if(!pts.length){ alert('Τσέκαρε ένα ή δύο σημεία στον πίνακα.'); return; }
+    if(pts.length > 2) setStatus('Τσεκαρισμένα ' + pts.length + ' — πάρθηκαν τα δύο πρώτα.', 'warn');
+    pick = {p1: pts[0], p2: pts[1] || null};
+    updatePick();
+    renderPointsTable();
+    showPane('stake');
+  };
+
+  /*  Αντιγραφή μετρημένων σημείων στα σημεία χάραξης, ώστε να επεξεργαστούν
+   *  εκεί. Τα πρωτότυπα δεν πειράζονται ποτέ. */
+  window.copySelectedToStake = function(){
+    var pts = checkedPts();
+    if(!pts.length){ alert('Τσέκαρε σημεία στον πίνακα.'); return; }
+    var made = 0, dup = 0;
+    pts.forEach(function(p){
+      var n = addVertex(p.id || 'P', {x:p.x, y:p.y, z:p.z, lat:p.lat, lon:p.lon}, 'αντίγραφο', 'Αντίγραφα');
+      if(n) made++; else dup++;
+    });
+    renderMap();
+    setStatus('αντιγράφηκαν ' + made + (dup ? (' · ' + dup + ' υπήρχαν ήδη') : '') + ' \u2713', 'ok');
+  };
+
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
 
   // --- DXF export (ΕΓΣΑ87) ---
@@ -1098,7 +1156,7 @@
           '<div style="font-size:13px;color:#f0f6ff"><b>Τελευταία εργασία (χωρίς όνομα)</b> \u2014 '+when(auto.saved)+'</div>'+
           '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Επαναφορά</button>'+
+            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Φόρτωσέ την πίσω</button>'+
             '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
           '</div>');
       } else { ha.innerHTML=''; }
@@ -1134,18 +1192,28 @@
    *  κλείνει, και η νέα ξεκινά ως ανώνυμη εργασία. Αλλιώς τα σημεία χάραξης της
    *  μιας δουλειάς θα συνέχιζαν σιωπηλά μέσα στην άλλη. */
   window.jobOnNewFile=function(fname){
-    if(!window.Jobs || !Jobs.getActive()) return;
+    if(!window.Jobs) return;
     var prev = model && model.__fname;
-    if(!fname || !prev || fname===prev) return;
-    var nm = activeName;
-    Jobs.save();                       // η παλιά κατάσταση γράφεται όπως είναι
-    Jobs.setActive(null);
-    computed = [];                     // η νέα εργασία ξεκινά καθαρή
+    if(!fname || !prev || fname===prev) return;   // ίδιο αρχείο = ανανέωση δεδομένων
+    var act = Jobs.getActive(), nm = activeName, msg;
+    if(act){
+      Jobs.save();                     // η ονομασμένη γράφεται και κλείνει
+      Jobs.setActive(null);
+      msg = 'Νέα εργασία — η «'+nm+'» αποθηκεύτηκε και έκλεισε.';
+    } else if(computed.length){
+      /*  Ανώνυμη δουλειά με σημεία χάραξης: αποθηκεύεται μόνη της με το όνομα
+       *  του αρχείου που την παρήγαγε. Αλλιώς το νέο φόρτωμα θα την έσβηνε
+       *  σιωπηλά — ή, χειρότερα, τα σημεία της θα συνέχιζαν μέσα στη νέα. */
+      msg = 'Νέα εργασία — η προηγούμενη αποθηκεύτηκε ως «'+prev+'».';
+      Jobs.saveAs(prev).then(function(){ Jobs.setActive(null); renderJobs(); })
+                       .catch(function(){});
+    } else {
+      msg = 'Νέα εργασία.';
+    }
+    computed = [];                     // η νέα ξεκινά καθαρή, ΠΑΝΤΑ
     pick = {p1:null, p2:null};
-    setTimeout(function(){
-      renderJobs();
-      setStatus('Νέα εργασία — η «'+nm+'» αποθηκεύτηκε και έκλεισε.','ok');
-    }, 400);
+    if(window.clearLines) clearLines();
+    setTimeout(function(){ renderJobs(); setStatus(msg,'ok'); }, 400);
   };
 
   window.jobOpen=function(id){
