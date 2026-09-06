@@ -309,6 +309,27 @@
       </div>
 
       <div class="card">
+        <h2><span class="c"></span>Μηκοτομή</h2>
+        <div class="hint">Υψόμετρα και κλίσεις κατά μήκος γραμμής. Δίνεις υψόμετρο σε <b>όσες κορυφές θέλεις</b> — τα ενδιάμεσα βγαίνουν με γραμμική παρεμβολή <b>κατά Χ.Θ.</b>, δηλαδή κατά μήκος της γραμμής και όχι σε ευθεία.</div>
+        <div class="fld" style="margin-top:12px"><label>Πηγή</label>
+          <select id="pfSrc">
+            <option value="feat">Όλη η Γραμμή 1</option>
+            <option value="pick">P1 → P2</option>
+          </select></div>
+        <button class="btn ghost" style="width:100%;margin-top:10px" onclick="pfLoad()">📥 Φόρτωση κορυφών</button>
+        <div id="pfTable"></div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Συμπλήρωση από σημεία σε ακτίνα (m)</label><input id="pfNear" type="number" step="0.1" value="2" inputmode="decimal"></div>
+          <button class="btn ghost" onclick="pfFromPoints()">⛏ Από σημεία</button>
+        </div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Βήμα πύκνωσης (m)</label><input id="pfStep" type="number" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div>
+          <button class="btn" onclick="pfCompute()">📐 Υπολογισμός</button>
+        </div>
+        <div id="pfResult"></div>
+      </div>
+
+      <div class="card">
         <h2><span class="c"></span>Παράλληλη μετατόπιση (offset)</h2>
         <div class="hint">Πηγή: η <b>Γραμμή 1</b> που διάλεξες παραπάνω, ή τα <b>P1–P2</b>. Πρόσημο ίδιο με το SW Maps: <b>αρνητικό = αριστερά</b>, θετικό = δεξιά.</div>
         <div class="fld" style="margin-top:12px"><label>Πηγή</label>
@@ -523,7 +544,7 @@
           L.circleMarker([p.lat,p.lon],{radius:COARSE?7:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
             .addTo(drawnLayer);
           var hit=hitHalo(p.lat,p.lon,drawnLayer).bindPopup(popup);
-          (function(pt){ hit.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon});
+          (function(pt){ hit.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,elv:p.elv,lat:p.lat,lon:p.lon});
         });
       } else if(f.geomType==='LINE'){
         L.polyline(latlngs,{color:f.color,weight:3}).addTo(drawnLayer);
@@ -579,13 +600,13 @@
         if(f.geomType!=='POINT' || !layerState[f.layer]) return;
         f.pts.forEach(function(p){
           addRow(p.__id, (p.x!=null)?p.x.toFixed(3):'—', (p.y!=null)?p.y.toFixed(3):'—', (p.z!=null)?p.z.toFixed(3):'—',
-            f.remarks, f.layer, {id:p.__id,x:p.x,y:p.y,z:p.z,lat:p.lat,lon:p.lon}, false, {kind:'model',feature:f,pt:p});
+            f.remarks, f.layer, {id:p.__id,x:p.x,y:p.y,z:p.z,elv:p.elv,lat:p.lat,lon:p.lon}, false, {kind:'model',feature:f,pt:p});
         });
       });
     }
     computed.forEach(function(cp){
       if(layerState[cp.layer||'StakeOut']===false) return;
-      addRow(cp.id, cp.x.toFixed(3), cp.y.toFixed(3), cp.z.toFixed(3), cp.remarks, (cp.layer||'StakeOut'), {id:cp.id,x:cp.x,y:cp.y,z:cp.z,lat:cp.lat,lon:cp.lon}, true, {kind:'computed',cp:cp});
+      addRow(cp.id, cp.x.toFixed(3), cp.y.toFixed(3), cp.z.toFixed(3), cp.remarks, (cp.layer||'StakeOut'), {id:cp.id,x:cp.x,y:cp.y,z:cp.z,zReal:true,lat:cp.lat,lon:cp.lon}, true, {kind:'computed',cp:cp});
     });
     if(!rows) tb.innerHTML='<tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">Δεν υπάρχουν σημεία</td></tr>';
   }
@@ -914,6 +935,24 @@
    */
   var VXLAYER = 'Κορυφές';
 
+  /*  ΤΟ Z ΔΕΝ ΕΙΝΑΙ ΠΑΝΤΑ ΥΨΟΜΕΤΡΟ.
+   *
+   *  Το SW Maps γράφει 0 όταν δεν έχει ύψος. Μετά τον μετασχηματισμό, εκείνο
+   *  το 0 γίνεται η αναγωγή στο γεωειδές — περίπου −32 m στην Ήπειρο. Αν
+   *  διαβαστεί ως υψόμετρο, βγαίνει μηκοτομή με τέρατα.
+   *
+   *  Κριτήριο είναι το ΠΗΓΑΙΟ ύψος (p.elv), όχι το μετασχηματισμένο p.z.
+   *  Γραμμή με το ΙΔΙΟ υψόμετρο σε όλες τις κορυφές μετράει κανονικά: κάθε
+   *  κορυφή έχει το δικό της elv, απλώς ίσο με των άλλων.
+   */
+  function hasRealZ(p){
+    if (p == null) return false;
+    if (p.zReal) return true;                 // σημείο χάραξης: δικό μας υψόμετρο
+    if (p.elv !== undefined) return p.elv != null && p.elv !== 0;
+    return p.z != null && p.z !== 0;
+  }
+  function realZ(p){ return hasRealZ(p) ? (p.z || 0) : 0; }
+
   /** Το ίδιο σημείο δεν μπαίνει δεύτερη φορά αν πατηθεί ξανά το κουμπί. */
   function alreadyThere(x, y){
     for (var i = 0; i < computed.length; i++){
@@ -925,8 +964,9 @@
   function addVertex(id, p, rem, layer){
     if (p.x == null) return 0;
     if (alreadyThere(p.x, p.y)) return 0;
-    var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, p.z || 0) : {lat:p.lat, lon:p.lon, h:p.z || 0};
-    computed.push({id:id, x:p.x, y:p.y, z:p.z || 0,
+    var z = (p.zGiven != null) ? p.zGiven : realZ(p);
+    var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, z) : {lat:p.lat, lon:p.lon, h:z};
+    computed.push({id:id, x:p.x, y:p.y, z:z, zReal:true,
                    lat:(p.lat != null ? p.lat : w.lat), lon:(p.lon != null ? p.lon : w.lon),
                    h:w.h, remarks:rem, fix:4, layer:layer || VXLAYER});
     document.getElementById('btnCsv').disabled = false;
@@ -1096,7 +1136,7 @@
     var f = LSEL.a.f;
     if (!f || !f.pts) return {err:'Η γραμμή δεν βρέθηκε.'};
     var v = f.pts.filter(function(p){ return p.x != null; })
-                 .map(function(p){ return {x:p.x, y:p.y, z:p.z||0}; });
+                 .map(function(p){ return {x:p.x, y:p.y, z:realZ(p)}; });
     if (v.length < 2) return {err:'Η γραμμή δεν έχει συντεταγμένες ΕΓΣΑ87.'};
     return {name:LSEL.a.name, pts:v};
   }
@@ -1159,6 +1199,189 @@
     genLines.forEach(function(g){ delete layerState[g.layer]; });
     genLines = [];
     renderSummary(); renderLayers(); renderMap();
+  };
+
+
+  /* ==================== ΜΗΚΟΤΟΜΗ ====================
+   *
+   *  Η παρεμβολή γίνεται κατά Χ.Θ. — μήκος ΠΑΝΩ στη γραμμή. Σε γραμμή που
+   *  στρίβει, η ευθεία απόσταση δίνει άλλο ποσοστό και άλλο υψόμετρο· η
+   *  κλίση υπάρχει πάνω στον δρόμο, όχι στη χορδή του.
+   *
+   *  Κορυφές ΕΞΩ από τα γνωστά υψόμετρα δεν παίρνουν τιμή. Η προέκταση μιας
+   *  κλίσης πέρα από τη μέτρηση είναι μαντεψιά που μοιάζει με μέτρηση.
+   */
+  var pfV = [], pfName = '';
+
+  function pfSource(){
+    var mode = document.getElementById('pfSrc').value;
+    if (mode === 'pick'){
+      if (!pick.p1 || !pick.p2) return {err:'Διάλεξε P1 και P2.'};
+      return {name:'P1P2', pts:[pick.p1, pick.p2]};
+    }
+    if (!LSEL.a || !LSEL.a.f) return {err:'Διάλεξε πρώτα Γραμμή 1 πατώντας τη στον χάρτη.'};
+    var v = LSEL.a.f.pts.filter(function(p){ return p.x != null; });
+    if (v.length < 2) return {err:'Η γραμμή δεν έχει συντεταγμένες ΕΓΣΑ87.'};
+    return {name:LSEL.a.name, pts:v};
+  }
+
+  window.pfLoad = function(){
+    var src = pfSource();
+    if (src.err){ document.getElementById('pfTable').innerHTML =
+      '<div class="warnbox">' + esc(src.err) + '</div>'; return; }
+    pfName = src.name;
+    var ch = 0;
+    pfV = src.pts.map(function(p, i){
+      if (i > 0) ch += Math.hypot(p.x - src.pts[i-1].x, p.y - src.pts[i-1].y);
+      // Όποια κορυφή έχει πραγματικό υψόμετρο, μπαίνει μόνη της.
+      var z = hasRealZ(p) ? p.z : null;
+      return {i:i+1, ch:ch, x:p.x, y:p.y, z:z};
+    });
+    pfRender();
+    var auto = pfV.filter(function(v){ return v.z != null; }).length;
+    document.getElementById('pfResult').innerHTML = auto
+      ? '<div class="hint">Η γραμμή είχε υψόμετρα: συμπληρώθηκαν <b>' + auto + '</b> κορυφές αυτόματα.</div>'
+      : '';
+  };
+
+  function pfRender(){
+    if (!pfV.length){ document.getElementById('pfTable').innerHTML = ''; return; }
+    var h = '<div class="tblwrap" style="margin-top:12px"><table><thead><tr>' +
+            '<th>#</th><th>Χ.Θ.</th><th>X</th><th>Y</th><th>Υψόμετρο</th></tr></thead><tbody>';
+    pfV.forEach(function(v, k){
+      h += '<tr><td>' + v.i + '</td><td>' + v.ch.toFixed(2) + '</td>' +
+           '<td>' + v.x.toFixed(2) + '</td><td>' + v.y.toFixed(2) + '</td>' +
+           '<td><input type="number" step="0.001" inputmode="decimal" style="width:92px" ' +
+           'value="' + (v.z == null ? '' : v.z.toFixed(3)) + '" ' +
+           'oninput="pfSetZ(' + k + ',this.value)"></td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="hint">Συνολικό μήκος: <b>' + pfV[pfV.length-1].ch.toFixed(2) + ' m</b> · ' +
+         pfV.length + ' κορυφές</div>';
+    document.getElementById('pfTable').innerHTML = h;
+  }
+
+  window.pfSetZ = function(k, val){
+    var n = parseFloat(String(val).replace(',', '.'));
+    pfV[k].z = Number.isFinite(n) ? n : null;
+  };
+
+  /** Παίρνει υψόμετρο από το κοντινότερο υπάρχον σημείο, μέσα σε ακτίνα. */
+  window.pfFromPoints = function(){
+    if (!pfV.length){ alert('Φόρτωσε πρώτα τις κορυφές.'); return; }
+    var rad = parseFloat(document.getElementById('pfNear').value);
+    if (!Number.isFinite(rad) || rad <= 0){ alert('Δώσε ακτίνα σε μέτρα.'); return; }
+    var pool = [];
+    if (model) model.features.forEach(function(f){
+      if (f.geomType !== 'POINT') return;
+      f.pts.forEach(function(p){ if (p.x != null && hasRealZ(p)) pool.push({id:p.__id||f.name, x:p.x, y:p.y, z:p.z}); });
+    });
+    computed.forEach(function(c){ pool.push({id:c.id, x:c.x, y:c.y, z:c.z}); });
+    if (!pool.length){ alert('Δεν υπάρχουν σημεία με υψόμετρο.'); return; }
+    var got = 0, names = [];
+    pfV.forEach(function(v){
+      var best = null, bd = Infinity;
+      pool.forEach(function(p){
+        var d = Math.hypot(p.x - v.x, p.y - v.y);
+        if (d < bd){ bd = d; best = p; }
+      });
+      if (best && bd <= rad){ v.z = best.z; got++; names.push(v.i + '←' + best.id); }
+    });
+    pfRender();
+    setStatus(got ? ('υψόμετρα σε ' + got + ' κορυφές: ' + names.join(', ')) :
+                    'Κανένα σημείο μέσα στην ακτίνα.', got ? 'ok' : 'warn');
+  };
+
+  /** Υψόμετρο σε Χ.Θ. c, με παρεμβολή ανάμεσα στα ΓΝΩΣΤΑ. null αν είναι εκτός. */
+  function pfZat(known, c){
+    if (known.length < 2) return null;
+    if (c < known[0].ch || c > known[known.length-1].ch) return null;
+    for (var i = 0; i < known.length - 1; i++){
+      var a = known[i], b = known[i+1];
+      if (c >= a.ch && c <= b.ch){
+        var span = b.ch - a.ch;
+        return span > 0 ? a.z + (b.z - a.z) * (c - a.ch) / span : a.z;
+      }
+    }
+    return null;
+  }
+
+  /** Σημείο πάνω στη γραμμή σε Χ.Θ. c. */
+  function pfXYat(c){
+    for (var i = 0; i < pfV.length - 1; i++){
+      var a = pfV[i], b = pfV[i+1];
+      if (c >= a.ch && c <= b.ch){
+        var span = b.ch - a.ch;
+        var t = span > 0 ? (c - a.ch) / span : 0;
+        return {x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t};
+      }
+    }
+    var last = pfV[pfV.length-1];
+    return {x:last.x, y:last.y};
+  }
+
+  window.pfCompute = function(){
+    var host = document.getElementById('pfResult');
+    if (!pfV.length){ host.innerHTML = '<div class="warnbox">Φόρτωσε πρώτα τις κορυφές.</div>'; return; }
+    var known = pfV.filter(function(v){ return v.z != null; })
+                   .map(function(v){ return {ch:v.ch, z:v.z, i:v.i}; });
+    if (known.length < 2){
+      host.innerHTML = '<div class="warnbox"><b>Χρειάζονται τουλάχιστον δύο υψόμετρα.</b><br>' +
+        'Με ένα μόνο, δεν υπάρχει κλίση να παρεμβληθεί.</div>';
+      return;
+    }
+    var step = parseFloat(document.getElementById('pfStep').value);
+    var total = pfV[pfV.length-1].ch;
+
+    // Χ.Θ. εξόδου: πάντα οι κορυφές, συν το βήμα από την αρχή.
+    var chs = pfV.map(function(v){ return v.ch; });
+    if (Number.isFinite(step) && step > 0){
+      for (var c = step; c < total; c += step) chs.push(c);
+    }
+    chs.sort(function(a, b){ return a - b; });
+    var uniq = [];
+    chs.forEach(function(c){
+      if (!uniq.length || Math.abs(c - uniq[uniq.length-1]) > 0.005) uniq.push(c);
+    });
+
+    var made = 0, outside = 0;
+    var lyr = 'Μηκοτομή';
+    uniq.forEach(function(c){
+      var z = pfZat(known, c);
+      if (z == null){ outside++; return; }
+      var xy = pfXYat(c);
+      if (addVertex(pfName + '_' + c.toFixed(2), {x:xy.x, y:xy.y, zGiven:z}, 'Χ.Θ. ' + c.toFixed(2), lyr)) made++;
+    });
+    renderMap();
+
+    // ---- αναφορά κλίσεων ανά τμήμα μεταξύ ΓΝΩΣΤΩΝ υψομέτρων ----
+    var rows = '';
+    for (var i = 0; i < known.length - 1; i++){
+      var a = known[i], b = known[i+1];
+      var dch = b.ch - a.ch, dz = b.z - a.z;
+      var pc = dch > 0 ? (dz / dch * 100) : 0;
+      var oneIn = (dz !== 0 && dch > 0) ? ('1:' + Math.abs(dch / dz).toFixed(1)) : '—';
+      rows += '<tr><td>' + a.i + ' → ' + b.i + '</td><td>' + a.ch.toFixed(2) + ' → ' + b.ch.toFixed(2) +
+              '</td><td>' + dch.toFixed(2) + '</td><td>' + (dz >= 0 ? '+' : '') + dz.toFixed(3) +
+              '</td><td style="color:' + (pc >= 0 ? '#8ff0b6' : '#ff9ea0') + '">' +
+              (pc >= 0 ? '+' : '') + pc.toFixed(2) + ' %</td><td>' + oneIn + '</td></tr>';
+    }
+
+    var html = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">Κλίσεις ανά τμήμα</div>' +
+      '<div class="tblwrap" style="margin-top:8px"><table><thead><tr><th>Κορυφές</th><th>Χ.Θ.</th>' +
+      '<th>Μήκος</th><th>ΔΖ</th><th>Κλίση</th><th>1:n</th></tr></thead><tbody>' + rows +
+      '</tbody></table></div>' +
+      '<div class="hint" style="margin-top:10px">Έγιναν <b>' + made + '</b> σημεία στο layer «' +
+      lyr + '» · συνολικό μήκος ' + total.toFixed(2) + ' m</div>';
+    if (outside){
+      html += '<div class="warnbox"><b>' + outside + ' θέσεις έμειναν χωρίς υψόμετρο.</b><br>' +
+        'Είναι εκτός των γνωστών υψομέτρων (πριν την πρώτη ή μετά την τελευταία κορυφή με τιμή). ' +
+        'Δεν παρεμβάλλονται — θα ήταν προέκταση κλίσης, δηλαδή μαντεψιά.</div>';
+    }
+    html += '</div>';
+    host.innerHTML = html;
+    setStatus('μηκοτομή: ' + made + ' σημεία \u2713', 'ok');
   };
 
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
