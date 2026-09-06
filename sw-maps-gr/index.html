@@ -97,6 +97,11 @@
   .compbar{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
   footer{flex-shrink:0;text-align:center;font-size:11px;color:var(--mut);padding:8px;border-top:1px solid var(--line);background:var(--bg2);}
   footer a{color:var(--navy2);text-decoration:none;}
+  .tabbar{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:3px;-webkit-overflow-scrolling:touch;}
+  .tabbar::-webkit-scrollbar{height:0;}
+  .tabbar .tb{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s;}
+  .tabbar .tb.active{background:var(--navy2);border-color:var(--navy2);color:#fff;}
+  .pane{display:none;} .pane.show{display:block;}
 </style>
 </head>
 <body>
@@ -168,6 +173,13 @@
   <main>
     <div class="map-wrap"><div id="map"></div></div>
 
+    <div class="tabbar">
+      <button class="tb active" data-pane="data" onclick="showPane('data')">📂 Δεδομένα</button>
+      <button class="tb" data-pane="stake" onclick="showPane('stake')">🎯 Χάραξη</button>
+      <button class="tb" data-pane="calc" onclick="showPane('calc')">📐 Υπολογισμοί</button>
+      <button class="tb" data-pane="out" onclick="showPane('out')">📤 Εξαγωγές</button>
+    </div>
+    <section class="pane show" id="pane-data">
     <div class="card">
       <h2><span class="c"></span>Άνοιγμα δεδομένων</h2>
       <div class="btns">
@@ -203,7 +215,9 @@
       </div>
       <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Περιγραφή</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
     </div>
+    </section>
 
+    <section class="pane" id="pane-stake">
     <div class="card">
       <h2><span class="c"></span>Προσθήκη σημείου <span style="color:var(--mut);font-weight:400">(ΕΓΣΑ87)</span></h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -249,7 +263,16 @@
       </div>
       <div style="margin-top:14px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Ανέβασμα σημείων ΕΓΣΑ (txt: pt,x,y[,z][,disc])</button></div>
     </div>
+    </section>
 
+    <section class="pane" id="pane-calc">
+      <div class="card">
+        <h2><span class="c"></span>Υπολογισμοί</h2>
+        <div class="empty">Έρχονται: τομή ευθειών, offset, μηκοτομή.</div>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-out">
     <div class="card">
       <h2><span class="c"></span>Εξαγωγές</h2>
       <div class="opt"><input type="checkbox" id="chkGeoid" checked><label for="chkGeoid">Ορθομετρικό ύψος (Z = h − N γεωειδούς)</label></div>
@@ -260,6 +283,8 @@
         <button class="btn" id="btnCsv" onclick="exportTXT()" disabled>📄 TXT σημείων (ανά layer)</button>
       </div>
     </div>
+    </section>
+
   </main>
   <footer>SW Maps GR Helper · ZS-Top — Αποστόλου Φ. Στυλιανός · <a href="../index.html">GeoLab</a> · <a href="mailto:supportlab@zstop.gr" style="color:inherit">supportlab@zstop.gr</a></footer>
 
@@ -622,6 +647,30 @@
     };
     r.readAsText(file); e.target.value='';
   });
+
+
+  /*  Καρτέλες. Ο χάρτης είναι ΕΞΩ από αυτές και μένει πάντα ορατός: η επιλογή
+   *  σημείων γίνεται πάνω του και θα ήταν άχρηστη κρυμμένη. Η επιλογή
+   *  θυμάται, ώστε το refresh στο χωράφι να μη σε γυρίζει στην αρχή. */
+  var PANES = ['data','stake','calc','out'];
+  function showPane(name){
+    if(PANES.indexOf(name) < 0) name = 'data';
+    PANES.forEach(function(p){
+      var el = document.getElementById('pane-'+p);
+      if(el) el.classList.toggle('show', p === name);
+    });
+    [].slice.call(document.querySelectorAll('.tabbar .tb')).forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-pane') === name);
+    });
+    try{ localStorage.setItem('zs_pane:sw-maps-gr', name); }catch(e){}
+    // Ο χάρτης πρέπει να ξαναμετρήσει: μπορεί να άλλαξε το ύψος της σελίδας.
+    if(window.map) setTimeout(function(){ map.invalidateSize(); }, 60);
+  }
+  (function(){
+    var last = null;
+    try{ last = localStorage.getItem('zs_pane:sw-maps-gr'); }catch(e){}
+    if(last) showPane(last);
+  })();
 
   document.getElementById('chkGeoid').addEventListener('change',function(){ if(model) retransform(); });
 
