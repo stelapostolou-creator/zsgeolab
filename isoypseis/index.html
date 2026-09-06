@@ -90,6 +90,12 @@
           <input id="iv" type="text" inputmode="decimal" value="0,50"></div>
         <button class="btn" id="go" onclick="build()">📈 Υπολογισμός</button>
       </div>
+      <div class="fld" style="margin-top:10px"><label>Υψόμετρα των γραμμών αλλαγής κλίσης</label>
+        <select id="blz">
+          <option value="file">Από το σχέδιο (3D polyline ή LINE)</option>
+          <option value="points">Από τα σημεία — οι γραμμές είναι δισδιάστατες</option>
+        </select></div>
+      <div class="hint">Η <b>LWPOLYLINE</b> του DXF έχει ένα μόνο υψόμετρο για όλες τις κορυφές — είναι επίπεδη. Γραμμή με πραγματικά υψόμετρα πρέπει να είναι <b>3D polyline</b> ή σειρά από LINE. Αν τη σχεδίασες με snap πάνω στα σημεία, διάλεξε τη δεύτερη επιλογή.</div>
       <div class="fld" style="margin-top:10px"><label><input type="checkbox" id="clip" checked> Κοπή στην περιοχή μελέτης</label></div>
       <div class="fld"><label><input type="checkbox" id="wmesh" checked> Ψηφιακό μοντέλο (τρίγωνα)</label></div>
       <div id="out"></div>
@@ -165,7 +171,6 @@ document.getElementById('file').addEventListener('change', function(ev){
         META[n] = r; ROLE[n] = ROLE[n] || ''; VIS[n] = true;
       });
       info.innerHTML = '<div class="okbox"><b>'+esc(j.file)+'</b> — '+j.layers.length+' layers</div>';
-      guessRoles();
       renderLayers(); fit();
       document.getElementById('cLayers').hidden = false;
       document.getElementById('cCalc').hidden = false;
@@ -173,16 +178,11 @@ document.getElementById('file').addEventListener('change', function(ev){
     .catch(function(e){ info.innerHTML = '<div class="warnbox">Ο server δεν απάντησε: '+esc(e.message)+'</div>'; });
 });
 
-/*  Προτείνεται ρόλος μόνο όταν είναι ΑΔΙΑΜΦΙΣΒΗΤΗΤΟ: ένα μόνο layer έχει
- *  σημεία με υψόμετρα. Ό,τι άλλο το λέει ο χρήστης — τα ονόματα των layers δεν
- *  σημαίνουν το ίδιο σε δύο γραφεία. */
-function guessRoles(){
-  var cand = Object.keys(GEOM).filter(function(n){
-    return META[n].points >= 3 && !META[n].flat;
-  });
-  if (cand.length === 1 && !Object.keys(ROLE).some(function(k){ return ROLE[k]==='pts'; }))
-    ROLE[cand[0]] = 'pts';
-}
+/*  ΚΑΝΕΝΑΣ ΡΟΛΟΣ ΔΕΝ ΠΡΟΤΕΙΝΕΤΑΙ. Τα ονόματα των layers δεν σημαίνουν το ίδιο
+ *  σε δύο γραφεία, και το λάθος θα ήταν επικίνδυνο: μια γραμμή που παρθεί κατά
+ *  λάθος για breakline ΕΠΙΒΑΛΛΕΤΑΙ στην επιφάνεια, και βγαίνει λάθος έδαφος
+ *  που φαίνεται σωστό. Δύο ρόλοι είναι υποχρεωτικοί και ένας προαιρετικός —
+ *  τους λέει ο χρήστης. */
 
 function renderLayers(){
   var h = '';
@@ -235,6 +235,7 @@ function payload(){
 
   return {points:pts, breaklines:brk, boundary:bnd,
           interval:numIn('iv'), clip:document.getElementById('clip').checked,
+          breakline_z:document.getElementById('blz').value,
           mesh:document.getElementById('wmesh').checked};
 }
 
@@ -266,7 +267,11 @@ function show(j){
   if (c) h += '<tr><td>Ισοϋψείς</td><td class="mono">'+c.count+' στάθμες ανά '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
   h += '</tbody></table></div>';
   if (j.warning) h += '<div class="warnbox">⚠ '+esc(j.warning)+'</div>';
-  if (r.snapped) h += '<div class="hint">'+r.snapped+' κορυφές γραμμών έπεσαν πάνω σε υπάρχοντα σημεία και ενώθηκαν μαζί τους.</div>';
+  if (r.snapped) h += '<div class="hint">'+r.snapped+' κορυφές γραμμών έπεσαν πάνω σε υπάρχοντα σημεία και πήραν το υψόμετρό τους.</div>';
+  // Κορυφή που έφερε ΔΙΚΟ της υψόμετρο δεν είναι λάθος — αλλά αν είναι πολλές
+  // ενώ περίμενες snap, κάτι δεν πάει καλά και πρέπει να φανεί.
+  if (r.breakline_own_z) h += '<div class="hint">'+r.breakline_own_z+' κορυφές έφεραν <b>δικό τους</b> υψόμετρο από το σχέδιο.</div>';
+  if (r.breakline_lost) h += '<div class="warnbox"><b>⚠ '+r.breakline_lost+' κορυφές γραμμών πετάχτηκαν</b> — δεν είχαν υψόμετρο ούτε έπεσαν πάνω σε μετρημένο σημείο. Δεν εφευρέθηκε υψόμετρο. Αν η γραμμή είναι δισδιάστατη, πρέπει οι κορυφές της να πατάνε ακριβώς στα σημεία.</div>';
   document.getElementById('out').innerHTML = h;
 }
 
