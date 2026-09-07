@@ -382,7 +382,7 @@ function run(){
   st.style.display='block'; st.className='status';
   st.textContent='Υπολογισμός ' + pending.length + ' σημείων…';
 
-  fetch('/api/wgs/points',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/wgs/points'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({points:pending.map(function(x){return x.p;}),
                          reverse:(DIR!=='toEGSA'), geoid:ell})})
    .then(function(r){return r.json();})
@@ -437,7 +437,7 @@ function inspect(){
   var fi=document.getElementById('finfo');
   fi.classList.remove('hidden'); fi.textContent='Ανάλυση…';
   var fd=new FormData(); fd.append('file',fileObj); fd.append('reverse', FDIR==='inv'?'1':'0');
-  fetch('/api/wgs/inspect',{method:'POST',body:fd}).then(function(r){return r.json();})
+  fetch(ZSServer.api('/api/wgs/inspect'),{method:'POST',body:fd}).then(function(r){return r.json();})
    .then(function(j){
      if(!j.ok){ fi.innerHTML='<b style="color:#e5534b">'+j.error+'</b>';
                 document.getElementById('cardOpts').classList.add('hidden'); return; }
@@ -498,7 +498,7 @@ function runFile(){
   fd.append('outputs', outs.join(',')); fd.append('labels', checkedVals('fields').join(','));
   fd.append('layers', checkedVals('layers').join(','));
   fd.append('with_z', document.getElementById('chkZ').checked?'1':'0');
-  fetch('/api/wgs/convert',{method:'POST',body:fd}).then(function(r){return r.json();})
+  fetch(ZSServer.api('/api/wgs/convert'),{method:'POST',body:fd}).then(function(r){return r.json();})
    .then(function(j){
      go.disabled=false;
      if(!j.ok){ st.textContent=j.error; return; }
@@ -506,7 +506,7 @@ function runFile(){
      document.getElementById('freport').textContent=j.report;
      document.getElementById('flinks').innerHTML=j.files.map(function(f){
        return '<div class="dl"><b>'+f.name+'</b><span class="sz">'+(f.size/1024).toFixed(0)+
-              ' KB</span><a href="'+f.url+'"><button class="btn">&#11015; Κατέβασμα</button></a></div>';
+              ' KB</span><a href="'+ZSServer.api(f.url)+'"><button class="btn">&#11015; Κατέβασμα</button></a></div>';
      }).join('');
      document.getElementById('cardRes').classList.remove('hidden');
      document.getElementById('cardRes').scrollIntoView({behavior:'smooth'});
@@ -530,7 +530,7 @@ function init(){
   document.getElementById('btnGo').disabled=false;
   s.style.display='block'; s.className='status';
   s.textContent='Έλεγχος σύνδεσης…';
-  fetch('/api/wgs/points',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/wgs/points'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({points:[[39.70758029,20.72920305,544.963]],reverse:false})})
    .then(function(r){return r.json();})
    .then(function(j){
@@ -547,7 +547,7 @@ function init(){
 document.addEventListener('DOMContentLoaded', init);
 
 </script>
-<script src="../lib/server-check.js"></script>
+<script src="../lib/server-check.js?v=20260907b"></script>
 <script>
   ZSServer.banner('<b>\u26a0 Προσωρινά εκτός λειτουργίας.</b><br>Το εργαλείο αυτό εκτελεί τους υπολογισμούς <b>στον server</b>, ώστε οι επίσημοι συντελεστές και τα grids HEPOS να μη φεύγουν στον browser. Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση — το εργαλείο θα ενεργοποιηθεί μόνο του μόλις ανέβει.');
 </script>

@@ -328,7 +328,7 @@ function runFit(){
     for(var i=0;i<n;i++){ src.push(A[i].c); dst.push(B[i].c); names.push(A[i].name); }
   }
   st.textContent='Υπολογισμός…'; st.className='status';
-  fetch('/api/aff/fit',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/aff/fit'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({src:src,dst:dst,kind:KIND,dim:DIM,names:names})})
    .then(function(r){return r.json();})
    .then(function(j){
@@ -391,7 +391,7 @@ function clearFit(){
 function downloadParams(){
   if(!RESULT) return;
   var st=document.getElementById('pStat'); st.textContent='…';
-  fetch('/api/aff/params',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/aff/params'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({result:RESULT,name:'parametroi_'+RESULT.kind+'_'+RESULT.dim+'D'})})
    .then(function(r){return r.json();})
    .then(function(j){
@@ -399,7 +399,7 @@ function downloadParams(){
      if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
      document.getElementById('pLink').innerHTML=
        '<div class="dl"><b>'+j.file.name+'</b><span class="sz">'+j.file.size+
-       ' bytes</span><a href="'+j.file.url+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
+       ' bytes</span><a href="'+ZSServer.api(j.file.url)+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
    }).catch(function(){ st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
 }
 
@@ -439,7 +439,7 @@ function swapDir(){
   // Χωρίς σημεία (π.χ. συντελεστές από αρχείο): αντιστρέφουμε τις παραμέτρους.
   if(!PARAMS){ st.textContent='Δώσε σημεία ή φόρτωσε συντελεστές.'; st.className='status warn'; return; }
   st.textContent='…'; st.className='status';
-  fetch('/api/aff/invert',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/aff/invert'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({params:PARAMS})})
    .then(function(r){return r.json();})
    .then(function(j){
@@ -457,7 +457,7 @@ function runApply(){
   var P=parseLines(document.getElementById('taP').value);
   if(!P.length){ st.textContent='Δώσε σημεία.'; st.className='status err'; return; }
   st.textContent='…'; st.className='status';
-  fetch('/api/aff/apply',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch(ZSServer.api('/api/aff/apply'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({params:PARAMS, points:P.map(function(r){return r.c;})})})
    .then(function(r){return r.json();})
    .then(function(j){
@@ -490,7 +490,7 @@ document.getElementById('fP').addEventListener('change', function(){
   var f=this.files[0]; if(!f) return;
   var st=document.getElementById('upStat'); st.textContent='…'; st.className='status';
   var fd=new FormData(); fd.append('file',f);
-  fetch('/api/aff/params_read',{method:'POST',body:fd}).then(function(r){return r.json();})
+  fetch(ZSServer.api('/api/aff/params_read'),{method:'POST',body:fd}).then(function(r){return r.json();})
    .then(function(j){
      if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
      PARAMS=j.params; RESULT=null; INVERTED=false;
@@ -517,7 +517,7 @@ function runDxf(){
   if(!PARAMS||!fileD) return;
   go.disabled=true; st.textContent='Επεξεργασία…'; st.className='status';
   var fd=new FormData(); fd.append('file',fileD); fd.append('params',JSON.stringify(PARAMS));
-  fetch('/api/aff/dxf',{method:'POST',body:fd}).then(function(r){return r.json();})
+  fetch(ZSServer.api('/api/aff/dxf'),{method:'POST',body:fd}).then(function(r){return r.json();})
    .then(function(j){
      go.disabled=false;
      if(!j.ok){ st.textContent=j.error; st.className='status err'; return; }
@@ -525,7 +525,7 @@ function runDxf(){
      var p=document.getElementById('dRep'); p.textContent=j.report; p.classList.remove('hidden');
      document.getElementById('dLink').innerHTML=
        '<div class="dl"><b>'+j.file.name+'</b><span class="sz">'+(j.file.size/1024).toFixed(0)+
-       ' KB</span><a href="'+j.file.url+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
+       ' KB</span><a href="'+ZSServer.api(j.file.url)+'"><button class="primary">⬇ Κατέβασμα</button></a></div>';
    })
    .catch(function(){ go.disabled=false; st.textContent='Δεν απάντησε ο server.'; st.className='status err'; });
 }
@@ -533,7 +533,7 @@ function runDxf(){
 wire('dropA','fA','taA'); wire('dropB','fB','taB'); wire('dropP','fT','taP');
 hint(); showParams();
 </script>
-<script src="../lib/server-check.js"></script>
+<script src="../lib/server-check.js?v=20260907b"></script>
 <script>
   ZSServer.banner('<b>\u26a0 Προσωρινά εκτός λειτουργίας.</b><br>Το εργαλείο αυτό εκτελεί τους υπολογισμούς <b>στον server</b>. Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση — το εργαλείο θα ενεργοποιηθεί μόνο του μόλις ανέβει.');
 </script>

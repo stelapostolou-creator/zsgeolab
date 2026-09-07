@@ -90,7 +90,7 @@
 
 <footer>ZS-GeoLab · Αποστόλου Φ. Στυλιανός · <a href="../index.html">Επιστροφή</a></footer>
 
-<script src="../lib/server-check.js?v=20260906i"></script>
+<script src="../lib/server-check.js?v=20260907b"></script>
 <script>
 /*  Οι υπολογισμοί γίνονται στον server: είναι δουλειά γραφείου, δεν χρειάζεται
  *  να τρέχει χωρίς σήμα, και ο κώδικας δεν φεύγει στον browser. */
@@ -113,7 +113,7 @@ document.getElementById('file').addEventListener('change', function(ev){
   var info = document.getElementById('info');
   info.innerHTML = '<div class="hint">Διάβασμα…</div>';
   var fd = new FormData(); fd.append('file', f);
-  fetch('/api/vol/read', {method:'POST', body:fd})
+  fetch(ZSServer.api('/api/vol/read'), {method:'POST', body:fd})
     .then(function(r){ return r.json(); })
     .then(function(j){
       if (!j.ok){ info.innerHTML = '<div class="warnbox">' + esc(j.error) + '</div>'; return; }
@@ -179,7 +179,7 @@ function go(){
   var btn = document.getElementById('go');
   btn.disabled = true;
   out.innerHTML = '<div class="card"><div class="hint">Υπολογισμός…</div></div>';
-  fetch('/api/vol/compute', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+  fetch(ZSServer.api('/api/vol/compute'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
     .then(function(r){ return r.json(); })
     .then(function(j){
       btn.disabled = false;
