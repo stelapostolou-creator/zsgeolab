@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contours &amp; Digital Terrain Model | ZS-GeoLab</title>
+<title>ZSGround — Contours &amp; DTM | ZS-GeoLab</title>
 <meta name="theme-color" content="#0b1220">
 <link rel="icon" type="image/png" sizes="32x32" href="../sw-maps-gr/favicon-32.png">
 <style>
@@ -10,7 +10,7 @@
   body{background:var(--bg);color:var(--ink);min-height:100vh;}
   header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg2);
     border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
-  header .logo-img{height:34px;width:auto;display:block;}
+  header .logo-img{height:36px;width:auto;display:block;background:#fff;padding:4px 7px;border-radius:8px;}
   header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
   header .pro{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.5px;
     background:linear-gradient(135deg,#c9a227,#f0d264);color:#231a00;padding:4px 10px;border-radius:6px;}
@@ -25,6 +25,15 @@
   .fld input,.fld select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
     border-radius:8px;color:var(--ink);font-size:14px;}
   .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  details.card > summary{font-size:15px;font-weight:700;cursor:pointer;display:flex;
+    align-items:center;gap:9px;list-style:none;}
+  details.card > summary::-webkit-details-marker{display:none;}
+  details.card > summary .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
+  details.card[open] > summary{margin-bottom:12px;}
+  .cset-grid{display:grid;gap:8px;}
+  .cset-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--ink);}
+  .cset-row input[type=color]{width:44px;height:26px;padding:0;border:1px solid var(--line);
+    border-radius:6px;background:var(--bg2);cursor:pointer;}
   .btn{padding:10px 14px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;
     color:#fff;background:var(--navy2);}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
@@ -67,7 +76,7 @@
 <header>
   <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center">
     <img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
-  <div class="htitle">Contours<span> &amp; DTM</span></div>
+  <div class="htitle">ZS<span>Ground</span></div>
   <span class="pro">PRO</span>
 </header>
 
@@ -81,6 +90,13 @@
       <button class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('file').click()">📂 Open file</button>
       <div id="info"></div>
     </div>
+
+    <details class="card" id="cAppear">
+      <summary><span class="c"></span>Appearance</summary>
+      <div class="hint">Colours are kept on this computer. They do not change the exported DXF.</div>
+      <div class="cset-grid" id="csetGrid" style="margin-top:10px"></div>
+      <button class="btn ghost" style="width:100%;margin-top:10px" onclick="resetColors()">Reset colours</button>
+    </details>
 
     <div class="card" id="cLayers" hidden>
       <h2><span class="c"></span>2. Layer roles</h2>
@@ -160,7 +176,7 @@
   </div>
 </main>
 
-<footer>ZS-GeoLab · Terrain &amp; Surfaces · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
+<footer>ZS-GeoLab · ZSGround · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
 
 <script src="../lib/server-check.js?v=20260907b"></script>
 <script>
@@ -182,6 +198,60 @@ var RES = null;         // the server's result
 var PICK = null;        // what the last click identified
 var SHOW = {mesh:true, iso:true, txt:false, z:false};
 var T = {s:1, x:0, y:0};
+
+/*  Canvas colours. The choices are kept on this computer (localStorage) and
+ *  never touch the exported DXF — only the screen. Keys added later still get
+ *  their own default. */
+var COLOR_DEF = {
+  bg:    '#080d18',   // canvas background
+  base:  '#33456a',   // layers with no role — orientation only
+  pts:   '#ff6b6e',   // measured points (and the elevation labels)
+  minor: '#4fd18b',   // contours
+  index: '#ffd166',   // index contours
+  mesh:  '#5a9678',   // model triangles (drawn faint)
+  brk:   '#00d5ff',   // breaklines
+  bnd:   '#ff3df0'    // area boundary
+};
+var COLOR_LABELS = {
+  bg:'Background', base:'Base drawing', pts:'Points', minor:'Contours',
+  index:'Index contours', mesh:'Triangles', brk:'Breaklines', bnd:'Boundary'
+};
+var COLORS = (function(){
+  var c = {};
+  for (var k in COLOR_DEF) c[k] = COLOR_DEF[k];
+  try {
+    var s = JSON.parse(localStorage.getItem('isoypseis.colors') || '{}');
+    for (var kk in s) if ((kk in c) && /^#[0-9a-f]{6}$/i.test(s[kk])) c[kk] = s[kk];
+  } catch (e) {}
+  return c;
+})();
+/** A hex colour with alpha — <input type=color> only ever gives opaque hex. */
+function hexA(h, a){
+  h = String(h).replace('#','');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var n = parseInt(h, 16) || 0;
+  return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+}
+function saveColors(){
+  try { localStorage.setItem('isoypseis.colors', JSON.stringify(COLORS)); } catch (e) {}
+}
+function buildColorUI(){
+  var box = document.getElementById('csetGrid'); if (!box) return;
+  box.innerHTML = Object.keys(COLOR_LABELS).map(function(k){
+    return '<label class="cset-row"><span>' + COLOR_LABELS[k] + '</span>' +
+           '<input type="color" data-ck="' + k + '" value="' + COLORS[k] + '"></label>';
+  }).join('');
+  [].slice.call(box.querySelectorAll('input[type=color]')).forEach(function(inp){
+    inp.addEventListener('input', function(){
+      COLORS[inp.getAttribute('data-ck')] = inp.value;
+      saveColors(); draw();
+    });
+  });
+}
+window.resetColors = function(){
+  for (var k in COLOR_DEF) COLORS[k] = COLOR_DEF[k];
+  saveColors(); buildColorUI(); draw();
+};
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function numIn(id){ var e=document.getElementById(id); return parseFloat(String(e.value||'').trim().replace(',','.')); }
@@ -475,20 +545,20 @@ function poly(L, close){ ctx.beginPath(); addPoly(L, close); ctx.stroke(); }
 function draw(){
   var r = cv.getBoundingClientRect();
   ctx.clearRect(0,0,r.width,r.height);
-  ctx.fillStyle = '#080d18'; ctx.fillRect(0,0,r.width,r.height);
+  ctx.fillStyle = COLORS.bg; ctx.fillRect(0,0,r.width,r.height);
   var pad = 20 / T.s;
   VIEW = [(0 - T.x)/T.s - pad, -(r.height - T.y)/T.s - pad,
           (r.width - T.x)/T.s + pad, -(0 - T.y)/T.s + pad];
 
   // 1. Background: whatever has no role. Dim, only for orientation.
-  ctx.lineWidth = 1; ctx.strokeStyle = '#33456a';
+  ctx.lineWidth = 1; ctx.strokeStyle = COLORS.base;
   ctx.beginPath();
   Object.keys(GEOM).forEach(function(n){
     if (!VIS[n] || ROLE[n]) return;
     GEOM[n].lines.forEach(function(L){ addPoly(L); });
   });
   ctx.stroke();
-  ctx.fillStyle = '#2c3d5e';
+  ctx.fillStyle = COLORS.base;
   var bseen = {};
   Object.keys(GEOM).forEach(function(n){
     if (!VIS[n] || ROLE[n]) return;
@@ -502,7 +572,7 @@ function draw(){
     });
   });
   if (SHOW.txt && T.s > 3){
-    ctx.fillStyle = '#5d7099'; ctx.font = '10px Consolas,monospace';
+    ctx.fillStyle = COLORS.base; ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
       if (!VIS[n]) return;
       GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
@@ -534,7 +604,7 @@ function draw(){
       RES.__bbox = bb; RES.__bb = TR;
     }
     var BB = RES.__bbox, minpx = 2 / T.s;
-    ctx.strokeStyle = 'rgba(90,150,120,.30)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = hexA(COLORS.mesh, 0.30); ctx.lineWidth = 1;
     ctx.beginPath();
     for (var i = 0; i < TR.length; i++){
       var j = i*4;
@@ -564,13 +634,13 @@ function draw(){
     var dense = gap * T.s < 4;
     ISODENSE = dense;
 
-    ctx.strokeStyle = '#4fd18b'; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.strokeStyle = COLORS.minor; ctx.lineWidth = 1; ctx.beginPath();
     if (!dense) RES.contours.levels.forEach(function(lv){
       if (isMainLevel(lv.z)) return;
       lv.lines.forEach(function(L){ addPoly(L); });
     });
     ctx.stroke();
-    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.8; ctx.beginPath();
+    ctx.strokeStyle = COLORS.index; ctx.lineWidth = 1.8; ctx.beginPath();
     RES.contours.levels.forEach(function(lv){
       if (!isMainLevel(lv.z)) return;
       lv.lines.forEach(function(L){ addPoly(L); });
@@ -579,15 +649,15 @@ function draw(){
   }
 
   // 4. Whatever the user picked, on top.
-  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.beginPath();
   sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
-  ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2; ctx.beginPath();
   sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
   /*  The points, one per pixel. In a 50 km project 32,000 points fall on a few
    *  thousand pixels — the rest were drawn one on top of the other. */
-  ctx.fillStyle = '#ff6b6e';
+  ctx.fillStyle = COLORS.pts;
   var ps = T.s > 8 ? 3 : 2, seen = {}, np = 0;
   /*  THE ELEVATION OF EVERY POINT, not only of the one that was clicked.
    *
@@ -618,7 +688,7 @@ function draw(){
   });
   PTSDRAWN = np;
   if (LBL && LBL.length){
-    ctx.font = '11px Consolas,monospace'; ctx.fillStyle = '#ffb9bb';
+    ctx.font = '11px Consolas,monospace'; ctx.fillStyle = COLORS.pts;
     for (var li = 0; li < LBL.length; li++)
       ctx.fillText(fmt(LBL[li][2], 2), LBL[li][0] + 5, LBL[li][1] - 4);
   }
@@ -636,7 +706,7 @@ function draw(){
     ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
     if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
   });
-  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
+  ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.beginPath();
   EDITS.brk.forEach(function(L){ addPoly(L); });
   ctx.stroke();
   ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
@@ -651,9 +721,9 @@ function draw(){
 
   // The line being drawn right now, and the point being dragged.
   if (DRAWING && DRAWING.length){
-    ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
     poly(DRAWING); ctx.setLineDash([]);
-    ctx.fillStyle = '#00d5ff';
+    ctx.fillStyle = COLORS.brk;
     DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
   }
   // 6. What the last click identified — over everything, so it is found again.
@@ -866,11 +936,11 @@ function draw(){
     if (!PICK){ el.hidden = true; el.innerHTML = ''; return; }
     var h = '<span class="x" onclick="clearPick();draw()" title="Close">✕</span>';
     if (PICK.kind === 'pt'){
-      h += '<div class="k" style="color:#ff6b6e">Point</div>' +
+      h += '<div class="k" style="color:' + COLORS.pts + '">Point</div>' +
            '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
            '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
     } else {
-      h += '<div class="k" style="color:' + (PICK.main ? '#ffd166' : '#4fd18b') + '">' +
+      h += '<div class="k" style="color:' + (PICK.main ? COLORS.index : COLORS.minor) + '">' +
              (PICK.main ? 'Index contour' : 'Contour') + '</div>' +
            '<div class="v">' + fmt(PICK.z,3) + ' m</div>' +
            '<div class="d">' + fmt(PICK.len,1) + ' m long · ' + PICK.n + ' vertices</div>';
@@ -977,6 +1047,7 @@ function draw(){
   var upd = function(){ b.style.opacity = SHOW[k] ? 1 : .45; };
   b.addEventListener('click', function(){ setTimeout(upd, 0); }); upd();
 });
+buildColorUI();
 resize();
 
 ZSServer.banner('<b>⚠ This tool needs the server.</b><br>' +
