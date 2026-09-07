@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ισοϋψείς &amp; ψηφιακό μοντέλο | ZS-GeoLab</title>
+<title>Contours &amp; Digital Terrain Model | ZS-GeoLab</title>
 <meta name="theme-color" content="#0b1220">
 <link rel="icon" type="image/png" sizes="32x32" href="../sw-maps-gr/favicon-32.png">
 <style>
@@ -50,6 +50,15 @@
   .cv-info{position:absolute;right:10px;bottom:10px;background:rgba(8,13,24,.85);border:1px solid var(--line);
     border-radius:7px;padding:5px 9px;font-size:11.5px;color:var(--mut);
     font-family:ui-monospace,Consolas,monospace;}
+  .cv-pick{position:absolute;right:10px;top:10px;min-width:172px;max-width:262px;
+    background:rgba(8,13,24,.93);border:1px solid var(--line);border-radius:9px;padding:8px 26px 9px 11px;}
+  .cv-pick .k{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;}
+  .cv-pick .v{font-family:ui-monospace,Consolas,monospace;font-size:17px;font-weight:700;
+    color:#fff;margin:3px 0 3px;}
+  .cv-pick .d{color:var(--mut);font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.55;}
+  .cv-pick .x{position:absolute;right:4px;top:3px;cursor:pointer;color:var(--mut);
+    font-size:14px;line-height:1;padding:3px 6px;}
+  .cv-pick .x:hover{color:var(--ink);}
   .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
   footer{color:var(--mut);font-size:12px;text-align:center;padding:18px;}
   footer a{color:inherit;}
@@ -58,7 +67,7 @@
 <header>
   <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center">
     <img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
-  <div class="htitle">Ισοϋψείς<span> &amp; μοντέλο</span></div>
+  <div class="htitle">Contours<span> &amp; DTM</span></div>
   <span class="pro">PRO</span>
 </header>
 
@@ -67,60 +76,60 @@
 <main>
   <div class="col">
     <div class="card">
-      <h2><span class="c"></span>1. Σχέδιο</h2>
-      <div class="hint">Δέχεται <b>DXF</b> (σημεία, γραμμές, blocks) ή <b>TXT/CSV</b> με «x y z». Ανέβασε όσα αρχεία θέλεις — τα layers μαζεύονται όλα μαζί.</div>
-      <button class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('file').click()">📂 Άνοιγμα αρχείου</button>
+      <h2><span class="c"></span>1. Drawing</h2>
+      <div class="hint">Accepts <b>DXF</b> (points, lines, blocks) or <b>TXT/CSV</b> with "x y z". Load as many files as you like — all their layers are collected together.</div>
+      <button class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('file').click()">📂 Open file</button>
       <div id="info"></div>
     </div>
 
     <div class="card" id="cLayers" hidden>
-      <h2><span class="c"></span>2. Ρόλοι των layers</h2>
-      <div class="hint">Πες ποιο layer είναι τι. Δεν μαντεύεται τίποτα από τα ονόματα. Ό,τι μείνει «φόντο» απλώς ζωγραφίζεται.</div>
+      <h2><span class="c"></span>2. Layer roles</h2>
+      <div class="hint">Say what each layer is. Nothing is guessed from the names. Whatever stays "background" is simply drawn.</div>
       <div class="tblwrap"><table>
-        <thead><tr><th>👁</th><th>Layer</th><th>Ρόλος</th><th>Σημ.</th><th>Γρ.</th><th>Z</th></tr></thead>
+        <thead><tr><th>👁</th><th>Layer</th><th>Role</th><th>Pts</th><th>Lines</th><th>Z</th></tr></thead>
         <tbody id="lyTbl"></tbody>
       </table></div>
       <div id="lyNote"></div>
     </div>
 
     <div class="card" id="cCalc" hidden>
-      <h2><span class="c"></span>3. Υπολογισμός</h2>
+      <h2><span class="c"></span>3. Calculation</h2>
       <div class="row2">
-        <div class="fld"><label>Ισοδιάστημα (m)</label>
-          <input id="iv" type="text" inputmode="decimal" value="0,50"></div>
-        <button class="btn" id="go" onclick="build()">📈 Υπολογισμός</button>
+        <div class="fld"><label>Contour interval (m)</label>
+          <input id="iv" type="text" inputmode="decimal" value="0.50"></div>
+        <button class="btn" id="go" onclick="build()">📈 Calculate</button>
       </div>
-      <div class="fld" style="margin-top:10px"><label>Υψόμετρα των γραμμών αλλαγής κλίσης</label>
+      <div class="fld" style="margin-top:10px"><label>Elevations of the breaklines</label>
         <select id="blz">
-          <option value="file">Από το σχέδιο (3D polyline ή LINE)</option>
-          <option value="points">Από τα σημεία — οι γραμμές είναι δισδιάστατες</option>
+          <option value="file">From the drawing (3D polyline or LINE)</option>
+          <option value="points">From the points — the lines are two-dimensional</option>
         </select></div>
-      <div class="hint">Η <b>LWPOLYLINE</b> του DXF έχει ένα μόνο υψόμετρο για όλες τις κορυφές — είναι επίπεδη. Γραμμή με πραγματικά υψόμετρα πρέπει να είναι <b>3D polyline</b> ή σειρά από LINE. Αν τη σχεδίασες με snap πάνω στα σημεία, διάλεξε τη δεύτερη επιλογή.</div>
-      <div class="fld" style="margin-top:10px"><label><input type="checkbox" id="clip" checked> Κοπή στην περιοχή μελέτης</label></div>
-      <div class="fld"><label><input type="checkbox" id="wmesh" checked> Ψηφιακό μοντέλο (τρίγωνα)</label></div>
+      <div class="hint">A DXF <b>LWPOLYLINE</b> carries a single elevation for all of its vertices — it is flat. A line with real elevations has to be a <b>3D polyline</b> or a series of LINE entities. If you drew it snapped onto the points, pick the second option.</div>
+      <div class="fld" style="margin-top:10px"><label><input type="checkbox" id="clip" checked> Clip to the area of interest</label></div>
+      <div class="fld"><label><input type="checkbox" id="wmesh" checked> Digital terrain model (triangles)</label></div>
       <div id="out"></div>
     </div>
 
     <div class="card" id="cEdit" hidden>
-      <h2><span class="c"></span>Διορθώσεις <span id="edN" class="mono" style="margin-left:auto;color:var(--mut)">0</span></h2>
-      <div class="hint">Το αρχείο σου <b>δεν αλλάζει</b>. Οι διορθώσεις κρατιούνται χωριστά και αναιρούνται όλες.</div>
+      <h2><span class="c"></span>Edits <span id="edN" class="mono" style="margin-left:auto;color:var(--mut)">0</span></h2>
+      <div class="hint">Your file is <b>never changed</b>. The edits are kept separately and can all be undone.</div>
       <div id="edList"></div>
       <div class="btns" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:10px">
-        <button class="btn ghost" id="edUndo" onclick="undoEdit()">↶ Αναίρεση</button>
-        <button class="btn ghost" id="edRedo" onclick="redoEdit()">↷ Επανάληψη</button>
-        <button class="btn ghost" onclick="clearEdits()" title="Όλες πίσω">🗑</button>
+        <button class="btn ghost" id="edUndo" onclick="undoEdit()">↶ Undo</button>
+        <button class="btn ghost" id="edRedo" onclick="redoEdit()">↷ Redo</button>
+        <button class="btn ghost" onclick="clearEdits()" title="Undo them all">🗑</button>
       </div>
       <div id="edStale" hidden>
-        <div class="warnbox">Το αποτέλεσμα δεν είναι ενημερωμένο — μεγάλο σχέδιο, ο υπολογισμός δεν τρέχει μόνος του.</div>
-        <button class="btn" style="width:100%;margin-top:8px" onclick="build()">🔄 Ξαναϋπολογισμός</button>
+        <div class="warnbox">The result is out of date — large drawing, the calculation does not run on its own.</div>
+        <button class="btn" style="width:100%;margin-top:8px" onclick="build()">🔄 Recalculate</button>
       </div>
     </div>
 
     <div class="card" id="cOut" hidden>
-      <h2><span class="c"></span>4. Εξαγωγή</h2>
-      <div class="fld"><label><input type="checkbox" id="dBrk"> Να μπουν και οι γραμμές αλλαγής κλίσης</label></div>
-      <div class="fld"><label><input type="checkbox" id="dPts"> Να μπουν και τα σημεία</label></div>
-      <button class="btn green" style="width:100%;margin-top:8px" onclick="dxf()">📐 Λήψη DXF</button>
+      <h2><span class="c"></span>4. Export</h2>
+      <div class="fld"><label><input type="checkbox" id="dBrk"> Include the breaklines</label></div>
+      <div class="fld"><label><input type="checkbox" id="dPts"> Include the points</label></div>
+      <button class="btn green" style="width:100%;margin-top:8px" onclick="dxf()">📐 Download DXF</button>
       <div id="dxfOut"></div>
     </div>
   </div>
@@ -128,46 +137,50 @@
   <div class="cv-wrap">
     <canvas id="cv"></canvas>
     <div class="cv-bar">
-      <button onclick="fit()">⤢ Όλα</button>
+      <button onclick="fit()">⤢ Fit</button>
       <button onclick="zoom(1.4)">＋</button>
       <button onclick="zoom(1/1.4)">−</button>
-      <button id="bMesh" onclick="tog('mesh')">Τρίγωνα</button>
-      <button id="bIso" onclick="tog('iso')">Ισοϋψείς</button>
-      <button id="bTxt" onclick="tog('txt')">Κείμενα</button>
+      <button id="bMesh" onclick="tog('mesh')">Triangles</button>
+      <button id="bIso" onclick="tog('iso')">Contours</button>
+      <button id="bZ"   onclick="tog('z')">Elevations</button>
+      <button id="bTxt" onclick="tog('txt')">Text</button>
     </div>
     <div class="cv-bar" style="top:46px">
-      <button class="ed" data-m="pan"  onclick="setMode('pan')"  title="Μετακίνηση / μεγέθυνση">👆</button>
-      <button class="ed" data-m="del"  onclick="setMode('del')"  title="Σβήσιμο σημείου">✖ σημείο</button>
-      <button class="ed" data-m="move" onclick="setMode('move')" title="Μετακίνηση σημείου">✥ μετακίνηση</button>
-      <button class="ed" data-m="add"  onclick="setMode('add')"  title="Νέο σημείο">➕ σημείο</button>
-      <button class="ed" data-m="brk"  onclick="setMode('brk')"  title="Νέα γραμμή αλλαγής κλίσης">📐 γραμμή</button>
-      <button class="ed" data-m="swap" onclick="setMode('swap')" title="Αναστροφή ακμής τριγώνου">⇄ ακμή</button>
-      <button class="ed" data-m="hole" onclick="setMode('hole')" title="Σβήσιμο τριγώνου">🕳 τρίγωνο</button>
+      <button class="ed" data-m="pan"  onclick="setMode('pan')"  title="Pan / zoom">👆</button>
+      <button class="ed" data-m="del"  onclick="setMode('del')"  title="Delete point">✖ point</button>
+      <button class="ed" data-m="move" onclick="setMode('move')" title="Move point">✥ move</button>
+      <button class="ed" data-m="add"  onclick="setMode('add')"  title="New point">➕ point</button>
+      <button class="ed" data-m="brk"  onclick="setMode('brk')"  title="New breakline">📐 line</button>
+      <button class="ed" data-m="swap" onclick="setMode('swap')" title="Swap triangle edge">⇄ edge</button>
+      <button class="ed" data-m="hole" onclick="setMode('hole')" title="Delete triangle">🕳 triangle</button>
     </div>
-    <div class="cv-info" id="edHint" style="right:auto;left:10px;bottom:10px;max-width:60%">Σύρε για μετακίνηση, ρόδα για μεγέθυνση.</div>
+    <div class="cv-pick" id="pick" hidden></div>
+    <div class="cv-info" id="edHint" style="right:auto;left:10px;bottom:10px;max-width:60%">Drag to pan, wheel to zoom · click a point or a contour for its elevation.</div>
     <div class="cv-info" id="cvInfo">—</div>
   </div>
 </main>
 
-<footer>ZS-GeoLab · Έδαφος &amp; Επιφάνειες · Αποστόλου Φ. Στυλιανός · <a href="../index.html">Επιστροφή</a></footer>
+<footer>ZS-GeoLab · Terrain &amp; Surfaces · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
 
-<script src="../lib/server-check.js?v=20260906i"></script>
+<script src="../lib/server-check.js?v=20260907b"></script>
 <script>
-/*  Οι υπολογισμοί γίνονται στον server σε Python: είναι δουλειά γραφείου —
- *  ανεβάζεις σχέδιο, άρα υπάρχει σύνδεση — και ο κώδικας δεν φεύγει στον
- *  browser. Εδώ μένει μόνο η οθόνη: τι δείχνει και τι στέλνει.
+/*  The calculations run on the server in Python: this is office work — you
+ *  upload a drawing, so a connection exists anyway — and the code never
+ *  reaches the browser. What stays here is only the screen: what it shows and
+ *  what it sends.
  *
- *  Ο καμβάς είναι σκέτο 2D context και όχι χάρτης: οι συντεταγμένες είναι
- *  προβολικές (ΕΓΣΑ87) και δεν χρειάζεται υπόβαθρο — μόνο pan, zoom και
- *  διακόπτες ανά layer.
+ *  The canvas is a plain 2D context and not a map: the coordinates are
+ *  projected (EGSA87) and no basemap is needed — only pan, zoom and a switch
+ *  per layer.
  */
 'use strict';
 var GEOM = {};          // layer -> {points, lines, texts}
-var META = {};          // layer -> γραμμή της αναφοράς
+var META = {};          // layer -> its row of the report
 var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
 var VIS = {};           // layer -> boolean
-var RES = null;         // αποτέλεσμα του server
-var SHOW = {mesh:true, iso:true, txt:false};
+var RES = null;         // the server's result
+var PICK = null;        // what the last click identified
+var SHOW = {mesh:true, iso:true, txt:false, z:false};
 var T = {s:1, x:0, y:0};
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
@@ -175,20 +188,20 @@ function numIn(id){ var e=document.getElementById(id); return parseFloat(String(
 function fmt(v,d){ return v==null?'—':Number(v).toFixed(d==null?2:d); }
 function warn(id,h){ document.getElementById(id).innerHTML='<div class="warnbox">'+h+'</div>'; }
 
-// ------------------------------------------------------------ ανέβασμα ---
+// -------------------------------------------------------------- upload ---
 
 document.getElementById('file').addEventListener('change', function(ev){
   var f = ev.target.files[0]; ev.target.value = '';
   if (!f) return;
   var info = document.getElementById('info');
-  info.innerHTML = '<div class="hint">Διάβασμα…</div>';
+  info.innerHTML = '<div class="hint">Reading…</div>';
   var fd = new FormData(); fd.append('file', f);
-  fetch('/api/dtm/read', {method:'POST', body:fd})
+  fetch(ZSServer.api('/api/dtm/read'), {method:'POST', body:fd})
     .then(function(r){ return r.json(); })
     .then(function(j){
       if (!j.ok){ info.innerHTML = '<div class="warnbox">'+esc(j.error)+'</div>'; return; }
-      // Τα layers μαζεύονται: ο χρήστης μπορεί να δώσει σημεία από TXT και
-      // γραμμές από DXF, όπως το ζήτησε.
+      // The layers accumulate: the user may give points from a TXT and lines
+      // from a DXF, as requested.
       j.layers.forEach(function(r){
         var n = r.name;
         if (GEOM[n]){ n = r.name + ' (' + j.file + ')'; }
@@ -196,18 +209,18 @@ document.getElementById('file').addEventListener('change', function(ev){
         META[n] = r; ROLE[n] = ROLE[n] || ''; VIS[n] = true;
       });
       info.innerHTML = '<div class="okbox"><b>'+esc(j.file)+'</b> — '+j.layers.length+' layers</div>';
-      renderLayers(); fit();
+      clearPick(); renderLayers(); fit();
       document.getElementById('cLayers').hidden = false;
       document.getElementById('cCalc').hidden = false;
     })
-    .catch(function(e){ info.innerHTML = '<div class="warnbox">Ο server δεν απάντησε: '+esc(e.message)+'</div>'; });
+    .catch(function(e){ info.innerHTML = '<div class="warnbox">The server did not answer: '+esc(e.message)+'</div>'; });
 });
 
-/*  ΚΑΝΕΝΑΣ ΡΟΛΟΣ ΔΕΝ ΠΡΟΤΕΙΝΕΤΑΙ. Τα ονόματα των layers δεν σημαίνουν το ίδιο
- *  σε δύο γραφεία, και το λάθος θα ήταν επικίνδυνο: μια γραμμή που παρθεί κατά
- *  λάθος για breakline ΕΠΙΒΑΛΛΕΤΑΙ στην επιφάνεια, και βγαίνει λάθος έδαφος
- *  που φαίνεται σωστό. Δύο ρόλοι είναι υποχρεωτικοί και ένας προαιρετικός —
- *  τους λέει ο χρήστης. */
+/*  NO ROLE IS EVER SUGGESTED. Layer names do not mean the same thing in two
+ *  offices, and a wrong guess would be dangerous: a line taken for a breakline
+ *  by mistake is FORCED onto the surface, and the terrain that comes out is
+ *  wrong while looking right. Two roles are required and one is optional —
+ *  the user states them. */
 
 function renderLayers(){
   var h = '';
@@ -218,38 +231,38 @@ function renderLayers(){
       '<td title="'+esc(n)+'">'+esc(n.length>18?n.slice(0,17)+'…':n)+'</td>' +
       '<td><select onchange="ROLE[\''+esc(n)+'\']=this.value;renderLayers();draw()">' +
         ['','pts','brk','bnd'].map(function(v){
-          var lbl = {'':'φόντο','pts':'📍 σημεία','brk':'📐 breaklines','bnd':'▣ όριο'}[v];
+          var lbl = {'':'background','pts':'📍 points','brk':'📐 breaklines','bnd':'▣ boundary'}[v];
           return '<option value="'+v+'"'+(ROLE[n]===v?' selected':'')+'>'+lbl+'</option>';
         }).join('') + '</select></td>' +
       '<td class="mono">'+m.points+(m.inserts?('+'+m.inserts+'b'):'')+'</td>' +
       '<td class="mono">'+m.lines+'</td>' +
-      '<td class="mono">'+(m.zmin==null?'—':(m.flat?'επίπεδο':fmt(m.zmin,1)+'–'+fmt(m.zmax,1)))+'</td>' +
+      '<td class="mono">'+(m.zmin==null?'—':(m.flat?'flat':fmt(m.zmin,1)+'–'+fmt(m.zmax,1)))+'</td>' +
     '</tr>';
   });
   document.getElementById('lyTbl').innerHTML = h;
 
   var note = '', p = sel('pts'), b = sel('bnd');
   var np = p.reduce(function(s,n){ return s + META[n].points; }, 0);
-  if (!p.length) note += '<div class="warnbox">Διάλεξε ποιο layer έχει τα <b>σημεία</b>.</div>';
+  if (!p.length) note += '<div class="warnbox">Pick the layer that holds the <b>points</b>.</div>';
   else if (p.some(function(n){ return META[n].flat; }))
-    note += '<div class="warnbox">Το layer των σημείων είναι <b>επίπεδο</b> — όλα τα υψόμετρα ίδια. Το σχέδιο είναι δισδιάστατο· δώσε υψόμετρα από αρχείο κειμένου.</div>';
-  else note += '<div class="okbox">'+np+' σημεία · '+sel('brk').length+' layers με breaklines'+(b.length?' · όριο ✓':'')+'</div>';
+    note += '<div class="warnbox">The points layer is <b>flat</b> — every elevation is the same. The drawing is two-dimensional; give the elevations from a text file.</div>';
+  else note += '<div class="okbox">'+np+' points · '+sel('brk').length+' breakline layers'+(b.length?' · boundary ✓':'')+'</div>';
   document.getElementById('lyNote').innerHTML = note;
 }
 function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]===role; }); }
 
-// ------------------------------------------------------- τι στέλνεται ---
+// -------------------------------------------------------- what is sent ---
 
 function payload(){
-  /*  Τα σβησμένα αναγνωρίζονται από τη ΘΕΣΗ τους, στρογγυλεμένη στο εκατοστό:
-   *  δείκτες θα άλλαζαν σε κάθε νέο διάβασμα του σχεδίου. */
+  /*  Deleted points are recognised by their POSITION, rounded to the
+   *  centimetre: indices would change every time the drawing is read again. */
   var gone = {};
   EDITS.del.forEach(function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; });
   var keep = function(p){ return !gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)]; };
 
   var pts = [];
   sel('pts').forEach(function(n){ GEOM[n].points.forEach(function(p){ if (keep(p)) pts.push(p); }); });
-  // Οι κορυφές γραμμών σε layer σημείων μετράνε κι αυτές ως μετρημένα σημεία.
+  // Line vertices on a points layer count as measured points too.
   sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(function(p){ if (keep(p)) pts.push(p); }); }); });
   EDITS.add.forEach(function(p){ pts.push(p); });
 
@@ -260,7 +273,7 @@ function payload(){
   var bnd = null, best = -1;
   sel('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
     if (L.length < 4) return;
-    // Το μεγαλύτερο κλειστό σχήμα είναι η περιοχή μελέτης.
+    // The largest closed shape is the area of interest.
     var a = 0; for (var i=0,j=L.length-1;i<L.length;j=i++) a += (L[j][0]+L[i][0])*(L[j][1]-L[i][1]);
     a = Math.abs(a/2);
     if (a > best){ best = a; bnd = L.map(function(p){ return [p[0],p[1]]; }); }
@@ -276,42 +289,45 @@ function payload(){
 function build(quiet){
   document.getElementById('edStale').hidden = true;
   var b = payload();
-  if (b.points.length < 3){ warn('out','Χρειάζονται τουλάχιστον 3 σημεία με υψόμετρο.'); return; }
-  if (!(b.interval > 0)){ warn('out','Δώσε ισοδιάστημα σε μέτρα.'); return; }
+  if (b.points.length < 3){ warn('out','At least 3 points with an elevation are needed.'); return; }
+  if (!(b.interval > 0)){ warn('out','Give a contour interval in metres.'); return; }
   var btn = document.getElementById('go'); btn.disabled = true;
-  document.getElementById('out').innerHTML = '<div class="hint">Υπολογισμός…</div>';
-  fetch('/api/dtm/build', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+  document.getElementById('out').innerHTML = '<div class="hint">Calculating…</div>';
+  fetch(ZSServer.api('/api/dtm/build'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
     .then(function(r){ return r.json(); })
     .then(function(j){
       btn.disabled = false;
       if (!j.ok){ warn('out', esc(j.error)); return; }
-      RES = j; show(j); draw();
+      // The selection pointed into the PREVIOUS result: its contour no longer
+      // exists as an object. Keeping it would highlight a line that is gone.
+      RES = j; clearPick(); show(j); draw();
       document.getElementById('cOut').hidden = false;
       edBadge();
     })
-    .catch(function(e){ btn.disabled = false; warn('out','Ο server δεν απάντησε: '+esc(e.message)); });
+    .catch(function(e){ btn.disabled = false; warn('out','The server did not answer: '+esc(e.message)); });
 }
 
 function show(j){
   var r = j.report, c = j.contours;
   var h = '<div class="tblwrap" style="max-height:none"><table><tbody>' +
-    '<tr><td>Σημεία</td><td class="mono">'+r.points+(r.added_by_breaklines?(' +'+r.added_by_breaklines+' από γραμμές'):'')+'</td></tr>' +
-    '<tr><td>Τρίγωνα</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' έξω από το όριο'):'')+'</td></tr>' +
-    '<tr><td>Περιορισμοί</td><td class="mono">'+r.constraints+(r.constraints_failed?(' · '+r.constraints_failed+' ανεκπλήρωτοι'):' ✓')+'</td></tr>' +
-    '<tr><td>Εμβαδόν</td><td class="mono">'+fmt(r.area,1)+' m² · '+fmt(r.area/1000,3)+' στρ.</td></tr>' +
-    '<tr><td>Υψόμετρα</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m</td></tr>';
-  if (c) h += '<tr><td>Ισοϋψείς</td><td class="mono">'+c.count+' στάθμες ανά '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
+    '<tr><td>Points</td><td class="mono">'+r.points+(r.added_by_breaklines?(' +'+r.added_by_breaklines+' from lines'):'')+'</td></tr>' +
+    '<tr><td>Triangles</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' outside the boundary'):'')+'</td></tr>' +
+    '<tr><td>Constraints</td><td class="mono">'+r.constraints+(r.constraints_failed?(' · '+r.constraints_failed+' unmet'):' ✓')+'</td></tr>' +
+    '<tr><td>Area</td><td class="mono">'+fmt(r.area,1)+' m² · '+fmt(r.area/10000,4)+' ha</td></tr>' +
+    '<tr><td>Elevations</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m</td></tr>';
+  if (c) h += '<tr><td>Contours</td><td class="mono">'+c.count+' levels every '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
   h += '</tbody></table></div>';
-  if (r.swapped || r.removed) h += '<div class="hint">Διορθώσεις: '+
-    (r.swapped?r.swapped+' αναστροφές ακμών':'')+(r.swapped&&r.removed?' · ':'')+
-    (r.removed?r.removed+' σβησμένα τρίγωνα':'')+'</div>';
-  if (r.swap_missed) h += '<div class="warnbox">⚠ '+r.swap_missed+' αναστροφές δεν εφαρμόστηκαν — η ακμή δεν υπάρχει πια, ή το τετράπλευρό της δεν είναι κυρτό.</div>';
+  if (r.swapped || r.removed) h += '<div class="hint">Edits: '+
+    (r.swapped?r.swapped+' swapped edges':'')+(r.swapped&&r.removed?' · ':'')+
+    (r.removed?r.removed+' deleted triangles':'')+'</div>';
+  if (r.swap_missed) h += '<div class="warnbox">⚠ '+r.swap_missed+' swaps were not applied — the edge no longer exists, or its quadrilateral is not convex.</div>';
   if (j.warning) h += '<div class="warnbox">⚠ '+esc(j.warning)+'</div>';
-  if (r.snapped) h += '<div class="hint">'+r.snapped+' κορυφές γραμμών έπεσαν πάνω σε υπάρχοντα σημεία και πήραν το υψόμετρό τους.</div>';
-  // Κορυφή που έφερε ΔΙΚΟ της υψόμετρο δεν είναι λάθος — αλλά αν είναι πολλές
-  // ενώ περίμενες snap, κάτι δεν πάει καλά και πρέπει να φανεί.
-  if (r.breakline_own_z) h += '<div class="hint">'+r.breakline_own_z+' κορυφές έφεραν <b>δικό τους</b> υψόμετρο από το σχέδιο.</div>';
-  if (r.breakline_lost) h += '<div class="warnbox"><b>⚠ '+r.breakline_lost+' κορυφές γραμμών πετάχτηκαν</b> — δεν είχαν υψόμετρο ούτε έπεσαν πάνω σε μετρημένο σημείο. Δεν εφευρέθηκε υψόμετρο. Αν η γραμμή είναι δισδιάστατη, πρέπει οι κορυφές της να πατάνε ακριβώς στα σημεία.</div>';
+  if (r.snapped) h += '<div class="hint">'+r.snapped+' line vertices fell on existing points and took their elevation.</div>';
+  // A vertex that brought its OWN elevation is not an error — but if there are
+  // many of them while snapping was expected, something is wrong and it has to
+  // show.
+  if (r.breakline_own_z) h += '<div class="hint">'+r.breakline_own_z+' vertices brought <b>their own</b> elevation from the drawing.</div>';
+  if (r.breakline_lost) h += '<div class="warnbox"><b>⚠ '+r.breakline_lost+' line vertices were dropped</b> — they had no elevation and did not fall on a measured point. No elevation was invented. If the line is two-dimensional, its vertices have to sit exactly on the points.</div>';
   document.getElementById('out').innerHTML = h;
 }
 
@@ -320,9 +336,9 @@ function dxf(){
   b.with_breaklines = document.getElementById('dBrk').checked;
   b.with_points = document.getElementById('dPts').checked;
   b.name = 'DTM';
-  document.getElementById('dxfOut').innerHTML = '<div class="hint">Γράφεται…</div>';
-  fetch('/api/dtm/dxf', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
-    .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'σφάλμα'); }); })
+  document.getElementById('dxfOut').innerHTML = '<div class="hint">Writing…</div>';
+  fetch(ZSServer.api('/api/dtm/dxf'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'error'); }); })
     .then(function(txt){
       var a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([txt], {type:'application/octet-stream'}));
@@ -333,7 +349,7 @@ function dxf(){
     .catch(function(e){ warn('dxfOut', esc(e.message)); });
 }
 
-// ---------------------------------------------------------- ο καμβάς ----
+// ---------------------------------------------------------- the canvas ---
 
 var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 function resize(){
@@ -361,7 +377,7 @@ function fit(){
   var w = Math.max(b[2]-b[0], 1e-6), h = Math.max(b[3]-b[1], 1e-6);
   T.s = Math.min(r.width/w, r.height/h) * 0.92;
   T.x = r.width/2 - (b[0]+b[2])/2*T.s;
-  T.y = r.height/2 + (b[1]+b[3])/2*T.s;   // ο y κοιτά προς τα πάνω
+  T.y = r.height/2 + (b[1]+b[3])/2*T.s;   // y looks upwards
   draw();
 }
 function zoom(k, cx, cy){
@@ -373,16 +389,21 @@ function tog(k){ SHOW[k] = !SHOW[k]; draw(); }
 var SX = function(x){ return x*T.s + T.x; };
 var SY = function(y){ return -y*T.s + T.y; };
 
-var drag = null;
-cv.addEventListener('mousedown', function(e){ if (MODE !== 'pan') return; drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; cv.classList.add('drag'); });
+/*  PANNED separates a click from a drag: the same button both moves the
+ *  drawing and asks what is under it, and letting go after a pan must not
+ *  select whatever happened to be beneath the cursor. */
+var drag = null, PANNED = false;
+cv.addEventListener('mousedown', function(e){ if (MODE !== 'pan') return; drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; PANNED = false; cv.classList.add('drag'); });
 window.addEventListener('mouseup', function(){ drag = null; cv.classList.remove('drag'); });
 window.addEventListener('mousemove', function(e){
   var r = cv.getBoundingClientRect();
-  if (drag){ T.x = drag.tx + (e.clientX-drag.x); T.y = drag.ty + (e.clientY-drag.y); draw(); }
+  if (drag){
+    if (Math.abs(e.clientX-drag.x) > 3 || Math.abs(e.clientY-drag.y) > 3) PANNED = true;
+    T.x = drag.tx + (e.clientX-drag.x); T.y = drag.ty + (e.clientY-drag.y); draw(); }
   var wx = (e.clientX - r.left - T.x)/T.s, wy = -(e.clientY - r.top - T.y)/T.s;
   document.getElementById('cvInfo').textContent =
     'X ' + wx.toFixed(2) + '   Y ' + wy.toFixed(2) + '   1:' + Math.round(1/T.s*1000) +
-    (ISODENSE ? '   · μόνο κύριες ισοϋψείς' : '');
+    (ISODENSE ? '   · index contours only' : '');
 });
 cv.addEventListener('wheel', function(e){
   e.preventDefault();
@@ -392,9 +413,16 @@ cv.addEventListener('wheel', function(e){
 
 var MESHDRAWN = 0, PTSDRAWN = 0, ISODENSE = false, VIEW = [0,0,0,0];
 
-/*  Το πλαίσιο κάθε γραμμής υπολογίζεται ΜΙΑ φορά και κρέμεται πάνω της. Χωρίς
- *  αυτό, κάθε καρέ σάρωνε ξανά και τις 603.000 κορυφές μόνο και μόνο για να
- *  αποφασίσει τι να μη ζωγραφίσει. */
+/** Is this an index contour — every fifth level, drawn heavier? */
+function isMainLevel(z){
+  if (!RES || !RES.contours) return false;
+  var q = z / (RES.contours.interval * 5);
+  return Math.abs(q - Math.round(q)) < 1e-6;
+}
+
+/*  The bounding box of every line is computed ONCE and hung on it. Without
+ *  that, each frame swept all 603,000 vertices again only to decide what not
+ *  to draw. */
 function bbox(L){
   var b = L.__b;
   if (b) return b;
@@ -408,26 +436,26 @@ function bbox(L){
   return b;
 }
 
-/** Εκτός οθόνης, ή τόσο μικρή που δεν αξίζει; */
+/** Off screen, or so small that it is not worth it? */
 function offscreen(L){
   var b = bbox(L);
   if (b[2] < VIEW[0] || b[0] > VIEW[2] || b[3] < VIEW[1] || b[1] > VIEW[3]) return true;
-  // Ολόκληρη η γραμμή μέσα σε ενάμισι εικονοστοιχείο: δεν προσθέτει τίποτα.
+  // The whole line within one and a half pixels: it adds nothing.
   return (b[2]-b[0])*T.s < 1.5 && (b[3]-b[1])*T.s < 1.5;
 }
 
-/*  ΑΡΑΙΩΣΗ ΚΟΡΥΦΩΝ. Όταν βλέπεις ολόκληρο έργο 50 χλμ, οι 603.000 κορυφές των
- *  ισοϋψών πέφτουν όλες μέσα στην οθόνη — και δεκάδες από αυτές στο ίδιο
- *  εικονοστοιχείο. Ζωγραφίζονταν όλες, για να βγει μια πράσινη μουτζούρα σε
- *  159 ms το καρέ. Κορυφή που απέχει λιγότερο από ένα εικονοστοιχείο από την
- *  προηγούμενη δεν προσθέτει τίποτα ορατό.
+/*  VERTEX THINNING. When a whole 50 km project is in view, all 603,000
+ *  contour vertices fall inside the screen — and dozens of them on the same
+ *  pixel. They were all drawn, to produce a green smear in 159 ms per frame.
+ *  A vertex less than one pixel away from the previous one adds nothing
+ *  visible.
  *
- *  Η τελευταία κορυφή μπαίνει ΠΑΝΤΑ: αλλιώς η γραμμή θα κοβόταν πριν το τέλος
- *  της, και σε κλειστές ισοϋψείς δεν θα έκλεινε. */
-/*  ΟΜΑΔΟΠΟΙΗΣΗ. Κάθε stroke() είναι χωριστή υποβολή στον rasteriser. Με 612
- *  γραμμές ανά καρέ, το κόστος δεν είναι πια οι κορυφές αλλά οι υποβολές. Το
- *  addPoly χτίζει μόνο τη διαδρομή· ο καλών κάνει ΕΝΑ stroke για όλες όσες
- *  έχουν το ίδιο χρώμα και πάχος. */
+ *  The last vertex is ALWAYS kept: otherwise the line would stop short of its
+ *  end, and a closed contour would not close. */
+/*  BATCHING. Every stroke() is a separate submission to the rasteriser. With
+ *  612 lines per frame the cost is no longer the vertices but the submissions.
+ *  addPoly only builds the path; the caller makes ONE stroke for all the lines
+ *  that share a colour and a width. */
 function addPoly(L, close){
   var n = L.length;
   if (n > 1 && offscreen(L)) return;
@@ -441,7 +469,7 @@ function addPoly(L, close){
   if (close) ctx.closePath();
 }
 
-/** Μία μεμονωμένη γραμμή, όταν δεν αξίζει ομαδοποίηση. */
+/** A single line on its own, when batching is not worth it. */
 function poly(L, close){ ctx.beginPath(); addPoly(L, close); ctx.stroke(); }
 
 function draw(){
@@ -452,7 +480,7 @@ function draw(){
   VIEW = [(0 - T.x)/T.s - pad, -(r.height - T.y)/T.s - pad,
           (r.width - T.x)/T.s + pad, -(0 - T.y)/T.s + pad];
 
-  // 1. Φόντο: ό,τι δεν έχει ρόλο. Σβηστό, μόνο για προσανατολισμό.
+  // 1. Background: whatever has no role. Dim, only for orientation.
   ctx.lineWidth = 1; ctx.strokeStyle = '#33456a';
   ctx.beginPath();
   Object.keys(GEOM).forEach(function(n){
@@ -481,21 +509,21 @@ function draw(){
     });
   }
 
-  /*  2. Τρίγωνα του μοντέλου.
+  /*  2. Triangles of the model.
    *
-   *  Οι κορυφές έρχονται ΜΙΑ φορά και τα τρίγωνα ως δείκτες — αλλιώς το JSON
-   *  ενός σχεδίου 100.000 σημείων ήταν 36 MB αντί για 8.
+   *  The vertices arrive ONCE and the triangles as indices — otherwise the
+   *  JSON of a 100,000-point drawing was 36 MB instead of 8.
    *
-   *  Ζωγραφίζονται μόνο όσα φαίνονται ΚΑΙ είναι αρκετά μεγάλα. Σε ένα έργο
-   *  50 χλμ, όταν κοιτάς όλο τον άξονα, κάθε τρίγωνο είναι μικρότερο από
-   *  εικονοστοιχείο: το μόνο που πετυχαίνει η σχεδίασή τους είναι γκρι θολούρα
-   *  και κολλημένο ποντίκι. */
+   *  Only those that are visible AND large enough are drawn. In a 50 km
+   *  project, when the whole alignment is in view, every triangle is smaller
+   *  than a pixel: all their drawing achieves is a grey blur and a stuck
+   *  mouse. */
   if (RES && RES.mesh && SHOW.mesh){
     var V = RES.mesh.vertices, TR = RES.mesh.triangles, drawn = 0;
-    /*  Τα πλαίσια των τριγώνων υπολογίζονται ΜΙΑ φορά, σε συντεταγμένες
-     *  εδάφους. Παλιότερα σε κάθε καρέ μετασχηματίζονταν και οι 64.291
-     *  κορυφές σε οθονικές — 385.000 πράξεις — μόνο και μόνο για να
-     *  αποφασιστεί ότι οι περισσότερες δεν ζωγραφίζονται. */
+    /*  The bounding boxes of the triangles are computed ONCE, in ground
+     *  coordinates. Previously every frame transformed all 64,291 vertices
+     *  into screen coordinates — 385,000 operations — only to decide that most
+     *  of them are not drawn. */
     if (RES.__bb !== TR){
       var bb = new Float64Array(TR.length * 4);
       for (var q = 0; q < TR.length; q++){
@@ -511,8 +539,8 @@ function draw(){
     for (var i = 0; i < TR.length; i++){
       var j = i*4;
       if (BB[j+2] < VIEW[0] || BB[j] > VIEW[2] ||
-          BB[j+3] < VIEW[1] || BB[j+1] > VIEW[3]) continue;      // εκτός οθόνης
-      if (BB[j+2]-BB[j] < minpx && BB[j+3]-BB[j+1] < minpx) continue;  // κάτω από κουκκίδα
+          BB[j+3] < VIEW[1] || BB[j+1] > VIEW[3]) continue;      // off screen
+      if (BB[j+2]-BB[j] < minpx && BB[j+3]-BB[j+1] < minpx) continue;  // below a dot
       var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
       ctx.moveTo(SX(a[0]),SY(a[1])); ctx.lineTo(SX(b[0]),SY(b[1]));
       ctx.lineTo(SX(c[0]),SY(c[1])); ctx.closePath();
@@ -522,50 +550,55 @@ function draw(){
     MESHDRAWN = drawn;
   }
 
-  // 3. Ισοϋψείς. Κάθε πέμπτη πιο έντονη, όπως στο σχέδιο.
+  // 3. Contours. Every fifth one heavier, as on a drawing.
   if (RES && RES.contours && SHOW.iso){
-    var iv = RES.contours.interval;
-    var isMain = function(z){ var q = z/(iv*5); return Math.abs(q - Math.round(q)) < 1e-6; };
-
-    /*  ΟΤΑΝ ΟΙ ΙΣΟΫΨΕΙΣ ΠΕΣΟΥΝ Η ΜΙΑ ΠΑΝΩ ΣΤΗΝ ΑΛΛΗ, ΜΕΝΟΥΝ ΜΟΝΟ ΟΙ ΚΥΡΙΕΣ.
-     *  Σε ολόκληρο έργο 50 χλμ οι 616 στάθμες απέχουν κλάσματα του
-     *  εικονοστοιχείου: το αποτέλεσμα είναι πράσινη μουτζούρα που κοστίζει
-     *  πραγματικό χρόνο. Το ίδιο κάνει κάθε CAD και κάθε χάρτης. Μόλις
-     *  πλησιάσεις, επανέρχονται όλες. */
-    /*  Η μέση απόσταση ανάμεσα σε ισοϋψείς είναι εμβαδόν / συνολικό μήκος —
-     *  δουλεύει και σε μακρόστενο διάδρομο δρόμου, όπου το «ρίζα του εμβαδού
-     *  διά το πλήθος» έδινε 3,6 m αντί για 81 m και έσβηνε τις ισοϋψείς
-     *  ακόμη και σε μεγέθυνση. */
+    /*  ONCE THE CONTOURS FALL ON TOP OF EACH OTHER, ONLY THE INDEX ONES STAY.
+     *  Across a whole 50 km project the 616 levels are fractions of a pixel
+     *  apart: the result is a green smear that costs real time. Every CAD and
+     *  every map does the same. As soon as you zoom in, they all come back. */
+    /*  The mean spacing between contours is area / total length — it works
+     *  even in the long narrow corridor of a road, where "the square root of
+     *  the area over the count" gave 3.6 m instead of 81 m and erased the
+     *  contours even when zoomed in. */
     var gap = RES.report.area / Math.max(RES.contours.length, 1);
     var dense = gap * T.s < 4;
     ISODENSE = dense;
 
     ctx.strokeStyle = '#4fd18b'; ctx.lineWidth = 1; ctx.beginPath();
     if (!dense) RES.contours.levels.forEach(function(lv){
-      if (isMain(lv.z)) return;
+      if (isMainLevel(lv.z)) return;
       lv.lines.forEach(function(L){ addPoly(L); });
     });
     ctx.stroke();
     ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.8; ctx.beginPath();
     RES.contours.levels.forEach(function(lv){
-      if (!isMain(lv.z)) return;
+      if (!isMainLevel(lv.z)) return;
       lv.lines.forEach(function(L){ addPoly(L); });
     });
     ctx.stroke();
   }
 
-  // 4. Ό,τι διάλεξε ο χρήστης, από πάνω.
+  // 4. Whatever the user picked, on top.
   ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
   sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
   ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2; ctx.beginPath();
   sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
-  /*  Τα σημεία, με ένα ανά εικονοστοιχείο. Σε έργο 50 χλμ, 32.000 σημεία
-   *  πέφτουν σε λίγες χιλιάδες εικονοστοιχεία — τα υπόλοιπα ζωγραφίζονταν το
-   *  ένα πάνω στο άλλο. */
+  /*  The points, one per pixel. In a 50 km project 32,000 points fall on a few
+   *  thousand pixels — the rest were drawn one on top of the other. */
   ctx.fillStyle = '#ff6b6e';
   var ps = T.s > 8 ? 3 : 2, seen = {}, np = 0;
+  /*  THE ELEVATION OF EVERY POINT, not only of the one that was clicked.
+   *
+   *  A second grid, as coarse as the text is wide: two labels in the same cell
+   *  would be written one over the other and neither would be readable. So the
+   *  labels thin themselves out on their own as you zoom out, and they all come
+   *  back as you zoom in — no threshold to guess.
+   *
+   *  The ceiling is there for the whole 50 km project in view: past a certain
+   *  point the screen is full and every extra label is only cost. */
+  var LBL = SHOW.z ? [] : null, lseen = {};
   sel('pts').forEach(function(n){
     if (!VIS[n]) return;
     GEOM[n].points.forEach(function(p){
@@ -577,21 +610,31 @@ function draw(){
       if (isDeleted(p[0], p[1])) return;
       ctx.fillRect(x-ps/2, y-ps/2, ps, ps);
       np++;
+      if (LBL && p[2] != null && LBL.length < 700){
+        var lk = ((x/58)|0) + ',' + ((y/14)|0);
+        if (!lseen[lk]){ lseen[lk] = 1; LBL.push([x, y, p[2]]); }
+      }
     });
   });
   PTSDRAWN = np;
+  if (LBL && LBL.length){
+    ctx.font = '11px Consolas,monospace'; ctx.fillStyle = '#ffb9bb';
+    for (var li = 0; li < LBL.length; li++)
+      ctx.fillText(fmt(LBL[li][2], 2), LBL[li][0] + 5, LBL[li][1] - 4);
+  }
 
-  // 5. Οι διορθώσεις, ώστε να φαίνεται τι πείραξες.
+  // 5. The edits, so that what you touched can be seen.
   ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
   EDITS.del.forEach(function(p){
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
     ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
   });
-  ctx.fillStyle = '#7CFFB2';
+  ctx.fillStyle = '#7CFFB2'; ctx.font = '11px Consolas,monospace';
   EDITS.add.forEach(function(p){
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
+    if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
   });
   ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
   EDITS.brk.forEach(function(L){ addPoly(L); });
@@ -606,13 +649,28 @@ function draw(){
     ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.284); ctx.fill();
   });
 
-  // Η γραμμή που σχεδιάζεται τώρα, και το σημείο που σέρνεται.
+  // The line being drawn right now, and the point being dragged.
   if (DRAWING && DRAWING.length){
     ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
     poly(DRAWING); ctx.setLineDash([]);
     ctx.fillStyle = '#00d5ff';
     DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
   }
+  // 6. What the last click identified — over everything, so it is found again.
+  if (PICK){
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
+    if (PICK.kind === 'pt'){
+      var hx = SX(PICK.x), hy = SY(PICK.y);
+      ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 6.284); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(hx-12,hy); ctx.lineTo(hx-4,hy); ctx.moveTo(hx+4,hy); ctx.lineTo(hx+12,hy);
+      ctx.moveTo(hx,hy-12); ctx.lineTo(hx,hy-4); ctx.moveTo(hx,hy+4); ctx.lineTo(hx,hy+12);
+      ctx.stroke();
+    } else if (PICK.line){
+      ctx.lineWidth = 3; poly(PICK.line);
+    }
+  }
+
   if (MOVING){
     ctx.strokeStyle = '#7CFFB2'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
     ctx.beginPath(); ctx.moveTo(SX(MOVING.from[0]),SY(MOVING.from[1]));
@@ -623,22 +681,22 @@ function draw(){
 }
 
 
-  /* ====================== ΕΠΕΞΕΡΓΑΣΙΑ ΤΗΣ ΕΠΙΦΑΝΕΙΑΣ ====================
+  /* ========================= EDITING THE SURFACE ========================
    *
-   *  Οι ίδιες πράξεις που κάνει το Civil 3D πάνω σε surface: σβήσιμο,
-   *  μετακίνηση και προσθήκη σημείου, σχεδίαση γραμμής αλλαγής κλίσης,
-   *  αναστροφή ακμής (Swap Edge) και σβήσιμο τριγώνου (τρύπα).
+   *  The same operations Civil 3D performs on a surface: deleting, moving and
+   *  adding a point, drawing a breakline, swapping an edge (Swap Edge) and
+   *  deleting a triangle (a hole).
    *
-   *  ΤΙΠΟΤΑ ΔΕΝ ΑΛΛΑΖΕΙ ΣΤΟ ΣΧΕΔΙΟ ΣΟΥ. Οι διορθώσεις κρατιούνται χωριστά,
-   *  ως λίστα πράξεων με ΣΥΝΤΕΤΑΓΜΕΝΕΣ — όχι με δείκτες, που θα άλλαζαν σε
-   *  κάθε νέο τριγωνισμό. Το αρχικό DXF μένει ανέπαφο και κάθε πράξη
-   *  αναιρείται.
+   *  NOTHING CHANGES IN YOUR DRAWING. The edits are kept separately, as a list
+   *  of operations with COORDINATES — not with indices, which would change on
+   *  every new triangulation. The original DXF stays untouched and every
+   *  operation can be undone.
    */
   var MODE = 'pan';
   var EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
   var UNDO = [], REDO = [];
-  var DRAWING = null;        // γραμμή που σχεδιάζεται τώρα
-  var MOVING = null;         // σημείο που σέρνεται τώρα
+  var DRAWING = null;        // the line being drawn right now
+  var MOVING = null;         // the point being dragged right now
   var HOVER = null;
 
   function setMode(m){
@@ -650,13 +708,13 @@ function draw(){
     });
     cv.style.cursor = (MODE === 'pan') ? 'grab' : 'crosshair';
     document.getElementById('edHint').textContent = {
-      pan:   'Σύρε για μετακίνηση, ρόδα για μεγέθυνση.',
-      del:   'Πάτα σημείο για να ΒΓΕΙ από τον υπολογισμό.',
-      move:  'Σύρε σημείο σε νέα θέση. Το υψόμετρο μένει ίδιο.',
-      add:   'Πάτα για νέο σημείο — θα σου ζητηθεί υψόμετρο.',
-      brk:   'Πάτα κορυφές· διπλό πάτημα ή Enter τελειώνει τη γραμμή.',
-      swap:  'Πάτα ακμή τριγώνου για να αναστραφεί η διαγώνιος.',
-      hole:  'Πάτα τρίγωνο για να σβηστεί — τρύπα στην επιφάνεια.'
+      pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
+      del:   'Click a point to take it OUT of the calculation.',
+      move:  'Drag a point to a new position. Its elevation stays the same.',
+      add:   'Click for a new point — you will be asked for its elevation.',
+      brk:   'Click the vertices; a double click or Enter ends the line.',
+      swap:  'Click a triangle edge to swap its diagonal.',
+      hole:  'Click a triangle to delete it — a hole in the surface.'
     }[MODE] || '';
     draw();
   }
@@ -676,16 +734,19 @@ function draw(){
     EDITS[u.kind].push(u.item); UNDO.push(u); afterEdit();
   };
   window.clearEdits = function(){
-    if (UNDO.length && !confirm('Να αναιρεθούν και οι ' + UNDO.length + ' διορθώσεις;')) return;
+    if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
     UNDO = []; REDO = []; afterEdit();
   };
 
-  /*  Μετά από κάθε πράξη ξαναϋπολογίζει — αλλά μόνο αν είναι γρήγορο. Σε έργο
-   *  50 χλμ ο υπολογισμός θέλει δευτερόλεπτα, και αυτόματο τρέξιμο σε κάθε
-   *  κλικ θα ήταν βασανιστήριο. Εκεί περιμένει το κουμπί. */
+  /*  After every operation it recalculates — but only if that is fast. In a
+   *  50 km project the calculation takes seconds, and running it automatically
+   *  on every click would be torture. There it waits for the button. */
   var AUTO_LIMIT = 20000;
   function afterEdit(){
+    // Every edit triangulates again: the selected contour is no longer the
+    // same line, and the selected point may be the one just deleted.
+    clearPick();
     edBadge();
     draw();
     if (!RES) return;
@@ -704,16 +765,16 @@ function draw(){
     var d = EDITS;
     document.getElementById('edList').innerHTML = !n ? '' :
       '<div class="hint">' +
-      [[d.del.length,'σβησμένα σημεία'], [d.add.length,'νέα σημεία'],
-       [d.brk.length,'νέες γραμμές'], [d.swap.length,'αναστροφές ακμών'],
-       [d.hole.length,'σβησμένα τρίγωνα']]
+      [[d.del.length,'deleted points'], [d.add.length,'new points'],
+       [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
+       [d.hole.length,'deleted triangles']]
       .filter(function(p){ return p[0]; })
       .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
   }
 
-  // ------------------------------------------------------ εντοπισμός ----
+  // --------------------------------------------------------- picking ----
 
-  /** Το κοντινότερο σημείο στην οθόνη, μέσα σε «px» εικονοστοιχεία. */
+  /** The nearest point on screen, within "px" pixels. */
   function pickPoint(mx, my, px){
     px = px || 10;
     var best = null, bd = px * px;
@@ -731,7 +792,7 @@ function draw(){
     return best;
   }
 
-  /** Η κοντινότερη ακμή τριγώνου — για την αναστροφή. */
+  /** The nearest triangle edge — for the swap. */
   function pickEdge(mx, my, px){
     if (!RES || !RES.mesh) return null;
     px = px || 12;
@@ -753,6 +814,70 @@ function draw(){
     return Math.hypot(px - (ax+t*dx), py - (ay+t*dy));
   }
 
+  /*  ============================ IDENTIFYING ============================
+   *
+   *  Reading, not editing: a click in pan mode says what is underneath. It
+   *  changes nothing and takes no mode of its own — asking for an elevation is
+   *  the commonest thing done on a surface, and it should cost no button.
+   */
+
+  /** The nearest contour, and which one of them it is. */
+  function pickContour(mx, my, px){
+    if (!RES || !RES.contours || !SHOW.iso) return null;
+    px = px || 9;
+    var w = px / T.s;                                  // the reach, on the ground
+    var wx = (mx - T.x)/T.s, wy = -(my - T.y)/T.s;
+    var bz = null, bl = null, bd = px;
+    RES.contours.levels.forEach(function(lv){
+      /*  Only what is drawn can be picked. While the contours fall on top of
+       *  each other only the index ones are on the screen, and returning a
+       *  level that is not there would be a lie. */
+      if (ISODENSE && !isMainLevel(lv.z)) return;
+      lv.lines.forEach(function(L){
+        /*  The bounding box first: without it the click swept all 603,000
+         *  vertices of a 50 km project. */
+        var b = bbox(L);
+        if (wx < b[0]-w || wx > b[2]+w || wy < b[1]-w || wy > b[3]+w) return;
+        for (var i = 1; i < L.length; i++){
+          var d = segDist(mx, my, SX(L[i-1][0]), SY(L[i-1][1]), SX(L[i][0]), SY(L[i][1]));
+          if (d < bd){ bd = d; bz = lv.z; bl = L; }
+        }
+      });
+    });
+    if (!bl) return null;
+    var len = 0;
+    for (var k = 1; k < bl.length; k++)
+      len += Math.hypot(bl[k][0]-bl[k-1][0], bl[k][1]-bl[k-1][1]);
+    return {kind:'iso', z:bz, main:isMainLevel(bz), line:bl, len:len, n:bl.length};
+  }
+
+  function identify(mx, my){
+    /*  A point beats a contour when both are within reach: the point was
+     *  measured, the contour was computed from it. */
+    var p = pickPoint(mx, my, 9);
+    PICK = p ? {kind:'pt', x:p[0], y:p[1], z:p[2]} : pickContour(mx, my, 9);
+    showPick(); draw();
+  }
+
+  function clearPick(){ PICK = null; showPick(); }
+
+  function showPick(){
+    var el = document.getElementById('pick');
+    if (!PICK){ el.hidden = true; el.innerHTML = ''; return; }
+    var h = '<span class="x" onclick="clearPick();draw()" title="Close">✕</span>';
+    if (PICK.kind === 'pt'){
+      h += '<div class="k" style="color:#ff6b6e">Point</div>' +
+           '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
+           '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
+    } else {
+      h += '<div class="k" style="color:' + (PICK.main ? '#ffd166' : '#4fd18b') + '">' +
+             (PICK.main ? 'Index contour' : 'Contour') + '</div>' +
+           '<div class="v">' + fmt(PICK.z,3) + ' m</div>' +
+           '<div class="d">' + fmt(PICK.len,1) + ' m long · ' + PICK.n + ' vertices</div>';
+    }
+    el.innerHTML = h; el.hidden = false;
+  }
+
   function isDeleted(x, y){
     for (var i = 0; i < EDITS.del.length; i++){
       if (Math.abs(EDITS.del[i][0]-x) < 0.005 && Math.abs(EDITS.del[i][1]-y) < 0.005) return true;
@@ -764,24 +889,26 @@ function draw(){
     return [(ev.clientX - r.left - T.x)/T.s, -(ev.clientY - r.top - T.y)/T.s];
   }
 
-  // ------------------------------------------------------- χειρισμός ----
+  // ----------------------------------------------------- interaction ----
 
   cv.addEventListener('click', function(ev){
-    if (MODE === 'pan' || MOVING) return;
+    if (MOVING) return;
     var r = cv.getBoundingClientRect();
     var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    // In pan mode a click that did not move the drawing is a question.
+    if (MODE === 'pan'){ if (!PANNED) identify(mx, my); return; }
     var w = world(ev);
 
     if (MODE === 'del'){
       var p = pickPoint(mx, my);
       if (p) push('del', [p[0], p[1]]);
-      else setStatusEd('Δεν βρέθηκε σημείο εκεί.');
+      else setStatusEd('No point found there.');
     }
     else if (MODE === 'add'){
-      var z = prompt('Υψόμετρο του νέου σημείου (m):', RES ? RES.report.zmin.toFixed(2) : '');
+      var z = prompt('Elevation of the new point (m):', RES ? RES.report.zmin.toFixed(2) : '');
       if (z == null) return;
       var zz = parseFloat(String(z).trim().replace(',', '.'));
-      if (!Number.isFinite(zz)){ setStatusEd('Το υψόμετρο δεν διαβάστηκε.'); return; }
+      if (!Number.isFinite(zz)){ setStatusEd('The elevation could not be read.'); return; }
       push('add', [w[0], w[1], zz]);
     }
     else if (MODE === 'brk'){
@@ -793,10 +920,10 @@ function draw(){
     else if (MODE === 'swap'){
       var e = pickEdge(mx, my);
       if (e) push('swap', e);
-      else setStatusEd(RES ? 'Δεν βρέθηκε ακμή εκεί.' : 'Κάνε πρώτα υπολογισμό.');
+      else setStatusEd(RES ? 'No edge found there.' : 'Run the calculation first.');
     }
     else if (MODE === 'hole'){
-      if (!RES){ setStatusEd('Κάνε πρώτα υπολογισμό.'); return; }
+      if (!RES){ setStatusEd('Run the calculation first.'); return; }
       push('hole', [w[0], w[1]]);
     }
   });
@@ -804,22 +931,22 @@ function draw(){
   cv.addEventListener('dblclick', function(){ if (MODE === 'brk') endLine(); });
   window.addEventListener('keydown', function(ev){
     if (ev.key === 'Enter' && MODE === 'brk') endLine();
-    if (ev.key === 'Escape'){ DRAWING = null; setMode('pan'); }
+    if (ev.key === 'Escape'){ DRAWING = null; clearPick(); setMode('pan'); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
   });
   function endLine(){
     if (DRAWING && DRAWING.length >= 2){
-      // Κορυφή χωρίς υψόμετρο δεν μπαίνει: το υψόμετρο δεν εφευρίσκεται.
+      // A vertex without an elevation is not taken in: elevations are never invented.
       var missing = DRAWING.filter(function(v){ return v[2] == null; }).length;
-      if (missing) setStatusEd(missing + ' κορυφές δεν έπεσαν πάνω σε σημείο — θα ζητηθεί υψόμετρο από τα σημεία.');
+      if (missing) setStatusEd(missing + ' vertices did not fall on a point — their elevation will be taken from the points.');
       push('brk', DRAWING.map(function(v){ return [v[0], v[1], v[2] == null ? 0 : v[2]]; }));
     }
     DRAWING = null; draw();
   }
   function setStatusEd(t){ document.getElementById('edHint').textContent = t; }
 
-  // Μετακίνηση σημείου: πάτημα, σύρσιμο, άφημα.
+  // Moving a point: press, drag, release.
   cv.addEventListener('mousedown', function(ev){
     if (MODE !== 'move') return;
     var r = cv.getBoundingClientRect();
@@ -834,9 +961,9 @@ function draw(){
     if (!MOVING) return;
     var m = MOVING; MOVING = null;
     if (Math.hypot(m.to[0]-m.from[0], m.to[1]-m.from[1]) < 1e-6) return;
-    // Μετακίνηση = σβήσιμο στην παλιά θέση + προσθήκη στη νέα, με το ίδιο
-    // υψόμετρο. Έτσι αναιρείται με δύο βήματα και δεν χρειάζεται ξεχωριστή
-    // πράξη στον server.
+    // A move = a deletion at the old position + an addition at the new one,
+    // with the same elevation. That way it is undone in two steps and needs no
+    // separate operation on the server.
     EDITS.del.push(m.from);
     EDITS.add.push([m.to[0], m.to[1], m.z]);
     UNDO.push({kind: 'del', item: m.from});
@@ -845,16 +972,16 @@ function draw(){
     afterEdit();
   });
 
-['mesh','iso','txt'].forEach(function(k){
-  var b = document.getElementById({mesh:'bMesh',iso:'bIso',txt:'bTxt'}[k]);
+['mesh','iso','z','txt'].forEach(function(k){
+  var b = document.getElementById({mesh:'bMesh',iso:'bIso',z:'bZ',txt:'bTxt'}[k]);
   var upd = function(){ b.style.opacity = SHOW[k] ? 1 : .45; };
   b.addEventListener('click', function(){ setTimeout(upd, 0); }); upd();
 });
 resize();
 
-ZSServer.banner('<b>⚠ Το εργαλείο χρειάζεται τον server.</b><br>' +
-  'Οι υπολογισμοί γίνονται σε Python — τριγωνισμός με περιορισμούς, ισοϋψείς, ' +
-  'ψηφιακό μοντέλο — ώστε να μη φεύγει ο κώδικας στον browser. ' +
-  'Ο server δεν είναι ακόμη διαθέσιμος σε αυτή τη διεύθυνση· το εργαλείο θα ' +
-  'ενεργοποιηθεί μόνο του μόλις ανέβει.');
+ZSServer.banner('<b>⚠ This tool needs the server.</b><br>' +
+  'The calculations run in Python — constrained triangulation, contours, ' +
+  'digital terrain model — so that the code never reaches the browser. ' +
+  'The server is not available at this address yet; the tool will switch ' +
+  'itself on as soon as it is up.');
 </script>
