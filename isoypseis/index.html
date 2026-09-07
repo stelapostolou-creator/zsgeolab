@@ -349,7 +349,20 @@ cv.addEventListener('wheel', function(e){
   zoom(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX-r.left, e.clientY-r.top);
 }, {passive:false});
 
+var MESHDRAWN = 0, VIEW = [0,0,0,0];
+
+/** Το πλαίσιο μιας γραμμής· χρησιμεύει για να μη ζωγραφίζεται ό,τι δεν φαίνεται. */
+function offscreen(L){
+  var x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for (var i=0;i<L.length;i++){
+    var x=L[i][0], y=L[i][1];
+    if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+  }
+  return x1 < VIEW[0] || x0 > VIEW[2] || y1 < VIEW[1] || y0 > VIEW[3];
+}
+
 function poly(L, close){
+  if (L.length > 1 && offscreen(L)) return;
   ctx.beginPath();
   for (var i=0;i<L.length;i++){ var x=SX(L[i][0]), y=SY(L[i][1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
   if (close) ctx.closePath();
@@ -360,6 +373,9 @@ function draw(){
   var r = cv.getBoundingClientRect();
   ctx.clearRect(0,0,r.width,r.height);
   ctx.fillStyle = '#080d18'; ctx.fillRect(0,0,r.width,r.height);
+  var pad = 20 / T.s;
+  VIEW = [(0 - T.x)/T.s - pad, -(r.height - T.y)/T.s - pad,
+          (r.width - T.x)/T.s + pad, -(0 - T.y)/T.s + pad];
 
   // 1. Φόντο: ό,τι δεν έχει ρόλο. Σβηστό, μόνο για προσανατολισμό.
   ctx.lineWidth = 1; ctx.strokeStyle = '#33456a';
@@ -377,15 +393,31 @@ function draw(){
     });
   }
 
-  // 2. Τρίγωνα του μοντέλου.
+  /*  2. Τρίγωνα του μοντέλου.
+   *
+   *  Οι κορυφές έρχονται ΜΙΑ φορά και τα τρίγωνα ως δείκτες — αλλιώς το JSON
+   *  ενός σχεδίου 100.000 σημείων ήταν 36 MB αντί για 8.
+   *
+   *  Ζωγραφίζονται μόνο όσα φαίνονται ΚΑΙ είναι αρκετά μεγάλα. Σε ένα έργο
+   *  50 χλμ, όταν κοιτάς όλο τον άξονα, κάθε τρίγωνο είναι μικρότερο από
+   *  εικονοστοιχείο: το μόνο που πετυχαίνει η σχεδίασή τους είναι γκρι θολούρα
+   *  και κολλημένο ποντίκι. */
   if (RES && RES.mesh && SHOW.mesh){
+    var V = RES.mesh.vertices, TR = RES.mesh.triangles, drawn = 0;
     ctx.strokeStyle = 'rgba(90,150,120,.30)'; ctx.lineWidth = 1;
     ctx.beginPath();
-    RES.mesh.forEach(function(t){
-      ctx.moveTo(SX(t[0][0]),SY(t[0][1])); ctx.lineTo(SX(t[1][0]),SY(t[1][1]));
-      ctx.lineTo(SX(t[2][0]),SY(t[2][1])); ctx.closePath();
-    });
+    for (var i = 0; i < TR.length; i++){
+      var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
+      var ax = SX(a[0]), ay = SY(a[1]), bx = SX(b[0]), by = SY(b[1]), cx = SX(c[0]), cy = SY(c[1]);
+      var x0 = Math.min(ax,bx,cx), x1 = Math.max(ax,bx,cx);
+      var y0 = Math.min(ay,by,cy), y1 = Math.max(ay,by,cy);
+      if (x1 < 0 || x0 > r.width || y1 < 0 || y0 > r.height) continue;   // εκτός οθόνης
+      if (x1 - x0 < 2 && y1 - y0 < 2) continue;                          // πιο μικρό από κουκκίδα
+      ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.lineTo(cx,cy); ctx.closePath();
+      if (++drawn > 60000) break;
+    }
     ctx.stroke();
+    MESHDRAWN = drawn;
   }
 
   // 3. Ισοϋψείς. Κάθε πέμπτη πιο έντονη, όπως στο σχέδιο.
