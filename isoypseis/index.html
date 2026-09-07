@@ -381,7 +381,8 @@ window.addEventListener('mousemove', function(e){
   if (drag){ T.x = drag.tx + (e.clientX-drag.x); T.y = drag.ty + (e.clientY-drag.y); draw(); }
   var wx = (e.clientX - r.left - T.x)/T.s, wy = -(e.clientY - r.top - T.y)/T.s;
   document.getElementById('cvInfo').textContent =
-    'X ' + wx.toFixed(2) + '   Y ' + wy.toFixed(2) + '   1:' + Math.round(1/T.s*1000);
+    'X ' + wx.toFixed(2) + '   Y ' + wy.toFixed(2) + '   1:' + Math.round(1/T.s*1000) +
+    (ISODENSE ? '   · μόνο κύριες ισοϋψείς' : '');
 });
 cv.addEventListener('wheel', function(e){
   e.preventDefault();
@@ -389,25 +390,59 @@ cv.addEventListener('wheel', function(e){
   zoom(e.deltaY < 0 ? 1.15 : 1/1.15, e.clientX-r.left, e.clientY-r.top);
 }, {passive:false});
 
-var MESHDRAWN = 0, VIEW = [0,0,0,0];
+var MESHDRAWN = 0, PTSDRAWN = 0, ISODENSE = false, VIEW = [0,0,0,0];
 
-/** Το πλαίσιο μιας γραμμής· χρησιμεύει για να μη ζωγραφίζεται ό,τι δεν φαίνεται. */
-function offscreen(L){
+/*  Το πλαίσιο κάθε γραμμής υπολογίζεται ΜΙΑ φορά και κρέμεται πάνω της. Χωρίς
+ *  αυτό, κάθε καρέ σάρωνε ξανά και τις 603.000 κορυφές μόνο και μόνο για να
+ *  αποφασίσει τι να μη ζωγραφίσει. */
+function bbox(L){
+  var b = L.__b;
+  if (b) return b;
   var x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   for (var i=0;i<L.length;i++){
     var x=L[i][0], y=L[i][1];
     if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
   }
-  return x1 < VIEW[0] || x0 > VIEW[2] || y1 < VIEW[1] || y0 > VIEW[3];
+  b = [x0,y0,x1,y1];
+  try { Object.defineProperty(L, '__b', {value:b, enumerable:false}); } catch(e){}
+  return b;
 }
 
-function poly(L, close){
-  if (L.length > 1 && offscreen(L)) return;
-  ctx.beginPath();
-  for (var i=0;i<L.length;i++){ var x=SX(L[i][0]), y=SY(L[i][1]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
-  if (close) ctx.closePath();
-  ctx.stroke();
+/** Εκτός οθόνης, ή τόσο μικρή που δεν αξίζει; */
+function offscreen(L){
+  var b = bbox(L);
+  if (b[2] < VIEW[0] || b[0] > VIEW[2] || b[3] < VIEW[1] || b[1] > VIEW[3]) return true;
+  // Ολόκληρη η γραμμή μέσα σε ενάμισι εικονοστοιχείο: δεν προσθέτει τίποτα.
+  return (b[2]-b[0])*T.s < 1.5 && (b[3]-b[1])*T.s < 1.5;
 }
+
+/*  ΑΡΑΙΩΣΗ ΚΟΡΥΦΩΝ. Όταν βλέπεις ολόκληρο έργο 50 χλμ, οι 603.000 κορυφές των
+ *  ισοϋψών πέφτουν όλες μέσα στην οθόνη — και δεκάδες από αυτές στο ίδιο
+ *  εικονοστοιχείο. Ζωγραφίζονταν όλες, για να βγει μια πράσινη μουτζούρα σε
+ *  159 ms το καρέ. Κορυφή που απέχει λιγότερο από ένα εικονοστοιχείο από την
+ *  προηγούμενη δεν προσθέτει τίποτα ορατό.
+ *
+ *  Η τελευταία κορυφή μπαίνει ΠΑΝΤΑ: αλλιώς η γραμμή θα κοβόταν πριν το τέλος
+ *  της, και σε κλειστές ισοϋψείς δεν θα έκλεινε. */
+/*  ΟΜΑΔΟΠΟΙΗΣΗ. Κάθε stroke() είναι χωριστή υποβολή στον rasteriser. Με 612
+ *  γραμμές ανά καρέ, το κόστος δεν είναι πια οι κορυφές αλλά οι υποβολές. Το
+ *  addPoly χτίζει μόνο τη διαδρομή· ο καλών κάνει ΕΝΑ stroke για όλες όσες
+ *  έχουν το ίδιο χρώμα και πάχος. */
+function addPoly(L, close){
+  var n = L.length;
+  if (n > 1 && offscreen(L)) return;
+  var px = 0, py = 0, started = false;
+  for (var i = 0; i < n; i++){
+    var x = SX(L[i][0]), y = SY(L[i][1]);
+    if (!started){ ctx.moveTo(x, y); px = x; py = y; started = true; continue; }
+    if (i < n - 1 && Math.abs(x - px) < 1 && Math.abs(y - py) < 1) continue;
+    ctx.lineTo(x, y); px = x; py = y;
+  }
+  if (close) ctx.closePath();
+}
+
+/** Μία μεμονωμένη γραμμή, όταν δεν αξίζει ομαδοποίηση. */
+function poly(L, close){ ctx.beginPath(); addPoly(L, close); ctx.stroke(); }
 
 function draw(){
   var r = cv.getBoundingClientRect();
@@ -419,11 +454,24 @@ function draw(){
 
   // 1. Φόντο: ό,τι δεν έχει ρόλο. Σβηστό, μόνο για προσανατολισμό.
   ctx.lineWidth = 1; ctx.strokeStyle = '#33456a';
+  ctx.beginPath();
   Object.keys(GEOM).forEach(function(n){
     if (!VIS[n] || ROLE[n]) return;
-    GEOM[n].lines.forEach(function(L){ poly(L); });
-    ctx.fillStyle = '#2c3d5e';
-    GEOM[n].points.forEach(function(p){ ctx.fillRect(SX(p[0])-1, SY(p[1])-1, 2, 2); });
+    GEOM[n].lines.forEach(function(L){ addPoly(L); });
+  });
+  ctx.stroke();
+  ctx.fillStyle = '#2c3d5e';
+  var bseen = {};
+  Object.keys(GEOM).forEach(function(n){
+    if (!VIS[n] || ROLE[n]) return;
+    GEOM[n].points.forEach(function(p){
+      if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
+      var x = SX(p[0]), y = SY(p[1]);
+      var k = (x|0) + ',' + (y|0);
+      if (bseen[k]) return;
+      bseen[k] = 1;
+      ctx.fillRect(x-1, y-1, 2, 2);
+    });
   });
   if (SHOW.txt && T.s > 3){
     ctx.fillStyle = '#5d7099'; ctx.font = '10px Consolas,monospace';
@@ -444,16 +492,30 @@ function draw(){
    *  και κολλημένο ποντίκι. */
   if (RES && RES.mesh && SHOW.mesh){
     var V = RES.mesh.vertices, TR = RES.mesh.triangles, drawn = 0;
+    /*  Τα πλαίσια των τριγώνων υπολογίζονται ΜΙΑ φορά, σε συντεταγμένες
+     *  εδάφους. Παλιότερα σε κάθε καρέ μετασχηματίζονταν και οι 64.291
+     *  κορυφές σε οθονικές — 385.000 πράξεις — μόνο και μόνο για να
+     *  αποφασιστεί ότι οι περισσότερες δεν ζωγραφίζονται. */
+    if (RES.__bb !== TR){
+      var bb = new Float64Array(TR.length * 4);
+      for (var q = 0; q < TR.length; q++){
+        var A = V[TR[q][0]], B = V[TR[q][1]], C = V[TR[q][2]];
+        bb[q*4  ] = Math.min(A[0],B[0],C[0]); bb[q*4+1] = Math.min(A[1],B[1],C[1]);
+        bb[q*4+2] = Math.max(A[0],B[0],C[0]); bb[q*4+3] = Math.max(A[1],B[1],C[1]);
+      }
+      RES.__bbox = bb; RES.__bb = TR;
+    }
+    var BB = RES.__bbox, minpx = 2 / T.s;
     ctx.strokeStyle = 'rgba(90,150,120,.30)'; ctx.lineWidth = 1;
     ctx.beginPath();
     for (var i = 0; i < TR.length; i++){
+      var j = i*4;
+      if (BB[j+2] < VIEW[0] || BB[j] > VIEW[2] ||
+          BB[j+3] < VIEW[1] || BB[j+1] > VIEW[3]) continue;      // εκτός οθόνης
+      if (BB[j+2]-BB[j] < minpx && BB[j+3]-BB[j+1] < minpx) continue;  // κάτω από κουκκίδα
       var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
-      var ax = SX(a[0]), ay = SY(a[1]), bx = SX(b[0]), by = SY(b[1]), cx = SX(c[0]), cy = SY(c[1]);
-      var x0 = Math.min(ax,bx,cx), x1 = Math.max(ax,bx,cx);
-      var y0 = Math.min(ay,by,cy), y1 = Math.max(ay,by,cy);
-      if (x1 < 0 || x0 > r.width || y1 < 0 || y0 > r.height) continue;   // εκτός οθόνης
-      if (x1 - x0 < 2 && y1 - y0 < 2) continue;                          // πιο μικρό από κουκκίδα
-      ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.lineTo(cx,cy); ctx.closePath();
+      ctx.moveTo(SX(a[0]),SY(a[1])); ctx.lineTo(SX(b[0]),SY(b[1]));
+      ctx.lineTo(SX(c[0]),SY(c[1])); ctx.closePath();
       if (++drawn > 60000) break;
     }
     ctx.stroke();
@@ -463,28 +525,61 @@ function draw(){
   // 3. Ισοϋψείς. Κάθε πέμπτη πιο έντονη, όπως στο σχέδιο.
   if (RES && RES.contours && SHOW.iso){
     var iv = RES.contours.interval;
-    RES.contours.levels.forEach(function(lv){
-      var q = lv.z/(iv*5), main = Math.abs(q - Math.round(q)) < 1e-6;
-      ctx.strokeStyle = main ? '#ffd166' : '#4fd18b';
-      ctx.lineWidth = main ? 1.8 : 1;
-      lv.lines.forEach(function(L){ poly(L); });
+    var isMain = function(z){ var q = z/(iv*5); return Math.abs(q - Math.round(q)) < 1e-6; };
+
+    /*  ΟΤΑΝ ΟΙ ΙΣΟΫΨΕΙΣ ΠΕΣΟΥΝ Η ΜΙΑ ΠΑΝΩ ΣΤΗΝ ΑΛΛΗ, ΜΕΝΟΥΝ ΜΟΝΟ ΟΙ ΚΥΡΙΕΣ.
+     *  Σε ολόκληρο έργο 50 χλμ οι 616 στάθμες απέχουν κλάσματα του
+     *  εικονοστοιχείου: το αποτέλεσμα είναι πράσινη μουτζούρα που κοστίζει
+     *  πραγματικό χρόνο. Το ίδιο κάνει κάθε CAD και κάθε χάρτης. Μόλις
+     *  πλησιάσεις, επανέρχονται όλες. */
+    /*  Η μέση απόσταση ανάμεσα σε ισοϋψείς είναι εμβαδόν / συνολικό μήκος —
+     *  δουλεύει και σε μακρόστενο διάδρομο δρόμου, όπου το «ρίζα του εμβαδού
+     *  διά το πλήθος» έδινε 3,6 m αντί για 81 m και έσβηνε τις ισοϋψείς
+     *  ακόμη και σε μεγέθυνση. */
+    var gap = RES.report.area / Math.max(RES.contours.length, 1);
+    var dense = gap * T.s < 4;
+    ISODENSE = dense;
+
+    ctx.strokeStyle = '#4fd18b'; ctx.lineWidth = 1; ctx.beginPath();
+    if (!dense) RES.contours.levels.forEach(function(lv){
+      if (isMain(lv.z)) return;
+      lv.lines.forEach(function(L){ addPoly(L); });
     });
+    ctx.stroke();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 1.8; ctx.beginPath();
+    RES.contours.levels.forEach(function(lv){
+      if (!isMain(lv.z)) return;
+      lv.lines.forEach(function(L){ addPoly(L); });
+    });
+    ctx.stroke();
   }
 
   // 4. Ό,τι διάλεξε ο χρήστης, από πάνω.
-  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
-  sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ poly(L); }); });
-  ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2;
-  sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ poly(L); }); });
+  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
+  sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
+  ctx.stroke();
+  ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2; ctx.beginPath();
+  sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
+  ctx.stroke();
+  /*  Τα σημεία, με ένα ανά εικονοστοιχείο. Σε έργο 50 χλμ, 32.000 σημεία
+   *  πέφτουν σε λίγες χιλιάδες εικονοστοιχεία — τα υπόλοιπα ζωγραφίζονταν το
+   *  ένα πάνω στο άλλο. */
   ctx.fillStyle = '#ff6b6e';
-  var ps = T.s > 8 ? 3 : 2;
+  var ps = T.s > 8 ? 3 : 2, seen = {}, np = 0;
   sel('pts').forEach(function(n){
     if (!VIS[n]) return;
     GEOM[n].points.forEach(function(p){
+      if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
+      var x = SX(p[0]), y = SY(p[1]);
+      var k = (x|0) + ',' + (y|0);
+      if (seen[k]) return;
+      seen[k] = 1;
       if (isDeleted(p[0], p[1])) return;
-      ctx.fillRect(SX(p[0])-ps/2, SY(p[1])-ps/2, ps, ps);
+      ctx.fillRect(x-ps/2, y-ps/2, ps, ps);
+      np++;
     });
   });
+  PTSDRAWN = np;
 
   // 5. Οι διορθώσεις, ώστε να φαίνεται τι πείραξες.
   ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
@@ -498,8 +593,9 @@ function draw(){
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
   });
-  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
-  EDITS.brk.forEach(function(L){ poly(L); });
+  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.beginPath();
+  EDITS.brk.forEach(function(L){ addPoly(L); });
+  ctx.stroke();
   ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
   EDITS.swap.forEach(function(e){
     ctx.beginPath(); ctx.moveTo(SX(e[0]),SY(e[1])); ctx.lineTo(SX(e[2]),SY(e[3])); ctx.stroke();
