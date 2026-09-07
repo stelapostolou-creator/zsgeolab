@@ -45,6 +45,8 @@
   th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;}
   td select{background:var(--bg2);border:1px solid var(--line);border-radius:6px;color:var(--ink);
     font-size:11.5px;padding:3px 5px;}
+  td input[type=color]{width:26px;height:19px;padding:0;border:1px solid var(--line);
+    border-radius:4px;background:var(--bg2);cursor:pointer;vertical-align:middle;}
   .mono{font-family:ui-monospace,Consolas,monospace;}
   .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
@@ -102,7 +104,7 @@
       <h2><span class="c"></span>2. Layer roles</h2>
       <div class="hint">Say what each layer is. Nothing is guessed from the names. Whatever stays "background" is simply drawn.</div>
       <div class="tblwrap"><table>
-        <thead><tr><th>👁</th><th>Layer</th><th>Role</th><th>Pts</th><th>Lines</th><th>Z</th></tr></thead>
+        <thead><tr><th>👁</th><th>Layer</th><th>Role</th><th>Col</th><th>Pts</th><th>Lines</th><th>Z</th></tr></thead>
         <tbody id="lyTbl"></tbody>
       </table></div>
       <div id="lyNote"></div>
@@ -250,8 +252,29 @@ function buildColorUI(){
 }
 window.resetColors = function(){
   for (var k in COLOR_DEF) COLORS[k] = COLOR_DEF[k];
-  saveColors(); buildColorUI(); draw();
+  saveColors(); buildColorUI(); renderLayers(); draw();
 };
+
+/*  A colour per layer, for the ones with no role — so two background layers
+ *  can be told apart. Layers that carry a role follow the role's colour
+ *  instead. Kept by NAME on this computer; a stale name simply goes unused. */
+var LYCOLOR = (function(){
+  try {
+    var s = JSON.parse(localStorage.getItem('isoypseis.lycolors') || '{}'), o = {};
+    for (var k in s) if (/^#[0-9a-f]{6}$/i.test(s[k])) o[k] = s[k];
+    return o;
+  } catch (e) { return {}; }
+})();
+function saveLyColors(){
+  try { localStorage.setItem('isoypseis.lycolors', JSON.stringify(LYCOLOR)); } catch (e) {}
+}
+window.setLyColor = function(name, val){ LYCOLOR[name] = val; saveLyColors(); draw(); };
+
+/*  A layer with nothing we can use — only splines, hatches, dimensions, or
+ *  truly empty — is hidden from the table. Nothing to do with it. */
+function lyUsable(m){ return m.points > 0 || m.lines > 0 || m.inserts > 0 || m.texts > 0; }
+var SHOWALL_LY = false;
+window.toggleAllLayers = function(){ SHOWALL_LY = !SHOWALL_LY; renderLayers(); };
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function numIn(id){ var e=document.getElementById(id); return parseFloat(String(e.value||'').trim().replace(',','.')); }
@@ -293,9 +316,11 @@ document.getElementById('file').addEventListener('change', function(ev){
  *  the user states them. */
 
 function renderLayers(){
-  var h = '';
+  var h = '', unused = 0;
   Object.keys(GEOM).forEach(function(n){
     var m = META[n];
+    if (!lyUsable(m)) { unused++; if (!SHOWALL_LY) return; }
+    var noRole = !ROLE[n];
     h += '<tr>' +
       '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;draw()"></td>' +
       '<td title="'+esc(n)+'">'+esc(n.length>18?n.slice(0,17)+'…':n)+'</td>' +
@@ -304,6 +329,9 @@ function renderLayers(){
           var lbl = {'':'background','pts':'📍 points','brk':'📐 breaklines','bnd':'▣ boundary'}[v];
           return '<option value="'+v+'"'+(ROLE[n]===v?' selected':'')+'>'+lbl+'</option>';
         }).join('') + '</select></td>' +
+      '<td>' + (noRole
+        ? '<input type="color" value="'+(LYCOLOR[n]||COLORS.base)+'" title="Layer colour" onchange="setLyColor(\''+esc(n)+'\',this.value)">'
+        : '') + '</td>' +
       '<td class="mono">'+m.points+(m.inserts?('+'+m.inserts+'b'):'')+'</td>' +
       '<td class="mono">'+m.lines+'</td>' +
       '<td class="mono">'+(m.zmin==null?'—':(m.flat?'flat':fmt(m.zmin,1)+'–'+fmt(m.zmax,1)))+'</td>' +
@@ -312,6 +340,10 @@ function renderLayers(){
   document.getElementById('lyTbl').innerHTML = h;
 
   var note = '', p = sel('pts'), b = sel('bnd');
+  if (unused) note += '<div class="hint">' + unused + ' layer' + (unused>1?'s':'') +
+    ' with nothing usable — ' +
+    (SHOWALL_LY ? 'shown. <a href="#" onclick="toggleAllLayers();return false">hide them</a>'
+                : 'hidden. <a href="#" onclick="toggleAllLayers();return false">show them</a>') + '</div>';
   var np = p.reduce(function(s,n){ return s + META[n].points; }, 0);
   if (!p.length) note += '<div class="warnbox">Pick the layer that holds the <b>points</b>.</div>';
   else if (p.some(function(n){ return META[n].flat; }))
@@ -550,18 +582,18 @@ function draw(){
   VIEW = [(0 - T.x)/T.s - pad, -(r.height - T.y)/T.s - pad,
           (r.width - T.x)/T.s + pad, -(0 - T.y)/T.s + pad];
 
-  // 1. Background: whatever has no role. Dim, only for orientation.
-  ctx.lineWidth = 1; ctx.strokeStyle = COLORS.base;
-  ctx.beginPath();
-  Object.keys(GEOM).forEach(function(n){
-    if (!VIS[n] || ROLE[n]) return;
-    GEOM[n].lines.forEach(function(L){ addPoly(L); });
-  });
-  ctx.stroke();
-  ctx.fillStyle = COLORS.base;
+  /*  1. Background: layers with no role. Dim, only for orientation. Each may
+   *     carry its own colour (Layer roles table) — one stroke per layer so
+   *     they can differ; otherwise the shared "Base drawing" colour. */
+  ctx.lineWidth = 1;
   var bseen = {};
   Object.keys(GEOM).forEach(function(n){
     if (!VIS[n] || ROLE[n]) return;
+    var col = LYCOLOR[n] || COLORS.base;
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+    ctx.beginPath();
+    GEOM[n].lines.forEach(function(L){ addPoly(L); });
+    ctx.stroke();
     GEOM[n].points.forEach(function(p){
       if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
       var x = SX(p[0]), y = SY(p[1]);
@@ -572,9 +604,10 @@ function draw(){
     });
   });
   if (SHOW.txt && T.s > 3){
-    ctx.fillStyle = COLORS.base; ctx.font = '10px Consolas,monospace';
+    ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
       if (!VIS[n]) return;
+      ctx.fillStyle = LYCOLOR[n] || COLORS.base;
       GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
     });
   }
