@@ -101,6 +101,21 @@
       <div id="out"></div>
     </div>
 
+    <div class="card" id="cEdit" hidden>
+      <h2><span class="c"></span>Διορθώσεις <span id="edN" class="mono" style="margin-left:auto;color:var(--mut)">0</span></h2>
+      <div class="hint">Το αρχείο σου <b>δεν αλλάζει</b>. Οι διορθώσεις κρατιούνται χωριστά και αναιρούνται όλες.</div>
+      <div id="edList"></div>
+      <div class="btns" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:10px">
+        <button class="btn ghost" id="edUndo" onclick="undoEdit()">↶ Αναίρεση</button>
+        <button class="btn ghost" id="edRedo" onclick="redoEdit()">↷ Επανάληψη</button>
+        <button class="btn ghost" onclick="clearEdits()" title="Όλες πίσω">🗑</button>
+      </div>
+      <div id="edStale" hidden>
+        <div class="warnbox">Το αποτέλεσμα δεν είναι ενημερωμένο — μεγάλο σχέδιο, ο υπολογισμός δεν τρέχει μόνος του.</div>
+        <button class="btn" style="width:100%;margin-top:8px" onclick="build()">🔄 Ξαναϋπολογισμός</button>
+      </div>
+    </div>
+
     <div class="card" id="cOut" hidden>
       <h2><span class="c"></span>4. Εξαγωγή</h2>
       <div class="fld"><label><input type="checkbox" id="dBrk"> Να μπουν και οι γραμμές αλλαγής κλίσης</label></div>
@@ -120,6 +135,16 @@
       <button id="bIso" onclick="tog('iso')">Ισοϋψείς</button>
       <button id="bTxt" onclick="tog('txt')">Κείμενα</button>
     </div>
+    <div class="cv-bar" style="top:46px">
+      <button class="ed" data-m="pan"  onclick="setMode('pan')"  title="Μετακίνηση / μεγέθυνση">👆</button>
+      <button class="ed" data-m="del"  onclick="setMode('del')"  title="Σβήσιμο σημείου">✖ σημείο</button>
+      <button class="ed" data-m="move" onclick="setMode('move')" title="Μετακίνηση σημείου">✥ μετακίνηση</button>
+      <button class="ed" data-m="add"  onclick="setMode('add')"  title="Νέο σημείο">➕ σημείο</button>
+      <button class="ed" data-m="brk"  onclick="setMode('brk')"  title="Νέα γραμμή αλλαγής κλίσης">📐 γραμμή</button>
+      <button class="ed" data-m="swap" onclick="setMode('swap')" title="Αναστροφή ακμής τριγώνου">⇄ ακμή</button>
+      <button class="ed" data-m="hole" onclick="setMode('hole')" title="Σβήσιμο τριγώνου">🕳 τρίγωνο</button>
+    </div>
+    <div class="cv-info" id="edHint" style="right:auto;left:10px;bottom:10px;max-width:60%">Σύρε για μετακίνηση, ρόδα για μεγέθυνση.</div>
     <div class="cv-info" id="cvInfo">—</div>
   </div>
 </main>
@@ -216,13 +241,21 @@ function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]=
 // ------------------------------------------------------- τι στέλνεται ---
 
 function payload(){
+  /*  Τα σβησμένα αναγνωρίζονται από τη ΘΕΣΗ τους, στρογγυλεμένη στο εκατοστό:
+   *  δείκτες θα άλλαζαν σε κάθε νέο διάβασμα του σχεδίου. */
+  var gone = {};
+  EDITS.del.forEach(function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; });
+  var keep = function(p){ return !gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)]; };
+
   var pts = [];
-  sel('pts').forEach(function(n){ GEOM[n].points.forEach(function(p){ pts.push(p); }); });
+  sel('pts').forEach(function(n){ GEOM[n].points.forEach(function(p){ if (keep(p)) pts.push(p); }); });
   // Οι κορυφές γραμμών σε layer σημείων μετράνε κι αυτές ως μετρημένα σημεία.
-  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(function(p){ pts.push(p); }); }); });
+  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(function(p){ if (keep(p)) pts.push(p); }); }); });
+  EDITS.add.forEach(function(p){ pts.push(p); });
 
   var brk = [];
   sel('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) brk.push(L); }); });
+  EDITS.brk.forEach(function(L){ brk.push(L); });
 
   var bnd = null, best = -1;
   sel('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
@@ -236,10 +269,12 @@ function payload(){
   return {points:pts, breaklines:brk, boundary:bnd,
           interval:numIn('iv'), clip:document.getElementById('clip').checked,
           breakline_z:document.getElementById('blz').value,
+          swap_edges:EDITS.swap, remove_tris:EDITS.hole,
           mesh:document.getElementById('wmesh').checked};
 }
 
-function build(){
+function build(quiet){
+  document.getElementById('edStale').hidden = true;
   var b = payload();
   if (b.points.length < 3){ warn('out','Χρειάζονται τουλάχιστον 3 σημεία με υψόμετρο.'); return; }
   if (!(b.interval > 0)){ warn('out','Δώσε ισοδιάστημα σε μέτρα.'); return; }
@@ -252,6 +287,7 @@ function build(){
       if (!j.ok){ warn('out', esc(j.error)); return; }
       RES = j; show(j); draw();
       document.getElementById('cOut').hidden = false;
+      edBadge();
     })
     .catch(function(e){ btn.disabled = false; warn('out','Ο server δεν απάντησε: '+esc(e.message)); });
 }
@@ -266,6 +302,10 @@ function show(j){
     '<tr><td>Υψόμετρα</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m</td></tr>';
   if (c) h += '<tr><td>Ισοϋψείς</td><td class="mono">'+c.count+' στάθμες ανά '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
   h += '</tbody></table></div>';
+  if (r.swapped || r.removed) h += '<div class="hint">Διορθώσεις: '+
+    (r.swapped?r.swapped+' αναστροφές ακμών':'')+(r.swapped&&r.removed?' · ':'')+
+    (r.removed?r.removed+' σβησμένα τρίγωνα':'')+'</div>';
+  if (r.swap_missed) h += '<div class="warnbox">⚠ '+r.swap_missed+' αναστροφές δεν εφαρμόστηκαν — η ακμή δεν υπάρχει πια, ή το τετράπλευρό της δεν είναι κυρτό.</div>';
   if (j.warning) h += '<div class="warnbox">⚠ '+esc(j.warning)+'</div>';
   if (r.snapped) h += '<div class="hint">'+r.snapped+' κορυφές γραμμών έπεσαν πάνω σε υπάρχοντα σημεία και πήραν το υψόμετρό τους.</div>';
   // Κορυφή που έφερε ΔΙΚΟ της υψόμετρο δεν είναι λάθος — αλλά αν είναι πολλές
@@ -334,7 +374,7 @@ var SX = function(x){ return x*T.s + T.x; };
 var SY = function(y){ return -y*T.s + T.y; };
 
 var drag = null;
-cv.addEventListener('mousedown', function(e){ drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; cv.classList.add('drag'); });
+cv.addEventListener('mousedown', function(e){ if (MODE !== 'pan') return; drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; cv.classList.add('drag'); });
 window.addEventListener('mouseup', function(){ drag = null; cv.classList.remove('drag'); });
 window.addEventListener('mousemove', function(e){
   var r = cv.getBoundingClientRect();
@@ -437,12 +477,277 @@ function draw(){
   ctx.strokeStyle = '#ff3df0'; ctx.lineWidth = 2;
   sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ poly(L); }); });
   ctx.fillStyle = '#ff6b6e';
+  var ps = T.s > 8 ? 3 : 2;
   sel('pts').forEach(function(n){
     if (!VIS[n]) return;
-    var s = T.s > 8 ? 3 : 2;
-    GEOM[n].points.forEach(function(p){ ctx.fillRect(SX(p[0])-s/2, SY(p[1])-s/2, s, s); });
+    GEOM[n].points.forEach(function(p){
+      if (isDeleted(p[0], p[1])) return;
+      ctx.fillRect(SX(p[0])-ps/2, SY(p[1])-ps/2, ps, ps);
+    });
   });
+
+  // 5. Οι διορθώσεις, ώστε να φαίνεται τι πείραξες.
+  ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
+  EDITS.del.forEach(function(p){
+    var x = SX(p[0]), y = SY(p[1]);
+    ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
+    ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
+  });
+  ctx.fillStyle = '#7CFFB2';
+  EDITS.add.forEach(function(p){
+    var x = SX(p[0]), y = SY(p[1]);
+    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
+  });
+  ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2;
+  EDITS.brk.forEach(function(L){ poly(L); });
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
+  EDITS.swap.forEach(function(e){
+    ctx.beginPath(); ctx.moveTo(SX(e[0]),SY(e[1])); ctx.lineTo(SX(e[2]),SY(e[3])); ctx.stroke();
+  });
+  ctx.fillStyle = 'rgba(255,77,77,.85)';
+  EDITS.hole.forEach(function(p){
+    var x = SX(p[0]), y = SY(p[1]);
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.284); ctx.fill();
+  });
+
+  // Η γραμμή που σχεδιάζεται τώρα, και το σημείο που σέρνεται.
+  if (DRAWING && DRAWING.length){
+    ctx.strokeStyle = '#00d5ff'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    poly(DRAWING); ctx.setLineDash([]);
+    ctx.fillStyle = '#00d5ff';
+    DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
+  }
+  if (MOVING){
+    ctx.strokeStyle = '#7CFFB2'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(SX(MOVING.from[0]),SY(MOVING.from[1]));
+    ctx.lineTo(SX(MOVING.to[0]),SY(MOVING.to[1])); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#7CFFB2';
+    ctx.beginPath(); ctx.arc(SX(MOVING.to[0]), SY(MOVING.to[1]), 4, 0, 6.284); ctx.fill();
+  }
 }
+
+
+  /* ====================== ΕΠΕΞΕΡΓΑΣΙΑ ΤΗΣ ΕΠΙΦΑΝΕΙΑΣ ====================
+   *
+   *  Οι ίδιες πράξεις που κάνει το Civil 3D πάνω σε surface: σβήσιμο,
+   *  μετακίνηση και προσθήκη σημείου, σχεδίαση γραμμής αλλαγής κλίσης,
+   *  αναστροφή ακμής (Swap Edge) και σβήσιμο τριγώνου (τρύπα).
+   *
+   *  ΤΙΠΟΤΑ ΔΕΝ ΑΛΛΑΖΕΙ ΣΤΟ ΣΧΕΔΙΟ ΣΟΥ. Οι διορθώσεις κρατιούνται χωριστά,
+   *  ως λίστα πράξεων με ΣΥΝΤΕΤΑΓΜΕΝΕΣ — όχι με δείκτες, που θα άλλαζαν σε
+   *  κάθε νέο τριγωνισμό. Το αρχικό DXF μένει ανέπαφο και κάθε πράξη
+   *  αναιρείται.
+   */
+  var MODE = 'pan';
+  var EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
+  var UNDO = [], REDO = [];
+  var DRAWING = null;        // γραμμή που σχεδιάζεται τώρα
+  var MOVING = null;         // σημείο που σέρνεται τώρα
+  var HOVER = null;
+
+  function setMode(m){
+    MODE = (MODE === m && m !== 'pan') ? 'pan' : m;
+    DRAWING = null; MOVING = null;
+    [].slice.call(document.querySelectorAll('.ed')).forEach(function(b){
+      b.style.background = (b.getAttribute('data-m') === MODE) ? 'var(--navy2)' : '';
+      b.style.borderColor = (b.getAttribute('data-m') === MODE) ? 'var(--navy2)' : '';
+    });
+    cv.style.cursor = (MODE === 'pan') ? 'grab' : 'crosshair';
+    document.getElementById('edHint').textContent = {
+      pan:   'Σύρε για μετακίνηση, ρόδα για μεγέθυνση.',
+      del:   'Πάτα σημείο για να ΒΓΕΙ από τον υπολογισμό.',
+      move:  'Σύρε σημείο σε νέα θέση. Το υψόμετρο μένει ίδιο.',
+      add:   'Πάτα για νέο σημείο — θα σου ζητηθεί υψόμετρο.',
+      brk:   'Πάτα κορυφές· διπλό πάτημα ή Enter τελειώνει τη γραμμή.',
+      swap:  'Πάτα ακμή τριγώνου για να αναστραφεί η διαγώνιος.',
+      hole:  'Πάτα τρίγωνο για να σβηστεί — τρύπα στην επιφάνεια.'
+    }[MODE] || '';
+    draw();
+  }
+
+  function push(kind, item){
+    EDITS[kind].push(item);
+    UNDO.push({kind: kind, item: item});
+    REDO.length = 0;
+    afterEdit();
+  }
+  window.undoEdit = function(){
+    var u = UNDO.pop(); if (!u) return;
+    EDITS[u.kind].pop(); REDO.push(u); afterEdit();
+  };
+  window.redoEdit = function(){
+    var u = REDO.pop(); if (!u) return;
+    EDITS[u.kind].push(u.item); UNDO.push(u); afterEdit();
+  };
+  window.clearEdits = function(){
+    if (UNDO.length && !confirm('Να αναιρεθούν και οι ' + UNDO.length + ' διορθώσεις;')) return;
+    EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
+    UNDO = []; REDO = []; afterEdit();
+  };
+
+  /*  Μετά από κάθε πράξη ξαναϋπολογίζει — αλλά μόνο αν είναι γρήγορο. Σε έργο
+   *  50 χλμ ο υπολογισμός θέλει δευτερόλεπτα, και αυτόματο τρέξιμο σε κάθε
+   *  κλικ θα ήταν βασανιστήριο. Εκεί περιμένει το κουμπί. */
+  var AUTO_LIMIT = 20000;
+  function afterEdit(){
+    edBadge();
+    draw();
+    if (!RES) return;
+    if (basePointCount() <= AUTO_LIMIT) build(true);
+    else document.getElementById('edStale').hidden = false;
+  }
+  function basePointCount(){
+    return sel('pts').reduce(function(s,n){ return s + GEOM[n].points.length; }, 0);
+  }
+  function edBadge(){
+    var n = UNDO.length;
+    document.getElementById('edN').textContent = n;
+    document.getElementById('cEdit').hidden = false;
+    document.getElementById('edUndo').disabled = !UNDO.length;
+    document.getElementById('edRedo').disabled = !REDO.length;
+    var d = EDITS;
+    document.getElementById('edList').innerHTML = !n ? '' :
+      '<div class="hint">' +
+      [[d.del.length,'σβησμένα σημεία'], [d.add.length,'νέα σημεία'],
+       [d.brk.length,'νέες γραμμές'], [d.swap.length,'αναστροφές ακμών'],
+       [d.hole.length,'σβησμένα τρίγωνα']]
+      .filter(function(p){ return p[0]; })
+      .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
+  }
+
+  // ------------------------------------------------------ εντοπισμός ----
+
+  /** Το κοντινότερο σημείο στην οθόνη, μέσα σε «px» εικονοστοιχεία. */
+  function pickPoint(mx, my, px){
+    px = px || 10;
+    var best = null, bd = px * px;
+    sel('pts').forEach(function(n){
+      GEOM[n].points.forEach(function(p){
+        if (isDeleted(p[0], p[1])) return;
+        var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
+        if (d < bd){ bd = d; best = p; }
+      });
+    });
+    EDITS.add.forEach(function(p){
+      var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
+      if (d < bd){ bd = d; best = p; }
+    });
+    return best;
+  }
+
+  /** Η κοντινότερη ακμή τριγώνου — για την αναστροφή. */
+  function pickEdge(mx, my, px){
+    if (!RES || !RES.mesh) return null;
+    px = px || 12;
+    var V = RES.mesh.vertices, TR = RES.mesh.triangles, best = null, bd = px;
+    for (var i = 0; i < TR.length; i++){
+      for (var k = 0; k < 3; k++){
+        var a = V[TR[i][k]], b = V[TR[i][(k+1)%3]];
+        var ax = SX(a[0]), ay = SY(a[1]), bx = SX(b[0]), by = SY(b[1]);
+        if (Math.max(ax,bx) < 0 || Math.min(ax,bx) > cv.clientWidth) continue;
+        var d = segDist(mx, my, ax, ay, bx, by);
+        if (d < bd){ bd = d; best = [a[0], a[1], b[0], b[1]]; }
+      }
+    }
+    return best;
+  }
+  function segDist(px, py, ax, ay, bx, by){
+    var dx = bx-ax, dy = by-ay, L = dx*dx + dy*dy;
+    var t = L ? Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy)/L)) : 0;
+    return Math.hypot(px - (ax+t*dx), py - (ay+t*dy));
+  }
+
+  function isDeleted(x, y){
+    for (var i = 0; i < EDITS.del.length; i++){
+      if (Math.abs(EDITS.del[i][0]-x) < 0.005 && Math.abs(EDITS.del[i][1]-y) < 0.005) return true;
+    }
+    return false;
+  }
+  function world(ev){
+    var r = cv.getBoundingClientRect();
+    return [(ev.clientX - r.left - T.x)/T.s, -(ev.clientY - r.top - T.y)/T.s];
+  }
+
+  // ------------------------------------------------------- χειρισμός ----
+
+  cv.addEventListener('click', function(ev){
+    if (MODE === 'pan' || MOVING) return;
+    var r = cv.getBoundingClientRect();
+    var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    var w = world(ev);
+
+    if (MODE === 'del'){
+      var p = pickPoint(mx, my);
+      if (p) push('del', [p[0], p[1]]);
+      else setStatusEd('Δεν βρέθηκε σημείο εκεί.');
+    }
+    else if (MODE === 'add'){
+      var z = prompt('Υψόμετρο του νέου σημείου (m):', RES ? RES.report.zmin.toFixed(2) : '');
+      if (z == null) return;
+      var zz = parseFloat(String(z).trim().replace(',', '.'));
+      if (!Number.isFinite(zz)){ setStatusEd('Το υψόμετρο δεν διαβάστηκε.'); return; }
+      push('add', [w[0], w[1], zz]);
+    }
+    else if (MODE === 'brk'){
+      var snap = pickPoint(mx, my, 12);
+      var v = snap ? [snap[0], snap[1], snap[2]] : [w[0], w[1], null];
+      if (!DRAWING) DRAWING = [v]; else DRAWING.push(v);
+      draw();
+    }
+    else if (MODE === 'swap'){
+      var e = pickEdge(mx, my);
+      if (e) push('swap', e);
+      else setStatusEd(RES ? 'Δεν βρέθηκε ακμή εκεί.' : 'Κάνε πρώτα υπολογισμό.');
+    }
+    else if (MODE === 'hole'){
+      if (!RES){ setStatusEd('Κάνε πρώτα υπολογισμό.'); return; }
+      push('hole', [w[0], w[1]]);
+    }
+  });
+
+  cv.addEventListener('dblclick', function(){ if (MODE === 'brk') endLine(); });
+  window.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter' && MODE === 'brk') endLine();
+    if (ev.key === 'Escape'){ DRAWING = null; setMode('pan'); }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
+  });
+  function endLine(){
+    if (DRAWING && DRAWING.length >= 2){
+      // Κορυφή χωρίς υψόμετρο δεν μπαίνει: το υψόμετρο δεν εφευρίσκεται.
+      var missing = DRAWING.filter(function(v){ return v[2] == null; }).length;
+      if (missing) setStatusEd(missing + ' κορυφές δεν έπεσαν πάνω σε σημείο — θα ζητηθεί υψόμετρο από τα σημεία.');
+      push('brk', DRAWING.map(function(v){ return [v[0], v[1], v[2] == null ? 0 : v[2]]; }));
+    }
+    DRAWING = null; draw();
+  }
+  function setStatusEd(t){ document.getElementById('edHint').textContent = t; }
+
+  // Μετακίνηση σημείου: πάτημα, σύρσιμο, άφημα.
+  cv.addEventListener('mousedown', function(ev){
+    if (MODE !== 'move') return;
+    var r = cv.getBoundingClientRect();
+    var p = pickPoint(ev.clientX - r.left, ev.clientY - r.top);
+    if (p){ MOVING = {from: [p[0], p[1]], z: p[2], to: [p[0], p[1]]}; ev.stopPropagation(); }
+  }, true);
+  window.addEventListener('mousemove', function(ev){
+    if (!MOVING) return;
+    MOVING.to = world(ev); draw();
+  });
+  window.addEventListener('mouseup', function(){
+    if (!MOVING) return;
+    var m = MOVING; MOVING = null;
+    if (Math.hypot(m.to[0]-m.from[0], m.to[1]-m.from[1]) < 1e-6) return;
+    // Μετακίνηση = σβήσιμο στην παλιά θέση + προσθήκη στη νέα, με το ίδιο
+    // υψόμετρο. Έτσι αναιρείται με δύο βήματα και δεν χρειάζεται ξεχωριστή
+    // πράξη στον server.
+    EDITS.del.push(m.from);
+    EDITS.add.push([m.to[0], m.to[1], m.z]);
+    UNDO.push({kind: 'del', item: m.from});
+    UNDO.push({kind: 'add', item: EDITS.add[EDITS.add.length-1]});
+    REDO.length = 0;
+    afterEdit();
+  });
 
 ['mesh','iso','txt'].forEach(function(k){
   var b = document.getElementById({mesh:'bMesh',iso:'bIso',txt:'bTxt'}[k]);
