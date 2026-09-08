@@ -18,15 +18,172 @@
   header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
   header .pro{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.5px;
     background:linear-gradient(135deg,#c9a227,#f0d264);color:#231a00;padding:4px 10px;border-radius:6px;}
-  main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:330px 1fr;
+  main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:auto 1fr;
     grid-template-rows:auto minmax(0,1fr);}
   /*  The "server missing" notice is injected as a direct child of <main>; it
    *  takes its own top row across both columns so the workspace below fills
    *  the rest. With no notice the row collapses to nothing. */
   main > [role="status"]{grid-row:1;grid-column:1 / -1;margin:10px 12px !important;max-width:none !important;}
-  .col{grid-row:2;grid-column:1;display:flex;flex-direction:column;gap:12px;padding:12px;
-    overflow-y:auto;min-height:0;background:var(--bg2);border-right:1px solid var(--line);}
-  .cv-wrap{grid-row:2;grid-column:2;}
+
+  /*  ============================ TOOLSPACE ============================
+   *  A panel flush to the left edge: a fixed body (job strip that never
+   *  scrolls, then one scrolling area holding the JOB and LAYERS panes) and a
+   *  thin strip of vertical tabs on its right edge. */
+  .space{grid-row:2;grid-column:1;display:flex;min-height:0;
+    background:var(--bg2);border-right:1px solid var(--line);}
+  .space-body{width:344px;display:flex;flex-direction:column;min-height:0;}
+  .space-tabs{width:30px;display:flex;flex-direction:column;
+    border-left:1px solid var(--line);background:var(--bg);}
+  .space-tabs button{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);
+    background:none;border:0;border-bottom:1px solid var(--line);color:var(--mut);
+    padding:14px 0;font-size:12px;font-weight:700;letter-spacing:.5px;cursor:pointer;}
+  .space-tabs button.on{background:var(--bg2);color:var(--ink);box-shadow:inset -2px 0 0 var(--red);}
+
+  .space-top{flex:0 0 auto;padding:9px 10px;border-bottom:1px solid var(--line);background:var(--bg);}
+  .jobline{display:flex;align-items:center;gap:8px;}
+  .jobline #jobName{flex:1;min-width:0;text-align:left;padding:7px 9px;background:var(--bg2);
+    border:1px solid var(--line);border-radius:7px;color:var(--ink);font-size:13.5px;font-weight:700;
+    cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;}
+  .jobline #jobName:hover{border-color:var(--navy2);}
+  .jobline #jobSaved{font-size:10.5px;color:var(--mut);white-space:nowrap;text-align:right;
+    font-family:ui-monospace,Consolas,monospace;}
+
+  /*  ============================ MODALS ============================
+   *  One backdrop, one box. Used for naming a job and for the "start a new
+   *  job" warning. Click the backdrop or press Escape to cancel. */
+  .modal-back{position:fixed;inset:0;background:rgba(4,8,16,.66);display:flex;
+    align-items:center;justify-content:center;z-index:200;padding:16px;}
+  .modal-back[hidden]{display:none;}
+  .modal{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;
+    width:min(390px,100%);box-shadow:0 24px 60px rgba(0,0,0,.6);}
+  .modal h3{font-size:15px;margin-bottom:8px;}
+  .modal p{font-size:12.5px;color:var(--mut);line-height:1.6;margin-bottom:12px;}
+  .modal p b{color:var(--ink);}
+  .modal input[type=text]{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);font-size:14px;margin-bottom:12px;}
+  .modal .mbtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+  .modal .mbtns button{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;
+    cursor:pointer;border:0;color:#fff;background:var(--navy2);}
+  .modal .mbtns button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .modal .mbtns button.danger{background:var(--red);}
+  .modal .mbtns button:disabled{opacity:.4;cursor:default;}
+  .jobbtns{display:flex;gap:6px;margin-top:8px;}
+  .jobbtns button{flex:1;background:rgba(19,29,51,.7);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:8px 4px;font-size:15px;line-height:1;cursor:pointer;}
+  .jobbtns button:hover:not(:disabled){background:var(--card);border-color:var(--navy2);}
+  .jobbtns button.prim{background:var(--navy);border-color:var(--navy2);color:#fff;}
+  .jobbtns button:disabled{opacity:.4;cursor:default;}
+  .asnote{margin-top:8px;font-size:10.5px;color:var(--mut);line-height:1.5;}
+  .asnote b{color:var(--ink);}
+  #jobRestore{margin-top:9px;padding:9px 11px;background:#0f2a1c;border:1px solid #1d5c39;
+    border-radius:8px;font-size:11.5px;color:#8ff0b6;line-height:1.55;}
+  #jobRestore b{color:#c8f7dc;}
+  #jobRestore .rbtn{margin-top:7px;display:flex;gap:6px;}
+  #jobRestore .rbtn button{flex:1;background:#1d7a4a;border:0;color:#fff;border-radius:6px;
+    padding:6px;font-size:11.5px;font-weight:700;cursor:pointer;}
+  #jobRestore .rbtn button.g{background:transparent;border:1px solid #1d5c39;color:#8ff0b6;font-weight:600;}
+
+  .space-scroll{flex:1 1 auto;overflow-y:auto;min-height:0;padding:10px 8px 40px;}
+  .pane{display:none;}
+  .pane.on{display:block;}
+
+  /*  ============================ JOB TREE ============================
+   *  One scroll, no inner panels. A node's row toggles its own kids; the
+   *  leaf sections (Points, Breaklines, …) open in place. */
+  .node{user-select:none;}
+  .node > .row{display:flex;align-items:center;gap:6px;padding:6px;border-radius:6px;
+    font-size:13px;cursor:pointer;white-space:nowrap;}
+  .node > .row:hover{background:var(--card);}
+  .node > .row .tw{width:12px;text-align:center;color:var(--mut);font-size:10px;flex:0 0 auto;}
+  .node > .row .ic{width:16px;text-align:center;flex:0 0 auto;}
+  .node > .row .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+  .node > .row .tag{font-size:10px;color:var(--mut);font-family:ui-monospace,Consolas,monospace;}
+  .node .kids{margin-left:13px;border-left:1px solid var(--line);padding-left:6px;}
+  .node.collapsed > .kids{display:none;}
+
+  .cnt{padding:4px 2px 10px;display:flex;flex-direction:column;gap:10px;}
+  .cnt h4{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--mut);
+    margin-top:6px;padding-bottom:3px;border-bottom:1px solid var(--line);}
+  .cnt h4:first-child{margin-top:0;}
+  .cnt .pr{font-size:12.5px;color:var(--mut);}
+  .cnt .pr > label{display:block;margin-bottom:5px;}
+  .cnt .pr input[type=text],.cnt .pr select{width:100%;background:var(--bg2);border:1px solid var(--line);
+    color:var(--ink);border-radius:7px;padding:8px;font-size:13px;}
+  .cnt .pr input[type=range]{width:100%;accent-color:var(--navy2);}
+  .cnt .pr input:disabled,.cnt .pr select:disabled{opacity:.5;cursor:default;}
+  .soonbadge{font-size:8px;font-weight:800;letter-spacing:.5px;color:var(--warn);
+    border:1px solid var(--warn);border-radius:3px;padding:0 3px;margin-left:6px;vertical-align:1px;text-transform:uppercase;}
+  .cnt .go{background:var(--navy2);border:0;color:#fff;border-radius:8px;padding:9px;
+    font-size:13px;font-weight:700;cursor:pointer;}
+  .cnt .go:disabled{opacity:.5;cursor:default;}
+  .sub{color:var(--mut);font-size:11.5px;line-height:1.5;}
+
+  /*  Surface chips: one per surface, plus a "+" to add. The active one is
+   *  highlighted; everything below the chips shows that surface. */
+  .surf-chips{display:flex;flex-wrap:wrap;gap:5px;padding:2px 2px 9px;}
+  .surf-chips .chip{background:rgba(19,29,51,.7);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:5px 9px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;
+    line-height:1;}
+  .surf-chips .chip:hover{border-color:var(--navy2);}
+  .surf-chips .chip.on{background:var(--navy);border-color:var(--navy2);color:#fff;font-weight:700;}
+  .surf-chips .chip.add{color:var(--mut);font-size:14px;padding:5px 11px;}
+  .surf-chips .chx{opacity:.5;font-size:10px;}
+  .surf-chips .chx:hover{opacity:1;color:var(--red);}
+
+  /*  A layer this surface pulls from — ticked in Points / Breaklines / Boundary.
+   *  The role is declared once (LAYERS tab); here you pick which of those feed
+   *  THIS surface. */
+  .pick-row{display:flex;align-items:center;gap:7px;padding:4px 2px;font-size:12px;color:var(--ink);cursor:pointer;}
+  .pick-row .pn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pick-row .pc{font-size:10px;color:var(--mut);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  .pick-row input[type=checkbox]{accent-color:var(--navy2);flex:0 0 auto;}
+  .pick-row input[type=color]{width:22px;height:16px;padding:0;border:1px solid var(--line);
+    border-radius:3px;background:var(--bg2);flex:0 0 auto;cursor:pointer;}
+
+  .miniBtns{display:flex;gap:6px;}
+  .miniBtns button{flex:1;background:rgba(19,29,51,.7);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:7px 4px;font-size:13px;line-height:1;cursor:pointer;}
+  .miniBtns button:hover:not(:disabled){background:var(--card);border-color:var(--navy2);}
+  .miniBtns button:disabled{opacity:.4;cursor:default;}
+
+  /*  ========================== LAYERS TAB ==========================
+   *  Grouped per file. The eye is display only; the role select decides what
+   *  feeds the surface. A hidden role layer stays pink and still counts. */
+  .lyhead{font-size:11.5px;color:var(--mut);padding:2px 4px 10px;line-height:1.55;}
+  .lyfile > .row{display:flex;align-items:center;gap:6px;padding:6px;border-radius:6px;
+    font-size:12.5px;font-weight:600;cursor:pointer;}
+  .lyfile > .row:hover{background:var(--card);}
+  .lyfile > .row .tw{width:12px;text-align:center;color:var(--mut);font-size:10px;flex:0 0 auto;}
+  .lyfile > .row .fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lyfile > .row .fall{font-size:10px;font-weight:600;color:var(--mut);border:1px solid var(--line);
+    border-radius:5px;padding:2px 6px;background:var(--bg2);}
+  .lyfile > .row .fall:hover{color:var(--ink);border-color:var(--navy2);}
+  .lyfile.collapsed .lykids{display:none;}
+  .lykids{margin-left:13px;border-left:1px solid var(--line);padding-left:3px;}
+  .lyrow{display:flex;align-items:center;gap:7px;padding:4px 6px;font-size:12px;border-radius:6px;}
+  .lyrow:hover{background:var(--card);}
+  .lyrow .eye{cursor:pointer;width:15px;text-align:center;flex:0 0 auto;font-size:12px;user-select:none;}
+  .lyrow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lyrow select{background:var(--bg2);border:1px solid var(--line);border-radius:5px;color:var(--ink);
+    font-size:10.5px;padding:2px 3px;max-width:104px;flex:0 0 auto;}
+  .lyrow input[type=color]{width:20px;height:15px;padding:0;border:1px solid var(--line);
+    border-radius:3px;background:var(--bg2);flex:0 0 auto;cursor:pointer;}
+  .lyrow input[type=color]:disabled{opacity:.35;cursor:default;}
+  .lyrow .cnt2{font-size:10px;color:var(--mut);font-family:ui-monospace,Consolas,monospace;
+    white-space:nowrap;flex:0 0 auto;}
+  .lyrow.off{opacity:.5;}
+  .lyrow.off .nm{text-decoration:line-through;}
+  .lyrow.feeds{opacity:1;}
+  .lyrow.feeds .nm{color:#ff9a9d;text-decoration:none;}
+  .lyrow.feeds .eye{color:#ff9a9d;}
+  .lymore{font-size:10.5px;color:var(--mut);padding:3px 6px 7px 20px;cursor:pointer;}
+  .lymore:hover{color:var(--ink);}
+  .lybar{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:12px;}
+  .lybar button{flex:1 1 40%;background:rgba(19,29,51,.7);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:8px;font-size:11.5px;cursor:pointer;}
+  .lybar button:hover:not(:disabled){background:var(--card);border-color:var(--navy2);}
+  .lybar button:disabled{opacity:.4;cursor:default;}
+
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;}
   .card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
   .card h2 .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
@@ -36,13 +193,6 @@
     border-radius:8px;color:var(--ink);font-size:14px;}
   .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
   .row2b{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  #cJob .jobtop{display:flex;align-items:center;gap:8px;}
-  #cJob #jobName{flex:1;padding:8px 9px;background:var(--bg2);border:1px solid var(--line);
-    border-radius:8px;color:var(--ink);font-size:14px;font-weight:700;}
-  #cJob #jobSaved{font-size:11px;color:var(--mut);white-space:nowrap;font-family:ui-monospace,Consolas,monospace;}
-  #cJob .jobbtns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px;}
-  #cJob .jobbtns .btn{padding:8px 6px;font-size:12px;}
-  #jobRestore{color:var(--ok);}
   details.card > summary{font-size:15px;font-weight:700;cursor:pointer;display:flex;
     align-items:center;gap:9px;list-style:none;}
   details.card > summary::-webkit-details-marker{display:none;}
@@ -67,7 +217,8 @@
     border-radius:4px;background:var(--bg2);cursor:pointer;vertical-align:middle;}
   .lblmark{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--navy2);
     border:1px solid var(--navy2);border-radius:3px;padding:0 3px;vertical-align:1px;}
-  #fileList{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+  #fileList{display:flex;flex-direction:column;gap:4px;}
+  #fileList:not(:empty){margin-top:4px;}
   .filerow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 7px;
     background:var(--bg2);border:1px solid var(--line);border-radius:7px;cursor:pointer;}
   .filerow .fn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -88,12 +239,34 @@
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
   .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
-  .cv-wrap{position:relative;background:#080d18;overflow:hidden;height:100%;min-height:0;}
+  /*  ======================== STAGE / CANVAS ========================
+   *  A flex column: a CAD-style menu bar on top, then the canvas filling the
+   *  rest. Each menu item opens a dropdown; picking an entry closes it. */
+  .stage{grid-row:2;grid-column:2;display:flex;flex-direction:column;min-height:0;background:#080d18;}
+  .menubar{flex:0 0 auto;background:var(--bg2);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;flex-wrap:wrap;gap:1px;padding:3px 6px;z-index:15;}
+  .mgroup{position:relative;flex:0 0 auto;}
+  .mi{padding:6px 12px;font-size:13px;color:var(--ink);cursor:pointer;border-radius:6px;
+    user-select:none;white-space:nowrap;}
+  .mi:hover{background:var(--card);}
+  .mi.open{background:var(--navy);color:#fff;}
+  .mi.active{box-shadow:inset 0 -2px 0 var(--navy2);color:#fff;}
+  .menubar .mode{margin-left:auto;font-size:11px;color:var(--mut);
+    font-family:ui-monospace,Consolas,monospace;padding:0 8px;white-space:nowrap;flex:0 0 auto;}
+  .menu{position:absolute;top:100%;left:0;margin-top:3px;min-width:210px;background:var(--card);
+    border:1px solid var(--line);border-radius:9px;box-shadow:0 16px 36px rgba(0,0,0,.55);
+    padding:5px;display:none;z-index:16;}
+  .menu.on{display:block;}
+  .menu button{display:flex;width:100%;align-items:center;gap:10px;background:none;border:0;
+    color:var(--ink);font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left;}
+  .menu button:hover:not(:disabled){background:var(--bg2);}
+  .menu button:disabled{opacity:.4;cursor:default;}
+  .menu button .k{width:15px;text-align:center;flex:0 0 auto;}
+  .menu button .chk{margin-left:auto;color:var(--ok);width:14px;text-align:center;font-weight:800;}
+  .menu .div{height:1px;background:var(--line);margin:4px 6px;}
+  .cv-wrap{position:relative;flex:1 1 auto;background:#080d18;overflow:hidden;min-height:0;}
   #cv{display:block;width:100%;height:100%;cursor:grab;}
   #cv.drag{cursor:grabbing;}
-  .cv-bar{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;}
-  .cv-bar button{background:rgba(19,29,51,.92);border:1px solid var(--line);color:var(--ink);
-    border-radius:7px;padding:5px 9px;font-size:12px;cursor:pointer;}
   .cv-info{position:absolute;right:10px;bottom:10px;background:rgba(8,13,24,.85);border:1px solid var(--line);
     border-radius:7px;padding:5px 9px;font-size:11.5px;color:var(--mut);
     font-family:ui-monospace,Consolas,monospace;}
@@ -113,8 +286,13 @@
   @media(max-width:900px){
     body{height:auto;overflow:visible;display:block;}
     main{display:block;}
-    .col{overflow:visible;border-right:0;border-bottom:1px solid var(--line);}
-    .cv-wrap{height:72vh;}
+    .space{display:flex;flex-direction:column;border-right:0;border-bottom:1px solid var(--line);}
+    .space-body{width:auto;}
+    .space-tabs{order:-1;width:auto;flex-direction:row;border-left:0;border-bottom:1px solid var(--line);}
+    .space-tabs button{writing-mode:horizontal-tb;transform:none;flex:1;border-bottom:0;padding:10px 0;}
+    .space-tabs button.on{box-shadow:inset 0 -2px 0 var(--red);}
+    .space-scroll{overflow:visible;padding-bottom:12px;}
+    .stage{height:72vh;}
     footer{padding:12px;}
   }
 </style>
@@ -129,136 +307,304 @@
 <input type="file" id="file" accept=".dxf,.txt,.csv" style="display:none">
 
 <main>
-  <div class="col">
-    <div class="card" id="cJob">
-      <div class="jobtop">
-        <input id="jobName" placeholder="Untitled job" autocomplete="off" spellcheck="false">
-        <span id="jobSaved" title="Autosaved in this browser only">—</span>
-      </div>
-      <div class="jobbtns">
-        <button class="btn ghost" onclick="newJob()">New job</button>
-        <button class="btn ghost" disabled title="Coming soon">Open from account</button>
-        <button class="btn ghost" disabled title="Coming soon">Upload .zsg</button>
-        <button class="btn ghost" disabled title="Coming soon">Save to account</button>
-      </div>
-      <div class="hint" id="jobRestore" hidden style="margin-top:9px">
-        <span class="t"></span> · <a href="#" onclick="newJob();return false">Start fresh</a>
-      </div>
-      <div class="hint" style="margin-top:8px">Saved in this browser after every change. Survives a crash or a dropped connection — not a cleared browser or another computer. Export a <b>.zsg</b> to keep it safe.</div>
-    </div>
+  <div class="space">
+    <div class="space-body">
 
-    <div class="card">
-      <h2><span class="c"></span>1. Files</h2>
-      <button class="btn" style="width:100%" onclick="document.getElementById('file').click()">📂 Open file</button>
-      <div class="hint" style="margin-top:8px"><b>Upload</b> DXF, TXT or CSV.<br>
-        <b>DXF</b>: any version — points, lines, blocks.<br>
-        <b>TXT / CSV</b>: <span class="mono">pt, x, y, z, description</span>. Three columns are read as <span class="mono">x y z</span>. Anything after the description is ignored.</div>
-      <div id="info"></div>
-      <div id="fileList"></div>
-      <div id="fileBtns" style="display:none;gap:8px;margin-top:10px">
-        <button class="btn ghost" id="fRmUntick" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearFilesUnticked()" title="Remove the unticked files" disabled>Remove unticked</button>
-        <button class="btn ghost" id="fRmAll" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearFilesAll()" title="Remove every loaded file">Remove all</button>
-      </div>
-    </div>
-
-    <details class="card" id="cAppear">
-      <summary><span class="c"></span>Appearance</summary>
-      <div class="hint">Colours are kept on this computer. They do not change the exported DXF.</div>
-      <div class="cset-grid" id="csetGrid" style="margin-top:10px"></div>
-      <button class="btn ghost" style="width:100%;margin-top:10px" onclick="resetColors()">Reset colours</button>
-    </details>
-
-    <div class="card" id="cLayers" hidden>
-      <h2><span class="c"></span>2. Layer roles</h2>
-      <div class="hint">Say what each layer is. Nothing is guessed from the names. Whatever stays "background" is simply drawn.</div>
-      <div class="tblwrap"><table>
-        <thead><tr><th>👁</th><th>Layer</th><th>Role</th><th>Col</th><th>Pts</th><th>Lines</th><th>Z</th></tr></thead>
-        <tbody id="lyTbl"></tbody>
-      </table></div>
-      <div id="lyNote"></div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn ghost" id="clrHidden" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearLayersHidden()" title="Remove the unticked layers from this list" disabled>Clear hidden</button>
-      </div>
-    </div>
-
-    <div class="card" id="cCalc" hidden>
-      <h2><span class="c"></span>3. Calculation</h2>
-      <div class="row2">
-        <div class="fld"><label>Contour interval (m)</label>
-          <input id="iv" type="text" inputmode="decimal" value="0.50"></div>
-        <button class="btn" id="go" onclick="build()">📈 Calculate</button>
-      </div>
-      <div class="fld" style="margin-top:10px"><label>Elevation limits (m) — points outside are left out</label>
-        <div class="row2b">
-          <input id="zlo" type="text" inputmode="decimal" placeholder="min">
-          <input id="zhi" type="text" inputmode="decimal" placeholder="max">
+      <div class="space-top">
+        <div class="jobline">
+          <button type="button" id="jobName" title="Rename this job" onclick="renameJobPrompt()">Untitled job</button>
+          <span id="jobSaved" title="Autosaved in this browser only">—</span>
         </div>
-        <div class="hint" id="zRange">Pick the points layer to see its range.</div>
+        <div class="jobbtns">
+          <button onclick="newJob()" title="New Job — start an empty one">✚</button>
+          <button disabled title="Open From Account — coming soon">📂</button>
+          <button disabled title="Import .zsg — coming soon">⬇</button>
+          <button disabled title="Send To Account — coming soon">☁</button>
+          <button class="prim" disabled title="Save — coming soon">💾</button>
+        </div>
+        <div class="asnote">Autosaves to this browser every 3 minutes and when you close the tab.
+          Calculations are <b>not</b> saved — press Calculate after opening. Export a <b>.zsg</b> to keep a job elsewhere.</div>
+        <div id="jobRestore" hidden>
+          <div class="t"></div>
+          <div class="rbtn">
+            <button onclick="openSaved()">Open it</button>
+            <button class="g" onclick="dismissRestore()">Leave it, start new</button>
+          </div>
+        </div>
       </div>
-      <div class="fld" style="margin-top:10px"><label>Elevations of the breaklines</label>
-        <select id="blz">
-          <option value="file">From the drawing (3D polyline or LINE)</option>
-          <option value="points">From the points — the lines are two-dimensional</option>
-        </select></div>
-      <div class="hint">A DXF <b>LWPOLYLINE</b> carries a single elevation for all of its vertices — it is flat. A line with real elevations has to be a <b>3D polyline</b> or a series of LINE entities. If you drew it snapped onto the points, pick the second option.</div>
-      <div class="fld" style="margin-top:10px"><label><input type="checkbox" id="clip" checked> Clip to the area of interest</label></div>
-      <div class="fld"><label><input type="checkbox" id="wmesh" checked> Digital terrain model (triangles)</label></div>
-      <div id="out"></div>
-    </div>
 
-    <div class="card" id="cEdit" hidden>
-      <h2><span class="c"></span>Edits <span id="edN" class="mono" style="margin-left:auto;color:var(--mut)">0</span></h2>
-      <div class="hint">Your file is <b>never changed</b>. The edits are kept separately and can all be undone.</div>
-      <div id="edList"></div>
-      <div class="btns" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:10px">
-        <button class="btn ghost" id="edUndo" onclick="undoEdit()">↶ Undo</button>
-        <button class="btn ghost" id="edRedo" onclick="redoEdit()">↷ Redo</button>
-        <button class="btn ghost" onclick="clearEdits()" title="Undo them all">🗑</button>
+      <div class="space-scroll">
+        <div class="pane on" id="pane-job">
+
+          <div class="node" id="nFiles">
+            <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">📁</span><span class="lbl">Files</span></div>
+            <div class="kids"><div class="cnt">
+              <div id="info"></div>
+              <div id="fileList"></div>
+              <div id="fileBtns" class="miniBtns">
+                <button onclick="document.getElementById('file').click()" title="Open File — add a DXF, TXT or CSV">＋</button>
+                <button id="fRmUntick" onclick="clearFilesUnticked()" title="Remove Unticked — drop the files you unticked" disabled>⊘</button>
+                <button id="fRmAll" onclick="clearFilesAll()" title="Remove All — clear every loaded file" disabled>🗑</button>
+              </div>
+              <div class="sub">DXF (any version — points, lines, blocks) · TXT / CSV columns
+                <span class="mono">pt, x, y, z, description</span>. Three columns read as <span class="mono">x y z</span>.</div>
+            </div></div>
+          </div>
+
+          <div class="node" id="nSurf">
+            <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">▨</span><span class="lbl">Surface</span></div>
+            <div class="kids">
+              <div id="surfChips" class="surf-chips"></div>
+
+                  <div class="node collapsed" id="nPoints">
+                    <div class="row" onclick="tw(this)"><span class="tw">▸</span><span class="ic">📍</span><span class="lbl">Points</span><span class="tag" id="nPointsTag"></span></div>
+                    <div class="kids"><div class="cnt">
+                      <div class="sub">Which of the layers you gave the <b>points</b> role feed <i>this</i> surface.</div>
+                      <div id="ptsList"></div>
+                    </div></div>
+                  </div>
+
+                  <div class="node collapsed" id="nBrk">
+                    <div class="row" onclick="tw(this)"><span class="tw">▸</span><span class="ic">📐</span><span class="lbl">Breaklines</span><span class="tag" id="nBrkTag"></span></div>
+                    <div class="kids"><div class="cnt">
+                      <div class="sub">Which of the layers you gave the <b>breakline</b> role feed <i>this</i> surface.</div>
+                      <div id="brkList"></div>
+                    </div></div>
+                  </div>
+
+                  <div class="node collapsed" id="nBnd" hidden>
+                    <div class="row" onclick="tw(this)"><span class="tw">▸</span><span class="ic">▣</span><span class="lbl">Boundary</span></div>
+                    <div class="kids"><div class="cnt">
+                      <div class="sub">The area of interest for this surface — the largest closed shape among the ticked boundary layers.</div>
+                      <div id="bndList"></div>
+                    </div></div>
+                  </div>
+
+                  <div class="node collapsed" id="nProps">
+                    <div class="row" onclick="tw(this)"><span class="tw">▸</span><span class="ic">⚙</span><span class="lbl">Properties</span></div>
+                    <div class="kids"><div class="cnt">
+
+                      <h4>Surface</h4>
+                      <div class="pr"><label>Contour interval (m)</label>
+                        <input id="iv" type="text" inputmode="decimal" value="0.50"></div>
+                      <div class="pr"><label><input type="checkbox" id="wmesh" checked> Digital terrain model (triangles)</label></div>
+                      <div class="pr"><label><input type="checkbox" id="clip" checked> Clip to the area of interest</label></div>
+                      <div class="pr"><label>Max triangle edge — <span class="mono">off</span><span class="soonbadge">soon</span></label>
+                        <input type="range" min="0" max="100" value="0" disabled></div>
+                      <div class="pr"><label><input type="checkbox" disabled> Contours only from 3D polylines<span class="soonbadge">soon</span></label></div>
+                      <div class="pr"><label><input type="checkbox" disabled> Contour smoothing<span class="soonbadge">soon</span></label></div>
+
+                      <h4>Points</h4>
+                      <div class="pr"><label>Elevation limits (m) — points outside are left out</label>
+                        <div class="row2b">
+                          <input id="zlo" type="text" inputmode="decimal" placeholder="min">
+                          <input id="zhi" type="text" inputmode="decimal" placeholder="max">
+                        </div>
+                        <div class="hint" id="zRange">Pick the points layer to see its range.</div>
+                      </div>
+
+                      <h4>Breaklines</h4>
+                      <div class="pr"><label>Elevation of the lines</label>
+                        <select id="blz">
+                          <option value="file">From the drawing (3D polyline or LINE)</option>
+                          <option value="points">From the points — the lines are two-dimensional</option>
+                        </select></div>
+                      <div class="hint">A DXF <b>LWPOLYLINE</b> carries a single elevation for all of its vertices — it is flat. A line with real elevations has to be a <b>3D polyline</b> or a series of LINE entities. If you drew it snapped onto the points, pick the second option.</div>
+                      <div class="pr"><label>Snap radius — <span class="mono">1 mm</span><span class="soonbadge">soon</span></label>
+                        <input type="range" min="0" max="50" value="1" disabled></div>
+                      <div class="pr"><label><input type="checkbox" checked disabled> Lift a 2D breakline onto the points<span class="soonbadge">soon</span></label></div>
+
+                      <h4>Contour labels<span class="soonbadge">soon</span></h4>
+                      <div class="pr"><label>Paper text height — <span class="mono">2.5 mm</span></label>
+                        <input type="range" min="10" max="50" value="25" disabled></div>
+                      <div class="pr"><label>Rotation</label>
+                        <select disabled><option>Horizontal (0)</option><option>Along the contour</option></select></div>
+                      <div class="pr"><label><input type="checkbox" checked disabled> Mask behind the text</label></div>
+
+                      <h4>Appearance</h4>
+                      <div class="hint">Colours are kept on this computer. They do not change the exported DXF.</div>
+                      <div class="cset-grid" id="csetGrid" style="margin-top:4px"></div>
+                      <label class="cset-row" style="margin-top:2px">
+                        <span>Tint points by layer</span>
+                        <input type="checkbox" id="tintPts" onchange="setTintPts(this.checked)">
+                      </label>
+                      <div class="hint" style="margin-top:0">When points come from several layers, keep the Points colour but give each layer a clearly different shade.</div>
+                      <button class="btn ghost" style="width:100%;margin-top:8px" onclick="resetColors()">Reset colours</button>
+                    </div></div>
+                  </div>
+
+                  <div class="node" id="cCalc" hidden>
+                    <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">Σ</span><span class="lbl">Calculation</span></div>
+                    <div class="kids"><div class="cnt">
+                      <button class="go" id="go" onclick="build()">📈 Calculate</button>
+                      <div id="out"></div>
+                    </div></div>
+                  </div>
+
+                  <div class="node" id="cEdit" hidden>
+                    <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">✎</span><span class="lbl">Edits</span><span class="tag mono" id="edN">0</span></div>
+                    <div class="kids"><div class="cnt">
+                      <div class="hint">Your file is <b>never changed</b>. The edits are kept separately and can all be undone.</div>
+                      <div id="edList"></div>
+                      <div class="miniBtns">
+                        <button id="edUndo" onclick="undoEdit()">↶ Undo</button>
+                        <button id="edRedo" onclick="redoEdit()">↷ Redo</button>
+                        <button onclick="clearEdits()" title="Undo them all">🗑</button>
+                      </div>
+                      <div id="edStale" hidden>
+                        <div class="warnbox">The result is out of date — large drawing, the calculation does not run on its own.</div>
+                        <button class="go" style="width:100%;margin-top:8px" onclick="build()">🔄 Recalculate</button>
+                      </div>
+                    </div></div>
+                  </div>
+
+                  <div class="node" id="cOut" hidden>
+                    <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">⇩</span><span class="lbl">Export</span></div>
+                    <div class="kids"><div class="cnt">
+                      <div class="pr"><label><input type="checkbox" id="dBrk"> Include the breaklines</label></div>
+                      <div class="pr"><label><input type="checkbox" id="dPts"> Include the points</label></div>
+                      <button class="go" onclick="dxf()">📐 Download DXF</button>
+                      <div id="dxfOut"></div>
+                    </div></div>
+                  </div>
+
+            </div>
+          </div>
+
+        </div><!-- /pane-job -->
+
+        <div class="pane" id="pane-layers">
+          <div id="cLayers" hidden>
+            <div class="lyhead">Give every layer a role by hand — nothing is read from the names.
+              The <b>eye</b> only hides a layer from the drawing; whether it feeds the surface is
+              decided by its <b>role</b>. A hidden points / breakline / boundary layer still
+              counts, and is shown in <span style="color:#ff9a9d">red&nbsp;•</span>.</div>
+            <div id="lyTree"></div>
+            <div id="lyNote"></div>
+            <div class="lybar">
+              <button id="lyRmBg" onclick="clearLayersBackground()" title="Drop every layer that has no role" disabled>Remove background layers</button>
+              <button id="lyRmHid" onclick="clearLayersHidden()" title="Drop every layer whose eye is off" disabled>Remove hidden layers</button>
+            </div>
+          </div>
+        </div><!-- /pane-layers -->
+
+      </div><!-- /space-scroll -->
+    </div><!-- /space-body -->
+
+    <div class="space-tabs">
+      <button class="on" data-p="job" onclick="ztab(this)">JOB</button>
+      <button data-p="layers" onclick="ztab(this)">LAYERS</button>
+    </div>
+  </div><!-- /space -->
+
+  <div class="stage">
+    <div class="menubar">
+      <div class="mgroup">
+        <div class="mi ed" data-m="pan" onclick="setMode('pan');closeMenus()" title="Pan / zoom">👆&nbsp;Pan</div>
       </div>
-      <div id="edStale" hidden>
-        <div class="warnbox">The result is out of date — large drawing, the calculation does not run on its own.</div>
-        <button class="btn" style="width:100%;margin-top:8px" onclick="build()">🔄 Recalculate</button>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">Points</div>
+        <div class="menu">
+          <button class="ed" data-m="add"  onclick="setMode('add');closeMenus()"><span class="k">➕</span>Add point</button>
+          <button class="ed" data-m="move" onclick="setMode('move');closeMenus()"><span class="k">✥</span>Move point</button>
+          <button class="ed" data-m="del"  onclick="setMode('del');closeMenus()"><span class="k">✖</span>Delete point</button>
+        </div>
       </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">Breaklines</div>
+        <div class="menu">
+          <button class="ed" data-m="brk" onclick="setMode('brk');closeMenus()"><span class="k">📐</span>New line</button>
+          <button disabled title="Coming soon"><span class="k">✖</span>Delete line</button>
+        </div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">Triangles</div>
+        <div class="menu">
+          <button class="ed" data-m="swap" onclick="setMode('swap');closeMenus()"><span class="k">⇄</span>Swap edge</button>
+          <button class="ed" data-m="hole" onclick="setMode('hole');closeMenus()"><span class="k">🕳</span>Delete triangle</button>
+        </div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">View</div>
+        <div class="menu">
+          <button onclick="fit();closeMenus()"><span class="k">⤢</span>Fit to screen</button>
+          <button onclick="zoom(1.4)"><span class="k">＋</span>Zoom in</button>
+          <button onclick="zoom(1/1.4)"><span class="k">−</span>Zoom out</button>
+          <div class="div"></div>
+          <button id="vMesh" onclick="tog('mesh')"><span class="k">△</span>Triangles<span class="chk"></span></button>
+          <button id="vIso"  onclick="tog('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
+          <button id="vZ"    onclick="tog('z')"><span class="k">#</span>Elevations<span class="chk"></span></button>
+          <button id="vTxt"  onclick="tog('txt')"><span class="k">T</span>Text labels<span class="chk"></span></button>
+        </div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">Edits</div>
+        <div class="menu">
+          <button id="mUndo" onclick="undoEdit()"><span class="k">↶</span>Undo<span class="chk mono" id="mUndoN"></span></button>
+          <button id="mRedo" onclick="redoEdit()"><span class="k">↷</span>Redo</button>
+          <div class="div"></div>
+          <button onclick="clearEdits()"><span class="k">🗑</span>Clear all edits</button>
+        </div>
+      </div>
+      <div class="mode" id="modeLbl">Mode: Pan</div>
     </div>
-
-    <div class="card" id="cOut" hidden>
-      <h2><span class="c"></span>4. Export</h2>
-      <div class="fld"><label><input type="checkbox" id="dBrk"> Include the breaklines</label></div>
-      <div class="fld"><label><input type="checkbox" id="dPts"> Include the points</label></div>
-      <button class="btn green" style="width:100%;margin-top:8px" onclick="dxf()">📐 Download DXF</button>
-      <div id="dxfOut"></div>
-    </div>
-  </div>
-
-  <div class="cv-wrap">
+   <div class="cv-wrap">
     <canvas id="cv"></canvas>
-    <div class="cv-bar">
-      <button onclick="fit()">⤢ Fit</button>
-      <button onclick="zoom(1.4)">＋</button>
-      <button onclick="zoom(1/1.4)">−</button>
-      <button id="bMesh" onclick="tog('mesh')">Triangles</button>
-      <button id="bIso" onclick="tog('iso')">Contours</button>
-      <button id="bZ"   onclick="tog('z')">Elevations</button>
-      <button id="bTxt" onclick="tog('txt')">Text</button>
-    </div>
-    <div class="cv-bar" style="top:46px">
-      <button class="ed" data-m="pan"  onclick="setMode('pan')"  title="Pan / zoom">👆</button>
-      <button class="ed" data-m="del"  onclick="setMode('del')"  title="Delete point">✖ point</button>
-      <button class="ed" data-m="move" onclick="setMode('move')" title="Move point">✥ move</button>
-      <button class="ed" data-m="add"  onclick="setMode('add')"  title="New point">➕ point</button>
-      <button class="ed" data-m="brk"  onclick="setMode('brk')"  title="New breakline">📐 line</button>
-      <button class="ed" data-m="swap" onclick="setMode('swap')" title="Swap triangle edge">⇄ edge</button>
-      <button class="ed" data-m="hole" onclick="setMode('hole')" title="Delete triangle">🕳 triangle</button>
-    </div>
     <div class="cv-pick" id="pick" hidden></div>
     <div class="cv-info" id="edHint" style="right:auto;left:10px;bottom:10px;max-width:60%">Drag to pan, wheel to zoom · click a point or a contour for its elevation.</div>
     <div class="cv-info" id="cvInfo">—</div>
-  </div>
+   </div>
+  </div><!-- /stage -->
 </main>
 
 <footer>ZS-GeoLab · ZSGround · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
 <div class="lymenu" id="lyMenu" hidden></div>
+<div class="modal-back" id="modalBack" hidden><div class="modal" id="modal"></div></div>
 
+<script>
+/*  Toolspace shell: the vertical tabs on the panel's right edge switch the
+ *  scrolling area between the JOB pane and the LAYERS pane. Layout only — it
+ *  touches nothing the calculation script owns. */
+function ztab(btn){
+  var strip = btn.parentElement;
+  [].slice.call(strip.querySelectorAll('button')).forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+  [].slice.call(document.querySelectorAll('.pane')).forEach(function(p){ p.classList.remove('on'); });
+  var pane = document.getElementById('pane-' + btn.getAttribute('data-p'));
+  if (pane) pane.classList.add('on');
+  // The "go to LAYERS" nudge has done its job once the tab is open.
+  if (btn.getAttribute('data-p') === 'layers' && typeof clearUploadHint === 'function') clearUploadHint();
+}
+
+/*  A tree row: fold or unfold the node it belongs to. */
+function tw(row){
+  var n = row.parentElement;
+  var closed = n.classList.toggle('collapsed');
+  var tw = row.querySelector('.tw');
+  if (tw) tw.textContent = closed ? '▸' : '▾';
+}
+
+/*  The canvas menu bar: a classic menu — one item opens its dropdown, picking
+ *  an entry (or a click anywhere else) closes it, and sliding onto a
+ *  neighbouring item while one is open switches to it. */
+function closeMenus(){
+  [].slice.call(document.querySelectorAll('.menubar .mi')).forEach(function(m){ m.classList.remove('open'); });
+  [].slice.call(document.querySelectorAll('.menu')).forEach(function(m){ m.classList.remove('on'); });
+}
+function cmenu(mi){
+  var menu = mi.parentElement.querySelector('.menu');
+  var willOpen = menu && !menu.classList.contains('on');
+  closeMenus();
+  if (willOpen){ mi.classList.add('open'); menu.classList.add('on'); }
+}
+document.addEventListener('click', function(e){ if (!e.target.closest('.menubar')) closeMenus(); });
+[].slice.call(document.querySelectorAll('.menubar .mgroup .mi')).forEach(function(mi){
+  if (mi.classList.contains('ed')) return;                   // the bare "Pan" item has no menu
+  mi.addEventListener('mouseenter', function(){
+    if (document.querySelector('.menu.on') && !mi.classList.contains('open')) cmenu(mi);
+  });
+});
+</script>
 <script src="../lib/server-check.js?v=20260907b"></script>
 <script>
 /*  The calculations run on the server in Python: this is office work — you
@@ -277,12 +623,56 @@ var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
 var VIS = {};           // layer -> boolean
 var FILEOF = {};        // layer -> the file it came from
 var FILELIST = [];      // [{name, on}] in upload order
-var RES = null;         // the server's result
+var RES = null;         // the server's result — for the ACTIVE surface
 var PICK = null;        // what the last click identified
 var MEANZ = null;       // mean elevation of the points last sent
 var ZCUT = {p:0, v:0};  // points / line vertices left out by the elevation limits
 var SHOW = {mesh:true, iso:true, txt:false, z:false};
 var T = {s:1, x:0, y:0};
+
+/*  ============================ SURFACES ============================
+ *
+ *  A job holds SEVERAL surfaces (for volume comparison and, later, roads).
+ *  The layers and their roles are SHARED — one drawing, declared once in the
+ *  LAYERS tab. What a surface owns of its own: its calculation settings, its
+ *  edits, and its result. The active surface's settings live in the DOM
+ *  inputs and its edits in EDITS/UNDO/REDO; switching swaps them in and out.
+ *  `res` is transient and never serialised — Calculate rebuilds it. */
+function newSurface(name){
+  return {
+    name: name,
+    settings: { interval:'0.50', zlo:'', zhi:'', blz:'file', clip:true, wmesh:true },
+    /*  Which role layers feed THIS surface. Only exclusions are stored
+     *  ({layer:false}); a layer not listed is included. So a new layer is on
+     *  for every surface by default. */
+    sel: { pts:{}, brk:{}, bnd:{} },
+    edits: { del:[], add:[], brk:[], swap:[], hole:[] },
+    undo: [], redo: [], res: null
+  };
+}
+function normSel(x){
+  x = x || {};
+  return { pts: x.pts || {}, brk: x.brk || {}, bnd: x.bnd || {} };
+}
+/*  Does the ACTIVE surface pull from this layer? (default yes) */
+function surfHas(role, layer){
+  var s = SURFACES[ACTIVE];
+  return !(s && s.sel && s.sel[role] && s.sel[role][layer] === false);
+}
+/*  The layers of a role that feed the ACTIVE surface. */
+function selS(role){
+  return sel(role).filter(function(n){ return surfHas(role, n); });
+}
+window.surfSel = function(role, layer, on){
+  var m = SURFACES[ACTIVE].sel[role];
+  if (on) delete m[layer]; else m[layer] = false;
+  renderSurfaceUI();
+  refreshZRange();
+  draw();
+  touch();
+};
+var SURFACES = [ newSurface('Surface 1') ];
+var ACTIVE = 0;
 
 /*  Canvas colours. The choices are kept on this computer (localStorage) and
  *  never touch the exported DXF — only the screen. Keys added later still get
@@ -317,6 +707,43 @@ function hexA(h, a){
   var n = parseInt(h, 16) || 0;
   return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
 }
+/*  Tint points by layer: keep the Points hue, fan the lightness (and a touch
+ *  of hue) so N layers separate clearly while still reading as "the points". */
+function hexToHsl(h){
+  h = String(h).replace('#',''); if (h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var r = parseInt(h.substr(0,2),16)/255, g = parseInt(h.substr(2,2),16)/255, b = parseInt(h.substr(4,2),16)/255;
+  var mx = Math.max(r,g,b), mn = Math.min(r,g,b), d = mx-mn, l = (mx+mn)/2, s = 0, hu = 0;
+  if (d){
+    s = l > 0.5 ? d/(2-mx-mn) : d/(mx+mn);
+    hu = mx===r ? (g-b)/d + (g<b?6:0) : mx===g ? (b-r)/d + 2 : (r-g)/d + 4;
+    hu *= 60;
+  }
+  return { h:hu, s:s*100, l:l*100 };
+}
+function hslToHex(h, s, l){
+  h = ((h % 360) + 360) % 360 / 360; s = Math.max(0,Math.min(100,s))/100; l = Math.max(0,Math.min(100,l))/100;
+  var q = l < 0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+  var f = function(t){ t = (t+1)%1;
+    return t<1/6 ? p+(q-p)*6*t : t<1/2 ? q : t<2/3 ? p+(q-p)*(2/3-t)*6 : p; };
+  var x = function(v){ return ('0'+Math.round(v*255).toString(16)).slice(-2); };
+  return '#' + x(f(h+1/3)) + x(f(h)) + x(f(h-1/3));
+}
+function tintOf(hex, i, n){
+  if (n <= 1 || i < 0) return hex;
+  var c = hexToHsl(hex);
+  var t = n === 1 ? 0.5 : i / (n - 1);          // 0..1 across the layers
+  var l  = Math.max(32, Math.min(90, c.l + (t - 0.5) * 62));   // wide lightness fan
+  var hh = c.h + (t - 0.5) * 46;                                // noticeable hue fan
+  var ss = Math.max(28, Math.min(100, c.s - (t - 0.5) * 40));   // and a saturation fan
+  return hslToHex(hh, ss, l);
+}
+var TINT = (function(){ try { return localStorage.getItem('isoypseis.tintpts') === '1'; } catch (e) { return false; } })();
+window.setTintPts = function(on){
+  TINT = !!on;
+  try { localStorage.setItem('isoypseis.tintpts', TINT ? '1' : '0'); } catch (e) {}
+  renderLayers();             // show / hide the per-layer colour swatches in the LAYERS tab
+  draw(); touch();
+};
 function saveColors(){
   try { localStorage.setItem('isoypseis.colors', JSON.stringify(COLORS)); } catch (e) {}
 }
@@ -332,6 +759,7 @@ function buildColorUI(){
       saveColors(); draw(); touch();
     });
   });
+  var t = document.getElementById('tintPts'); if (t) t.checked = TINT;
 }
 window.resetColors = function(){
   for (var k in COLOR_DEF) COLORS[k] = COLOR_DEF[k];
@@ -485,9 +913,11 @@ var ZSJob = (function () {
 
 var JOBNAME = 'Untitled job';
 var RESTORING = false;                 // suppress autosave while a job loads
-var _saveTimer = null;
+var DIRTY = false;                     // unsaved changes since the last write
+var AUTOSAVE_MS = 3 * 60 * 1000;       // the fixed autosave beat
 
-function jobSettings() {
+/*  The active surface's settings — read straight from the DOM inputs. */
+function readSettings() {
   return {
     interval: document.getElementById('iv').value,
     zlo: document.getElementById('zlo').value,
@@ -497,94 +927,329 @@ function jobSettings() {
     wmesh: document.getElementById('wmesh').checked
   };
 }
+function writeSettings(st) {
+  st = st || {};
+  document.getElementById('iv').value = st.interval != null ? st.interval : '0.50';
+  document.getElementById('zlo').value = st.zlo || '';
+  document.getElementById('zhi').value = st.zhi || '';
+  document.getElementById('blz').value = st.blz || 'file';
+  document.getElementById('clip').checked = st.clip !== false;
+  document.getElementById('wmesh').checked = st.wmesh !== false;
+}
 function collectJob() {
   return {
     name: JOBNAME,
     modified: Date.now(),
-    version: 1,
-    appearance: { colors: COLORS },
-    active: 0,
-    surfaces: [{
-      name: 'Surface 1',
+    version: 2,
+    appearance: { colors: COLORS, tintPts: TINT },
+    active: ACTIVE,
+    /*  The drawing and its roles are shared across every surface. */
+    shared: {
       files: FILELIST, fileof: FILEOF,
       geom: GEOM, meta: META, roles: ROLE, vis: VIS,
-      lycolor: LYCOLOR, lytext: LYTEXT,
-      edits: EDITS, undo: UNDO, redo: REDO,
-      settings: jobSettings()
-    }]
+      lycolor: LYCOLOR, lytext: LYTEXT
+    },
+    surfaces: SURFACES.map(function (s, i) {
+      return {
+        name: s.name,
+        sel: s.sel,
+        settings: i === ACTIVE ? readSettings() : s.settings,
+        edits:    i === ACTIVE ? EDITS : s.edits,
+        undo:     i === ACTIVE ? UNDO : s.undo,
+        redo:     i === ACTIVE ? REDO : s.redo
+      };
+    })
   };
 }
 function markSaved(t) {
   var el = document.getElementById('jobSaved');
-  if (el) el.textContent = 'saved ' + new Date(t).toLocaleTimeString();
+  if (el) el.textContent = 'saved ' + new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+/*  A change only flags the job as dirty. The write happens on a fixed
+ *  three-minute beat and whenever the tab is hidden or closed — never on
+ *  every keystroke. The label shows only the time of the last real save. */
 function touch() {
   if (RESTORING) return;
-  var el = document.getElementById('jobSaved'); if (el) el.textContent = 'saving…';
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(function () {
-    ZSJob.put(collectJob())
-      .then(function () { markSaved(Date.now()); })
-      .catch(function () { var e = document.getElementById('jobSaved'); if (e) e.textContent = 'not saved'; });
-  }, 900);
+  DIRTY = true;
 }
+function saveNow() {
+  if (RESTORING || !DIRTY) return Promise.resolve();
+  DIRTY = false;
+  return ZSJob.put(collectJob())
+    .then(function () { markSaved(Date.now()); })
+    .catch(function () {
+      DIRTY = true;
+      var e = document.getElementById('jobSaved'); if (e) e.textContent = 'not saved';
+    });
+}
+setInterval(saveNow, AUTOSAVE_MS);
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') saveNow();
+});
+window.addEventListener('beforeunload', function () {
+  /*  Best effort on the way out: an IndexedDB write may not finish during
+   *  unload, but the beat and the visibility handler have almost always
+   *  saved already. */
+  if (DIRTY && !RESTORING) { try { ZSJob.put(collectJob()); } catch (e) {} }
+});
 
 function applyJob(job) {
   RESTORING = true;
-  var s = (job.surfaces && job.surfaces[job.active || 0]) || {};
-  GEOM = s.geom || {}; META = s.meta || {}; ROLE = s.roles || {}; VIS = s.vis || {};
-  FILEOF = s.fileof || {}; FILELIST = s.files || [];
-  LYCOLOR = s.lycolor || {}; LYTEXT = s.lytext || {};
-  EDITS = s.edits || { del: [], add: [], brk: [], swap: [], hole: [] };
-  UNDO = s.undo || []; REDO = s.redo || [];
-  RES = null; PICK = null; MEANZ = null; ZCUT = { p: 0, v: 0 };
+  /*  v2 keeps the drawing in job.shared; v1 kept it inside surfaces[0]. */
+  var sh = job.shared || (job.surfaces && job.surfaces[job.active || 0]) || {};
+  GEOM = sh.geom || {}; META = sh.meta || {}; ROLE = sh.roles || {}; VIS = sh.vis || {};
+  FILEOF = sh.fileof || {}; FILELIST = sh.files || [];
+  LYCOLOR = sh.lycolor || {}; LYTEXT = sh.lytext || {};
   if (job.appearance && job.appearance.colors)
     for (var k in COLOR_DEF) if (job.appearance.colors[k]) COLORS[k] = job.appearance.colors[k];
+  if (job.appearance && typeof job.appearance.tintPts === 'boolean') TINT = job.appearance.tintPts;
   JOBNAME = job.name || 'Untitled job';
-  var st = s.settings || {};
-  var setV = function (id, v) { if (v != null) document.getElementById(id).value = v; };
-  setV('iv', st.interval); setV('zlo', st.zlo); setV('zhi', st.zhi); setV('blz', st.blz);
-  if (st.clip != null) document.getElementById('clip').checked = st.clip;
-  if (st.wmesh != null) document.getElementById('wmesh').checked = st.wmesh;
+
+  var list = (job.surfaces && job.surfaces.length) ? job.surfaces : [{}];
+  SURFACES = list.map(function (s, i) {
+    var d = newSurface('Surface ' + (i + 1));
+    return {
+      name: s.name || d.name,
+      sel: normSel(s.sel),
+      settings: s.settings || d.settings,
+      edits: s.edits || d.edits,
+      undo: s.undo || [], redo: s.redo || [], res: null
+    };
+  });
+  ACTIVE = Math.min(job.active || 0, SURFACES.length - 1);
+  var a = SURFACES[ACTIVE];
+  EDITS = a.edits; UNDO = a.undo; REDO = a.redo;
+  RES = null; PICK = null; MEANZ = null; ZCUT = { p: 0, v: 0 };
+  writeSettings(a.settings);
 
   var has = Object.keys(GEOM).length;
   document.getElementById('cLayers').hidden = !has;
   document.getElementById('cCalc').hidden = !has;
   document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
   document.getElementById('cOut').hidden = true;
-  renderJob(); renderFiles(); buildColorUI(); renderLayers();
+  renderJob(); renderFiles(); buildColorUI(); renderLayers(); renderSurfaceChips();
   if (typeof edBadge === 'function') edBadge();
   has ? fit() : draw();
   RESTORING = false;
 }
 
+/*  ============================ SWITCHING ============================
+ *  The active surface's live state is in the DOM (settings) and in
+ *  EDITS/UNDO/REDO/RES (globals). Stash it back into SURFACES[ACTIVE], load
+ *  the target, redraw. */
+function stashActive() {
+  var s = SURFACES[ACTIVE]; if (!s) return;
+  s.settings = readSettings();
+  s.edits = EDITS; s.undo = UNDO; s.redo = REDO; s.res = RES;
+}
+function loadActive() {
+  var s = SURFACES[ACTIVE];
+  writeSettings(s.settings);
+  EDITS = s.edits; UNDO = s.undo; REDO = s.redo;
+  RES = s.res || null;
+  MEANZ = null; ZCUT = { p: 0, v: 0 };
+  clearPick();
+  var has = Object.keys(GEOM).length;
+  document.getElementById('cCalc').hidden = !has;
+  document.getElementById('cOut').hidden = !RES;
+  document.getElementById('out').innerHTML = '';
+  document.getElementById('edStale').hidden = true;
+  document.getElementById('dxfOut').innerHTML = '';
+  if (RES) show(RES);
+  edBadge();                       // also sets cEdit.hidden
+  refreshZRange();
+  renderSurfaceChips();
+  draw();                          // the view (pan/zoom) is shared, so keep it
+}
+window.switchSurface = function (i) {
+  if (i === ACTIVE || i < 0 || i >= SURFACES.length) return;
+  stashActive();
+  ACTIVE = i;
+  loadActive();
+  touch();
+};
+window.addSurface = function () {
+  stashActive();
+  SURFACES.push(newSurface('Surface ' + (SURFACES.length + 1)));
+  ACTIVE = SURFACES.length - 1;
+  loadActive();
+  touch();
+};
+window.removeSurface = function (i) {
+  if (SURFACES.length <= 1) return;
+  if (!confirm('Remove "' + SURFACES[i].name + '"? Its settings and edits are lost.')) return;
+  if (i === ACTIVE) { /* dropping the live one — nothing to stash */ }
+  else stashActive();
+  SURFACES.splice(i, 1);
+  if (i < ACTIVE) ACTIVE--;
+  else if (i === ACTIVE) ACTIVE = Math.min(ACTIVE, SURFACES.length - 1);
+  loadActive();
+  touch();
+};
+window.renameSurface = function (i) {
+  promptJobName({
+    title: 'Rename surface', value: SURFACES[i].name, okLabel: 'Rename',
+    onOk: function (name) { SURFACES[i].name = name; renderSurfaceChips(); touch(); }
+  });
+};
+/*  The per-surface layer pickers in the Points / Breaklines / Boundary nodes,
+ *  plus the small counts on their rows. Rendered from sel(role) (all layers of
+ *  that role) against SURFACES[ACTIVE].sel (which ones this surface uses). */
+function pickList(role, boxId){
+  var box = document.getElementById(boxId); if (!box) return;
+  var layers = sel(role);
+  if (!layers.length){
+    box.innerHTML = '<div class="sub">No layer has the "' +
+      {pts:'points', brk:'breakline', bnd:'boundary'}[role] +
+      '" role yet — set one in the LAYERS tab.</div>';
+    return;
+  }
+  box.innerHTML = layers.map(function(n){
+    var on = surfHas(role, n), m = META[n] || {};
+    var c = role === 'pts' ? (m.points || 0) + ' pt' : (m.lines || 0) + ' ln';
+    return '<label class="pick-row"><input type="checkbox"' + (on ? ' checked' : '') +
+      ' onchange="surfSel(\'' + role + '\',\'' + esc(n) + '\',this.checked)">' +
+      '<span class="pn" title="' + esc(n) + '">' + esc(n) + '</span>' +
+      '<span class="pc">' + c + '</span></label>';
+  }).join('');
+}
+function renderSurfaceUI(){
+  pickList('pts', 'ptsList');
+  pickList('brk', 'brkList');
+  pickList('bnd', 'bndList');
+  document.getElementById('nBnd').hidden = !sel('bnd').length;
+  var pt = selS('pts').reduce(function(a,n){ return a + ((META[n] && META[n].points) || 0); }, 0);
+  var bl = selS('brk').length;
+  document.getElementById('nPointsTag').textContent = sel('pts').length ? pt + ' pt' : '';
+  document.getElementById('nBrkTag').textContent = sel('brk').length ? bl + (bl === 1 ? ' layer' : ' layers') : '';
+}
+function renderSurfaceChips() {
+  renderSurfaceUI();
+  var box = document.getElementById('surfChips');
+  if (!box) return;
+  box.innerHTML = SURFACES.map(function (s, i) {
+    return '<button class="chip' + (i === ACTIVE ? ' on' : '') + '" onclick="switchSurface(' + i + ')" ' +
+      'ondblclick="renameSurface(' + i + ')" title="Double-click to rename">' + esc(s.name) +
+      (SURFACES.length > 1
+        ? ' <span class="chx" title="Remove" onclick="event.stopPropagation();removeSurface(' + i + ')">✕</span>'
+        : '') + '</button>';
+  }).join('') +
+  '<button class="chip add" onclick="addSurface()" title="Add a surface">＋</button>';
+}
+
 function renderJob() {
   var el = document.getElementById('jobName');
-  if (el && el.value !== JOBNAME) el.value = JOBNAME;
+  if (el) el.textContent = JOBNAME;
 }
-window.renameJob = function (v) { JOBNAME = (v || '').trim() || 'Untitled job'; touch(); };
+window.renameJob = function (v) { JOBNAME = (v || '').trim() || 'Untitled job'; renderJob(); touch(); };
+
+/*  ============================== MODALS ==============================
+ *  The job name is not typed in place any more — it is a label, and both
+ *  naming and the "start a new job" warning go through a small modal. */
+function modalOpen(html) {
+  var m = document.getElementById('modal');
+  m.innerHTML = html;
+  document.getElementById('modalBack').hidden = false;
+}
+function modalClose() {
+  document.getElementById('modalBack').hidden = true;
+  document.getElementById('modal').innerHTML = '';
+}
+document.getElementById('modalBack').addEventListener('click', function (e) {
+  if (e.target.id === 'modalBack') modalClose();     // the backdrop = cancel
+});
+
+/*  opts: {title, value, okLabel, onOk(name)}. Cancel always leaves everything
+ *  as it was. */
+function promptJobName(opts) {
+  modalOpen(
+    '<h3>' + esc(opts.title) + '</h3>' +
+    '<input type="text" id="mName" maxlength="80" placeholder="Job name" value="' + esc(opts.value || '') + '">' +
+    '<div class="mbtns">' +
+      '<button class="ghost" onclick="modalClose()">Cancel</button>' +
+      '<button class="prim" id="mOk">' + esc(opts.okLabel || 'OK') + '</button>' +
+    '</div>'
+  );
+  var inp = document.getElementById('mName');
+  inp.focus(); inp.select();
+  var go = function () { var v = inp.value.trim(); modalClose(); opts.onOk(v || 'Untitled job'); };
+  document.getElementById('mOk').addEventListener('click', go);
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.stopPropagation(); go(); }
+    if (e.key === 'Escape') { e.stopPropagation(); modalClose(); }
+  });
+}
+window.renameJobPrompt = function () {
+  promptJobName({ title: 'Rename job', value: JOBNAME, okLabel: 'Rename', onOk: renameJob });
+};
+
+/*  A new job replaces whatever is open — there is only one slot in this
+ *  browser, and the account is not wired yet. Warn first if there is work
+ *  open; then ask for the new name (Cancel there changes nothing). */
+function askNewJobName() {
+  promptJobName({
+    title: 'Name the new job', value: '', okLabel: 'Create',
+    onOk: function (name) {
+      wipe([], true);
+      ZSJob.wipe();
+      SAVED_JOB = null;
+      var jr = document.getElementById('jobRestore'); if (jr) jr.hidden = true;
+      JOBNAME = name;
+      renderJob();
+      touch();
+    }
+  });
+}
 window.newJob = function () {
-  if (Object.keys(GEOM).length &&
-      !confirm('Start a new job? The current one will be replaced — download a .zsg first if you want to keep it.'))
-    return;
-  wipe([], true);
-  JOBNAME = 'Untitled job';
-  renderJob();
-  ZSJob.wipe();
+  if (Object.keys(GEOM).length === 0) { askNewJobName(); return; }
+  modalOpen(
+    '<h3>Start a new job?</h3>' +
+    '<p>"<b>' + esc(JOBNAME) + '</b>" is open. A new job replaces it — anything since the last ' +
+    'autosave is lost. It is not on your account yet.</p>' +
+    '<div class="mbtns">' +
+      '<button class="ghost" disabled title="Coming soon">Send to account first</button>' +
+      '<button class="ghost" onclick="modalClose()">Cancel</button>' +
+      '<button class="danger" id="mNewGo">Discard &amp; continue</button>' +
+    '</div>'
+  );
+  document.getElementById('mNewGo').addEventListener('click', function () {
+    modalClose(); askNewJobName();
+  });
 };
 
 /*  Ask the browser to keep our storage even under disk pressure. */
 if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) {} }
 
-// Restore a job left from a previous visit — this is the whole point.
+/*  A job left from a previous visit is NOT opened on its own — it only
+ *  announces itself. The user opens it, or starts fresh (and the first save of
+ *  new work then replaces it). */
+var SAVED_JOB = null;
 ZSJob.get().then(function (job) {
-  if (!job || !job.surfaces || !Object.keys((job.surfaces[0] || {}).geom || {}).length) return;
-  applyJob(job);
+  if (!job) return;
+  /*  v2: the drawing is in job.shared; v1: in surfaces[0]. */
+  var g = (job.shared && job.shared.geom) ||
+          (job.surfaces && job.surfaces[0] && job.surfaces[0].geom) || {};
+  if (!Object.keys(g).length) return;
+  SAVED_JOB = job;
   var b = document.getElementById('jobRestore');
-  b.querySelector('.t').textContent =
-    'Restored your last job — saved ' + new Date(job.modified).toLocaleString();
+  b.querySelector('.t').innerHTML =
+    'You have a saved job <b>"' + esc(job.name || 'Untitled job') + '"</b> — last worked ' +
+    new Date(job.modified).toLocaleString() + '. It is not open yet. ' +
+    '<span style="color:#f5d98a">If you start a new job or import anything, this one is replaced.</span>';
   b.hidden = false;
 }).catch(function () {});
+window.openSaved = function () {
+  if (!SAVED_JOB) return;
+  applyJob(SAVED_JOB);
+  document.getElementById('jobRestore').hidden = true;
+};
+window.dismissRestore = function () {
+  document.getElementById('jobRestore').hidden = true;
+};
+function clearUploadHint(){
+  var i = document.getElementById('info');
+  if (i && i.querySelector('.uphint')) i.innerHTML = '';
+}
 
 // -------------------------------------------------------------- upload ---
 
@@ -618,10 +1283,15 @@ document.getElementById('file').addEventListener('change', function(ev){
         META[n] = r; ROLE[n] = ROLE[n] || (isText ? 'pts' : ''); VIS[n] = true;
         FILEOF[n] = fname;
       });
-      info.innerHTML = '';
       clearPick(); renderFiles(); renderLayers(); fit();
       document.getElementById('cLayers').hidden = false;
       document.getElementById('cCalc').hidden = false;
+      // A DXF still needs its roles set, and that table lives in the LAYERS
+      // tab now — so point there. A TXT/CSV is already "points", nothing to do.
+      // The nudge clears itself once the LAYERS tab is opened or a surface is
+      // calculated.
+      info.innerHTML = isText ? '' :
+        '<div class="hint uphint">Uploaded. Open the <b>LAYERS</b> tab (right edge) and give each layer a role.</div>';
     })
     .catch(function(e){ info.innerHTML = '<div class="warnbox">The server did not answer: '+esc(e.message)+'</div>'; });
 });
@@ -634,44 +1304,103 @@ document.getElementById('file').addEventListener('change', function(ev){
  *  The one exception is a TXT/CSV upload: a file of "x y z" rows can only be
  *  points, so it is given that role directly. The user can still change it. */
 
+/*  The layers, grouped by the file they came from. Each file is a foldable
+ *  node; each layer is a row with an eye (display only), a role select (this
+ *  is what decides whether the layer feeds the surface) and — for a layer with
+ *  no role — its own colour. A role layer whose file was unticked, or whose
+ *  eye is off, is kept and marked: it still counts. */
+function fileTicked(fname){
+  for (var i = 0; i < FILELIST.length; i++) if (FILELIST[i].name === fname) return FILELIST[i].on;
+  return true;
+}
+var LYFOLD = {};                                   // filename -> folded? (kept across re-renders)
+window.lyEye = function(n){ VIS[n] = !VIS[n]; renderLayers(); draw(); };
+window.fileVis = function(fname, on){
+  Object.keys(GEOM).forEach(function(n){ if ((FILEOF[n] || '—') === fname) VIS[n] = on; });
+  renderLayers(); draw();
+};
+window.lyFold = function(row){
+  var f = row.parentElement, closed = f.classList.toggle('collapsed');
+  LYFOLD[f.getAttribute('data-f')] = closed;
+  var tw = row.querySelector('.tw'); if (tw) tw.textContent = closed ? '▸' : '▾';
+};
+
 function renderLayers(){
-  var h = '', unused = 0, orphans = 0;
+  var tree = '', orphans = 0;
+  var ptsIdx = sel('pts');                 // for the per-layer points tint
+  var files = FILELIST.map(function(f){ return f.name; });
   Object.keys(GEOM).forEach(function(n){
-    var m = META[n];
-    var fon = fileOn(n);
-    if (!fon && !ROLE[n]) return;                  // background of an unticked file: gone
-    if (!lyUsable(m)) { unused++; if (!SHOWALL_LY) return; }
-    var orphan = !fon;                             // role layer of an unticked file: kept, flagged
-    if (orphan) orphans++;
-    var noRole = !ROLE[n];
-    var lt = LYTEXT[n] || {}, labels = (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
-    var canLabel = lyHasZ(n) || lyHasDisc(n);
-    h += '<tr' + (orphan ? ' class="orphan"' : '') + ' oncontextmenu="lyMenu(event,\''+esc(n)+'\')"' +
-        (canLabel ? ' title="Right-click for elevation / description labels"' : '') + '>' +
-      '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;updClearBtns();draw()"></td>' +
-      '<td title="'+esc(n)+(orphan?' — from an unticked file':'')+'">'+esc(n.length>16?n.slice(0,15)+'…':n)+
-        (orphan ? ' <span class="lblmark" style="color:var(--red);border-color:var(--red)">•</span>' : '') +
-        (labels ? ' <span class="lblmark">'+labels+'</span>' : '')+'</td>' +
-      '<td><select onchange="ROLE[\''+esc(n)+'\']=this.value;renderLayers();draw()">' +
-        ['','pts','brk','bnd'].map(function(v){
-          var lbl = {'':'background','pts':'📍 points','brk':'📐 breaklines','bnd':'▣ boundary'}[v];
-          return '<option value="'+v+'"'+(ROLE[n]===v?' selected':'')+'>'+lbl+'</option>';
-        }).join('') + '</select></td>' +
-      '<td>' + (noRole
-        ? '<input type="color" value="'+(LYCOLOR[n]||COLORS.base)+'" title="Layer colour" onchange="setLyColor(\''+esc(n)+'\',this.value)">'
-        : '') + '</td>' +
-      '<td class="mono">'+m.points+(m.inserts?('+'+m.inserts+'b'):'')+'</td>' +
-      '<td class="mono">'+m.lines+'</td>' +
-      '<td class="mono">'+(m.zmin==null?'—':(m.flat?'flat':fmt(m.zmin,1)+'–'+fmt(m.zmax,1)))+'</td>' +
-    '</tr>';
+    var f = FILEOF[n] || '—';
+    if (files.indexOf(f) < 0) files.push(f);
   });
-  document.getElementById('lyTbl').innerHTML = h;
+
+  files.forEach(function(fname){
+    var layers = Object.keys(GEOM).filter(function(n){ return (FILEOF[n] || '—') === fname; });
+    if (!layers.length) return;
+    var fon = fname === '—' ? true : fileTicked(fname);
+    var rows = '', shown = 0, emptyHere = 0;
+    layers.forEach(function(n){
+      var m = META[n], role = ROLE[n];
+      if (!fon && !role) return;                     // background of an unticked file: not listed
+      if (!lyUsable(m)) { emptyHere++; if (!SHOWALL_LY) return; }
+      var orphan = !fon;                             // role layer of an unticked file
+      if (orphan) orphans++;
+      var off = !VIS[n], feeds = off && !!role;      // hidden but still in the calculation
+      var lt = LYTEXT[n] || {}, labels = (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
+      var canLabel = lyHasZ(n) || lyHasDisc(n);
+      var cnt = m.points ? m.points + (m.inserts ? '+' + m.inserts + 'b' : '') + ' pt'
+              : m.lines ? m.lines + ' ln'
+              : m.inserts ? m.inserts + ' b' : '·';
+      rows += '<div class="lyrow' + (off ? ' off' : '') + (feeds ? ' feeds' : '') +
+          '" oncontextmenu="lyMenu(event,\'' + esc(n) + '\')"' +
+          (canLabel ? ' title="Right-click for elevation / description labels"' : '') + '>' +
+        '<span class="eye" onclick="lyEye(\'' + esc(n) + '\')">' + (off ? '🚫' : '👁') + '</span>' +
+        '<span class="nm" title="' + esc(n) + (orphan ? ' — from an unticked file' : '') + '">' + esc(n) +
+          (orphan ? ' <span class="lblmark" style="color:var(--red);border-color:var(--red)">•</span>' : '') +
+          (labels ? ' <span class="lblmark">' + labels + '</span>' : '') + '</span>' +
+        '<select onchange="ROLE[\'' + esc(n) + '\']=this.value;renderLayers();draw()">' +
+          ['','pts','brk','bnd'].map(function(v){
+            var lbl = {'':'background','pts':'📍 points','brk':'📐 breaklines','bnd':'▣ boundary'}[v];
+            return '<option value="' + v + '"' + (role === v ? ' selected' : '') + '>' + lbl + '</option>';
+          }).join('') + '</select>' +
+        /*  A colour swatch for background layers (always) and points layers.
+         *  For points it shows the automatic per-layer shade and can be
+         *  overridden; it only takes effect while "Tint points by layer"
+         *  (Properties → Appearance) is on, so it is disabled until then. */
+        ((!role || role === 'pts')
+          ? '<input type="color" value="' +
+              (LYCOLOR[n] || (role === 'pts'
+                ? tintOf(COLORS.pts, ptsIdx.indexOf(n), ptsIdx.length)
+                : COLORS.base)) + '"' +
+            (role === 'pts' && !TINT
+              ? ' disabled title="Turn on “Tint points by layer” in Properties → Appearance"'
+              : ' title="Layer colour"') +
+            ' onchange="setLyColor(\'' + esc(n) + '\',this.value)">'
+          : '') +
+        '<span class="cnt2">' + cnt + '</span>' +
+      '</div>';
+      shown++;
+    });
+    if (!shown && !emptyHere) return;
+    if (emptyHere)
+      rows += '<div class="lymore" onclick="toggleAllLayers()">' +
+        (SHOWALL_LY ? '▾ hide the ' + emptyHere + ' empty layer' + (emptyHere > 1 ? 's' : '')
+                    : '▸ ' + emptyHere + ' empty layer' + (emptyHere > 1 ? 's' : '') + ' hidden — show them') +
+        '</div>';
+    var fold = !!LYFOLD[fname];
+    tree += '<div class="lyfile' + (fold ? ' collapsed' : '') + '" data-f="' + esc(fname) + '">' +
+      '<div class="row" onclick="lyFold(this)"><span class="tw">' + (fold ? '▸' : '▾') + '</span>' +
+        '<span class="fn"' + (fon ? '' : ' style="opacity:.55"') +
+          ' title="' + esc(fname) + (fon ? '' : ' — unticked in Files') + '">' + esc(fname) + '</span>' +
+        '<span class="fall" onclick="event.stopPropagation();fileVis(\'' + esc(fname) + '\',true)">show all</span>' +
+        '<span class="fall" onclick="event.stopPropagation();fileVis(\'' + esc(fname) + '\',false)">hide all</span>' +
+      '</div>' +
+      '<div class="lykids">' + rows + '</div>' +
+    '</div>';
+  });
+  document.getElementById('lyTree').innerHTML = tree || '<div class="hint">No layers loaded yet.</div>';
 
   var note = '', p = sel('pts'), b = sel('bnd');
-  if (unused) note += '<div class="hint">' + unused + ' layer' + (unused>1?'s':'') +
-    ' with nothing usable — ' +
-    (SHOWALL_LY ? 'shown. <a href="#" onclick="toggleAllLayers();return false">hide them</a>'
-                : 'hidden. <a href="#" onclick="toggleAllLayers();return false">show them</a>') + '</div>';
   var np = p.reduce(function(s,n){ return s + META[n].points; }, 0);
   if (!p.length) note += '<div class="warnbox">Pick the layer that holds the <b>points</b>.</div>';
   else if (p.some(function(n){ return META[n].flat; }))
@@ -680,18 +1409,21 @@ function renderLayers(){
   if (p.some(function(n){ return lyHasZ(n) || lyHasDisc(n); }))
     note += '<div class="hint">Right-click a layer for elevation / description labels on the drawing.</div>';
   if (orphans) note += '<div class="hint" style="color:var(--red)">' + orphans + ' layer' + (orphans>1?'s':'') +
-    ' still in use from a file you unticked. Re-tick the file, or "Clear hidden" after unticking them.</div>';
+    ' still in use from a file you unticked. Re-tick the file in Files, or "Remove hidden layers".</div>';
   document.getElementById('lyNote').innerHTML = note;
+  if (typeof renderSurfaceUI === 'function') renderSurfaceUI();   // roles changed → refresh the pickers
   refreshZRange();
   updClearBtns();
   touch();
 }
 function updClearBtns(){
-  document.getElementById('fileBtns').style.display = FILELIST.length ? 'flex' : 'none';
+  // The Files row always shows — "Open file" lives in it — so only the two
+  // remove buttons switch on and off with the file list.
   document.getElementById('fRmUntick').disabled = !FILELIST.some(function(f){ return !f.on; });
   document.getElementById('fRmAll').disabled = !FILELIST.length;
-  document.getElementById('clrHidden').disabled =
-    !Object.keys(GEOM).some(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); });
+  var hid = document.getElementById('lyRmHid'), bg = document.getElementById('lyRmBg');
+  if (hid) hid.disabled = !Object.keys(GEOM).some(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); });
+  if (bg) bg.disabled = !Object.keys(GEOM).some(function(n){ return !ROLE[n] && fileOn(n); });
 }
 function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]===role; }); }
 
@@ -738,12 +1470,14 @@ function wipe(names, full){
   if (full){
     GEOM = {}; META = {}; ROLE = {}; VIS = {}; FILEOF = {}; FILELIST = [];
     RES = null; MEANZ = null; ZCUT = {p:0, v:0};
-    EDITS = {del:[], add:[], brk:[], swap:[], hole:[]}; UNDO = []; REDO = [];
+    SURFACES = [ newSurface('Surface 1') ]; ACTIVE = 0;
+    EDITS = SURFACES[0].edits; UNDO = SURFACES[0].undo; REDO = SURFACES[0].redo;
+    writeSettings(SURFACES[0].settings);
     DRAWING = null; MOVING = null;
     ['out','info','dxfOut'].forEach(function(id){ var e=document.getElementById(id); if(e) e.innerHTML=''; });
   }
   var left = Object.keys(GEOM).length;
-  clearPick(); renderFiles(); renderLayers(); edBadge();
+  clearPick(); renderFiles(); renderLayers(); renderSurfaceChips(); edBadge();
   document.getElementById('cLayers').hidden = !left;
   document.getElementById('cCalc').hidden = !left;
   document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
@@ -761,7 +1495,15 @@ window.clearFilesUnticked = function(){
   wipe(Object.keys(FILEOF).filter(function(n){ return off[FILEOF[n]]; }), false);
 };
 window.clearLayersHidden = function(){
-  wipe(Object.keys(GEOM).filter(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); }), false);
+  var gone = Object.keys(GEOM).filter(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); });
+  if (gone.length && !confirm('Remove ' + gone.length + ' hidden layer' + (gone.length>1?'s':'') + '?')) return;
+  wipe(gone, false);
+};
+window.clearLayersBackground = function(){
+  var gone = Object.keys(GEOM).filter(function(n){ return !ROLE[n] && fileOn(n); });
+  if (gone.length && !confirm('Remove ' + gone.length + ' background layer' + (gone.length>1?'s':'') +
+      '? Only the layers with a role stay.')) return;
+  wipe(gone, false);
 };
 
 /*  The elevation band. The surveyor types explicit limits; whatever falls
@@ -771,7 +1513,7 @@ function zStats(){
   var lo = Infinity, hi = -Infinity, s = 0, n = 0;
   var eat = function(p){ var z = p[2]; if (z == null) return;
     if (z < lo) lo = z; if (z > hi) hi = z; s += z; n++; };
-  sel('pts').forEach(function(nm){
+  selS('pts').forEach(function(nm){
     if (!VIS[nm]) return;
     GEOM[nm].points.forEach(eat);
     GEOM[nm].lines.forEach(function(L){ L.forEach(eat); });
@@ -801,11 +1543,13 @@ function payload(){
   var inband = function(z){ return z == null || ((!loOn || z >= zlo) && (!hiOn || z <= zhi)); };
   ZCUT = {p:0, v:0};
 
+  /*  Only the layers this surface pulls from (Points / Breaklines / Boundary
+   *  nodes). The role is declared once; a surface picks a subset. */
   var pts = [];
   var takePt = function(p){ if (!keep(p)) return; if (inband(p[2])) pts.push(p); else ZCUT.p++; };
-  sel('pts').forEach(function(n){ GEOM[n].points.forEach(takePt); });
+  selS('pts').forEach(function(n){ GEOM[n].points.forEach(takePt); });
   // Line vertices on a points layer count as measured points too.
-  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(takePt); }); });
+  selS('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(takePt); }); });
   EDITS.add.forEach(function(p){ if (inband(p[2])) pts.push(p); else ZCUT.p++; });
 
   var brk = [];
@@ -823,11 +1567,11 @@ function payload(){
     });
     if (run.length >= 2) brk.push(run);
   };
-  sel('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) addBrk(L); }); });
+  selS('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) addBrk(L); }); });
   EDITS.brk.forEach(function(L){ if (L.length>=2) brk.push(L); });
 
   var bnd = null, best = -1;
-  sel('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
+  selS('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
     if (L.length < 4) return;
     // The largest closed shape is the area of interest.
     var a = 0; for (var i=0,j=L.length-1;i<L.length;j=i++) a += (L[j][0]+L[i][0])*(L[j][1]-L[i][1]);
@@ -854,19 +1598,30 @@ function build(quiet){
   }
   if (!(b.interval > 0)){ warn('out','Give a contour interval in metres.'); return; }
   var btn = document.getElementById('go'); btn.disabled = true;
+  var forSurface = ACTIVE;              // the result belongs to this surface
   document.getElementById('out').innerHTML = '<div class="hint">Calculating…</div>';
   fetch(ZSServer.api('/api/dtm/build'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
     .then(function(r){ return r.json(); })
     .then(function(j){
       btn.disabled = false;
-      if (!j.ok){ warn('out', esc(j.error)); return; }
+      if (!j.ok){
+        if (forSurface === ACTIVE) warn('out', esc(j.error));
+        return;
+      }
+      // The user switched surface while this was in flight — file the result
+      // where it belongs and leave the visible surface alone.
+      if (forSurface !== ACTIVE){
+        if (SURFACES[forSurface]) SURFACES[forSurface].res = j;
+        return;
+      }
       // The selection pointed into the PREVIOUS result: its contour no longer
       // exists as an object. Keeping it would highlight a line that is gone.
-      RES = j; clearPick(); show(j); draw();
+      RES = j; SURFACES[ACTIVE].res = j; clearPick(); show(j); draw();
       document.getElementById('cOut').hidden = false;
+      clearUploadHint();
       edBadge();
     })
-    .catch(function(e){ btn.disabled = false; warn('out','The server did not answer: '+esc(e.message)); });
+    .catch(function(e){ btn.disabled = false; if (forSurface === ACTIVE) warn('out','The server did not answer: '+esc(e.message)); });
 }
 
 function show(j){
@@ -934,7 +1689,9 @@ function bounds(){
     if(p[0]<b[0])b[0]=p[0]; if(p[1]<b[1])b[1]=p[1];
     if(p[0]>b[2])b[2]=p[0]; if(p[1]>b[3])b[3]=p[1]; }
   Object.keys(GEOM).forEach(function(n){
-    if (!VIS[n] || (!fileOn(n) && !ROLE[n])) return;
+    if (!VIS[n]) return;
+    if (ROLE[n]) { if (!surfHas(ROLE[n], n)) return; }   // role layer off for this surface
+    else if (!fileOn(n)) return;                          // background of an unticked file
     GEOM[n].points.forEach(ext);
     GEOM[n].lines.forEach(function(L){ L.forEach(ext); });
   });
@@ -954,7 +1711,14 @@ function zoom(k, cx, cy){
   cx = cx==null ? r.width/2 : cx; cy = cy==null ? r.height/2 : cy;
   T.x = cx - (cx - T.x)*k; T.y = cy - (cy - T.y)*k; T.s *= k; draw();
 }
-function tog(k){ SHOW[k] = !SHOW[k]; draw(); }
+function tog(k){ SHOW[k] = !SHOW[k]; vChecks(); draw(); }
+/*  The ticks next to Triangles / Contours / Elevations / Text in the View menu. */
+function vChecks(){
+  [['mesh','vMesh'],['iso','vIso'],['z','vZ'],['txt','vTxt']].forEach(function(p){
+    var b = document.getElementById(p[1]); if (!b) return;
+    var c = b.querySelector('.chk'); if (c) c.textContent = SHOW[p[0]] ? '✓' : '';
+  });
+}
 var SX = function(x){ return x*T.s + T.x; };
 var SY = function(y){ return -y*T.s + T.y; };
 
@@ -1073,7 +1837,9 @@ function draw(){
   if (SHOW.txt && T.s > 3){
     ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
-      if (!VIS[n] || (!fileOn(n) && !ROLE[n])) return;
+      if (!VIS[n]) return;
+      if (ROLE[n]) { if (!surfHas(ROLE[n], n)) return; }
+      else if (!fileOn(n)) return;
       ctx.fillStyle = LYCOLOR[n] || COLORS.base;
       GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
     });
@@ -1148,17 +1914,22 @@ function draw(){
     ctx.stroke();
   }
 
-  // 4. Whatever the user picked, on top.
+  // 4. Whatever this surface pulls from, on top. Layers a role layer is
+  //    unticked for THIS surface are not drawn — you see one surface at a time.
   ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.beginPath();
-  sel('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
+  selS('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
   ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2; ctx.beginPath();
-  sel('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
+  selS('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
   /*  The points, one per pixel. In a 50 km project 32,000 points fall on a few
    *  thousand pixels — the rest were drawn one on top of the other. */
   ctx.fillStyle = COLORS.pts;
-  var ps = T.s > 8 ? 3 : 2, seen = {}, np = 0;
+  /*  When several points layers feed a surface, "Tint points by layer" keeps
+   *  the Points colour but gives each layer a clearly different shade of it —
+   *  and the dots grow a touch so the shades actually read. */
+  var ptsL = sel('pts'), tintOn = TINT && selS('pts').length > 1;
+  var ps = (T.s > 8 ? 3 : 2) + (tintOn ? 1 : 0), seen = {}, np = 0;
   /*  THE ELEVATION OF EVERY POINT, not only of the one that was clicked.
    *
    *  A second grid, as coarse as the text is wide: two labels in the same cell
@@ -1173,8 +1944,9 @@ function draw(){
    *  click on the layer row. Their own coarse grid — a description is wider
    *  than a number — so two never land one on top of the other. */
   var ATXT = [], aseen = {};
-  sel('pts').forEach(function(n){
+  selS('pts').forEach(function(n){
     if (!VIS[n]) return;
+    ctx.fillStyle = tintOn ? (LYCOLOR[n] || tintOf(COLORS.pts, ptsL.indexOf(n), ptsL.length)) : COLORS.pts;
     var lt = LYTEXT[n] || {}, pa = GEOM[n].point_attrs || [];
     var wantZ = !!lt.z, wantD = !!lt.disc;
     GEOM[n].points.forEach(function(p, pi){
@@ -1278,19 +2050,35 @@ function draw(){
    *  operation can be undone.
    */
   var MODE = 'pan';
-  var EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
-  var UNDO = [], REDO = [];
+  /*  These are the ACTIVE surface's edit lists — the same objects held in
+   *  SURFACES[ACTIVE]. switchSurface() swaps them. */
+  var EDITS = SURFACES[0].edits;
+  var UNDO = SURFACES[0].undo, REDO = SURFACES[0].redo;
   var DRAWING = null;        // the line being drawn right now
   var MOVING = null;         // the point being dragged right now
   var HOVER = null;
 
+  var MODE_NAME = {
+    pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
+    brk:'New line', swap:'Swap edge', hole:'Delete triangle'
+  };
   function setMode(m){
     MODE = (MODE === m && m !== 'pan') ? 'pan' : m;
     DRAWING = null; MOVING = null;
     [].slice.call(document.querySelectorAll('.ed')).forEach(function(b){
-      b.style.background = (b.getAttribute('data-m') === MODE) ? 'var(--navy2)' : '';
-      b.style.borderColor = (b.getAttribute('data-m') === MODE) ? 'var(--navy2)' : '';
+      var on = b.getAttribute('data-m') === MODE;
+      b.classList.toggle('active', on);          // menu items keep their own look via .active
+      b.style.background = on ? 'var(--navy2)' : '';
+      b.style.borderColor = on ? 'var(--navy2)' : '';
     });
+    // Light up the menu that owns the active mode, and name it on the right.
+    [].slice.call(document.querySelectorAll('.menubar .mgroup')).forEach(function(g){
+      var mi = g.querySelector('.mi');
+      if (mi && !mi.classList.contains('ed'))
+        mi.classList.toggle('active', !!g.querySelector('.ed[data-m="' + MODE + '"]'));
+    });
+    var lbl = document.getElementById('modeLbl');
+    if (lbl) lbl.textContent = 'Mode: ' + (MODE_NAME[MODE] || MODE);
     cv.style.cursor = (MODE === 'pan') ? 'grab' : 'crosshair';
     document.getElementById('edHint').textContent = {
       pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
@@ -1320,8 +2108,9 @@ function draw(){
   };
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
-    EDITS = {del: [], add: [], brk: [], swap: [], hole: []};
-    UNDO = []; REDO = []; afterEdit();
+    // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
+    ['del','add','brk','swap','hole'].forEach(function(k){ EDITS[k].length = 0; });
+    UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
   /*  After every operation it recalculates — but only if that is fast. In a
@@ -1340,7 +2129,7 @@ function draw(){
     else document.getElementById('edStale').hidden = false;
   }
   function basePointCount(){
-    return sel('pts').reduce(function(s,n){ return s + GEOM[n].points.length; }, 0);
+    return selS('pts').reduce(function(s,n){ return s + GEOM[n].points.length; }, 0);
   }
   function edBadge(){
     var n = UNDO.length;
@@ -1348,6 +2137,11 @@ function draw(){
     document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
     document.getElementById('edUndo').disabled = !UNDO.length;
     document.getElementById('edRedo').disabled = !REDO.length;
+    var mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo'),
+        mn = document.getElementById('mUndoN');
+    if (mu) mu.disabled = !UNDO.length;
+    if (mr) mr.disabled = !REDO.length;
+    if (mn) mn.textContent = n ? String(n) : '';
     var d = EDITS;
     document.getElementById('edList').innerHTML = !n ? '' :
       '<div class="hint">' +
@@ -1364,7 +2158,7 @@ function draw(){
   function pickPoint(mx, my, px){
     px = px || 10;
     var best = null, bd = px * px;
-    sel('pts').forEach(function(n){
+    selS('pts').forEach(function(n){
       GEOM[n].points.forEach(function(p){
         if (isDeleted(p[0], p[1])) return;
         var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
@@ -1516,9 +2310,13 @@ function draw(){
 
   cv.addEventListener('dblclick', function(){ if (MODE === 'brk') endLine(); });
   window.addEventListener('keydown', function(ev){
+    // A modal owns the keyboard while it is open.
+    var mb = document.getElementById('modalBack');
+    if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
     if (ev.key === 'Enter' && MODE === 'brk') endLine();
     if (ev.key === 'Escape'){ DRAWING = null; clearPick(); setMode('pan');
-      document.getElementById('lyMenu').hidden = true; }
+      document.getElementById('lyMenu').hidden = true;
+      if (typeof closeMenus === 'function') closeMenus(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
   });
@@ -1559,13 +2357,11 @@ function draw(){
     afterEdit();
   });
 
-['mesh','iso','z','txt'].forEach(function(k){
-  var b = document.getElementById({mesh:'bMesh',iso:'bIso',z:'bZ',txt:'bTxt'}[k]);
-  var upd = function(){ b.style.opacity = SHOW[k] ? 1 : .45; };
-  b.addEventListener('click', function(){ setTimeout(upd, 0); }); upd();
-});
 buildColorUI();
 resize();
+vChecks();
+setMode('pan');
+renderSurfaceChips();
 
 // The calculation settings are part of the job too.
 ['iv','zlo','zhi'].forEach(function(id){
@@ -1574,7 +2370,6 @@ resize();
 ['blz','clip','wmesh'].forEach(function(id){
   document.getElementById(id).addEventListener('change', touch);
 });
-document.getElementById('jobName').addEventListener('input', function(){ renameJob(this.value); });
 
 ZSServer.banner('<b>⚠ This tool needs the server.</b><br>' +
   'The calculations run in Python — constrained triangulation, contours, ' +
