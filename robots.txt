@@ -1,0 +1,7 @@
+# The site is live but not meant to be found yet.
+# The per-page <meta name="robots" content="noindex, nofollow"> is what actually
+# applies on the GitHub project page (stelapostolou-creator.github.io/zsgeolab/);
+# a crawler only reads robots.txt from the host root, so this file takes effect
+# once the site is served from its own domain (zsgeolab.com).
+User-agent: *
+Disallow: /
