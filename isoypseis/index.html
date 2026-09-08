@@ -60,6 +60,14 @@
     border-radius:4px;background:var(--bg2);cursor:pointer;vertical-align:middle;}
   .lblmark{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--navy2);
     border:1px solid var(--navy2);border-radius:3px;padding:0 3px;vertical-align:1px;}
+  #fileList{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+  .filerow{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 7px;
+    background:var(--bg2);border:1px solid var(--line);border-radius:7px;cursor:pointer;}
+  .filerow .fn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .filerow .fc{color:var(--mut);font-family:ui-monospace,Consolas,monospace;font-size:11px;}
+  .filerow .fc::after{content:" layers";}
+  tr.orphan td{background:rgba(224,53,58,.09);}
+  tr.orphan td:nth-child(2){color:#ff9a9d;}
   .lymenu{position:fixed;z-index:100;background:var(--card);border:1px solid var(--line);
     border-radius:8px;padding:5px;min-width:180px;box-shadow:0 10px 28px rgba(0,0,0,.45);}
   .lymenu .hd{font-size:10px;color:var(--mut);padding:4px 9px 6px;text-transform:uppercase;letter-spacing:.5px;
@@ -122,6 +130,11 @@
         <b>DXF</b>: any version — points, lines, blocks.<br>
         <b>TXT / CSV</b>: <span class="mono">pt, x, y, z, description</span>. Three columns are read as <span class="mono">x y z</span>. Anything after the description is ignored.</div>
       <div id="info"></div>
+      <div id="fileList"></div>
+      <div id="fileBtns" style="display:none;gap:8px;margin-top:10px">
+        <button class="btn ghost" id="fRmUntick" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearFilesUnticked()" title="Remove the unticked files" disabled>Remove unticked</button>
+        <button class="btn ghost" id="fRmAll" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearFilesAll()" title="Remove every loaded file">Remove all</button>
+      </div>
     </div>
 
     <details class="card" id="cAppear">
@@ -139,6 +152,9 @@
         <tbody id="lyTbl"></tbody>
       </table></div>
       <div id="lyNote"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn ghost" id="clrHidden" style="flex:1;padding:8px 6px;font-size:12.5px" onclick="clearLayersHidden()" title="Remove the unticked layers from this list" disabled>Clear hidden</button>
+      </div>
     </div>
 
     <div class="card" id="cCalc" hidden>
@@ -235,6 +251,8 @@ var GEOM = {};          // layer -> {points, lines, texts}
 var META = {};          // layer -> its row of the report
 var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
 var VIS = {};           // layer -> boolean
+var FILEOF = {};        // layer -> the file it came from
+var FILELIST = [];      // [{name, on}] in upload order
 var RES = null;         // the server's result
 var PICK = null;        // what the last click identified
 var MEANZ = null;       // mean elevation of the points last sent
@@ -391,15 +409,21 @@ document.getElementById('file').addEventListener('change', function(ev){
       // wrong — so it takes the "points" role straight away. Everything from a
       // DXF still waits for the user to say what it is.
       var isText = /\.(txt|csv)$/i.test(j.file);
+      // Each upload is its own row in the files list — the same name twice is
+      // kept apart. The layers remember which file they belong to.
+      var fname = j.file, k = 2;
+      while (FILELIST.some(function(x){ return x.name === fname; })) fname = j.file + ' (' + (k++) + ')';
+      FILELIST.push({name: fname, on: true});
       j.layers.forEach(function(r){
         var n = r.name;
-        if (GEOM[n]){ n = r.name + ' (' + j.file + ')'; }
+        if (GEOM[n]){ n = r.name + ' — ' + fname; }
         GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[],point_attrs:[]};
         if (!GEOM[n].point_attrs) GEOM[n].point_attrs = [];
         META[n] = r; ROLE[n] = ROLE[n] || (isText ? 'pts' : ''); VIS[n] = true;
+        FILEOF[n] = fname;
       });
-      info.innerHTML = '<div class="okbox"><b>'+esc(j.file)+'</b> — '+j.layers.length+' layers</div>';
-      clearPick(); renderLayers(); fit();
+      info.innerHTML = '';
+      clearPick(); renderFiles(); renderLayers(); fit();
       document.getElementById('cLayers').hidden = false;
       document.getElementById('cCalc').hidden = false;
     })
@@ -415,17 +439,22 @@ document.getElementById('file').addEventListener('change', function(ev){
  *  points, so it is given that role directly. The user can still change it. */
 
 function renderLayers(){
-  var h = '', unused = 0;
+  var h = '', unused = 0, orphans = 0;
   Object.keys(GEOM).forEach(function(n){
     var m = META[n];
+    var fon = fileOn(n);
+    if (!fon && !ROLE[n]) return;                  // background of an unticked file: gone
     if (!lyUsable(m)) { unused++; if (!SHOWALL_LY) return; }
+    var orphan = !fon;                             // role layer of an unticked file: kept, flagged
+    if (orphan) orphans++;
     var noRole = !ROLE[n];
     var lt = LYTEXT[n] || {}, labels = (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
     var canLabel = lyHasZ(n) || lyHasDisc(n);
-    h += '<tr oncontextmenu="lyMenu(event,\''+esc(n)+'\')"' +
+    h += '<tr' + (orphan ? ' class="orphan"' : '') + ' oncontextmenu="lyMenu(event,\''+esc(n)+'\')"' +
         (canLabel ? ' title="Right-click for elevation / description labels"' : '') + '>' +
-      '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;draw()"></td>' +
-      '<td title="'+esc(n)+'">'+esc(n.length>16?n.slice(0,15)+'…':n)+
+      '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;updClearBtns();draw()"></td>' +
+      '<td title="'+esc(n)+(orphan?' — from an unticked file':'')+'">'+esc(n.length>16?n.slice(0,15)+'…':n)+
+        (orphan ? ' <span class="lblmark" style="color:var(--red);border-color:var(--red)">•</span>' : '') +
         (labels ? ' <span class="lblmark">'+labels+'</span>' : '')+'</td>' +
       '<td><select onchange="ROLE[\''+esc(n)+'\']=this.value;renderLayers();draw()">' +
         ['','pts','brk','bnd'].map(function(v){
@@ -454,10 +483,90 @@ function renderLayers(){
   else note += '<div class="okbox">'+np+' points · '+sel('brk').length+' breakline layers'+(b.length?' · boundary ✓':'')+'</div>';
   if (p.some(function(n){ return lyHasZ(n) || lyHasDisc(n); }))
     note += '<div class="hint">Right-click a layer for elevation / description labels on the drawing.</div>';
+  if (orphans) note += '<div class="hint" style="color:var(--red)">' + orphans + ' layer' + (orphans>1?'s':'') +
+    ' still in use from a file you unticked. Re-tick the file, or "Clear hidden" after unticking them.</div>';
   document.getElementById('lyNote').innerHTML = note;
   refreshZRange();
+  updClearBtns();
+}
+function updClearBtns(){
+  document.getElementById('fileBtns').style.display = FILELIST.length ? 'flex' : 'none';
+  document.getElementById('fRmUntick').disabled = !FILELIST.some(function(f){ return !f.on; });
+  document.getElementById('fRmAll').disabled = !FILELIST.length;
+  document.getElementById('clrHidden').disabled =
+    !Object.keys(GEOM).some(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); });
 }
 function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]===role; }); }
+
+/*  ================================ FILES ================================
+ *
+ *  Each upload is a row you can tick off. Untick a file and its BACKGROUND
+ *  layers leave the list and the screen at once — they are only scenery. Its
+ *  points / breaklines / boundary stay (marked, because a role still counts
+ *  in the calculation), so unticking never quietly changes a surface. This is
+ *  all about the view; what a layer feeds is decided by its role, not here. */
+function fileOn(name){
+  var f = FILEOF[name];
+  if (!f) return true;
+  for (var i = 0; i < FILELIST.length; i++) if (FILELIST[i].name === f) return FILELIST[i].on;
+  return true;
+}
+function renderFiles(){
+  var box = document.getElementById('fileList');
+  if (!FILELIST.length){ box.innerHTML = ''; updClearBtns(); return; }
+  box.innerHTML = FILELIST.map(function(f){
+    var nl = Object.keys(FILEOF).filter(function(n){ return FILEOF[n] === f.name; }).length;
+    return '<label class="filerow"><input type="checkbox"' + (f.on ? ' checked' : '') +
+      ' onchange="setFileOn(this,\'' + esc(f.name) + '\')">' +
+      '<span class="fn" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+      '<span class="fc">' + nl + '</span></label>';
+  }).join('');
+  updClearBtns();
+}
+window.setFileOn = function(el, name){
+  for (var i = 0; i < FILELIST.length; i++) if (FILELIST[i].name === name) FILELIST[i].on = el.checked;
+  renderLayers(); draw();
+};
+
+/*  Removing whole files. "unticked" drops the files you switched off; "all"
+ *  empties everything, the result and the edits with it. Files on disk are
+ *  never touched — only what is loaded here. */
+function wipe(names, full){
+  if (!names.length && !full) return;
+  names.forEach(function(n){
+    delete GEOM[n]; delete META[n]; delete ROLE[n]; delete VIS[n]; delete FILEOF[n];
+  });
+  var live = {}; Object.keys(FILEOF).forEach(function(n){ live[FILEOF[n]] = 1; });
+  FILELIST = FILELIST.filter(function(f){ return live[f.name]; });
+  if (full){
+    GEOM = {}; META = {}; ROLE = {}; VIS = {}; FILEOF = {}; FILELIST = [];
+    RES = null; MEANZ = null; ZCUT = {p:0, v:0};
+    EDITS = {del:[], add:[], brk:[], swap:[], hole:[]}; UNDO = []; REDO = [];
+    DRAWING = null; MOVING = null;
+    ['out','info','dxfOut'].forEach(function(id){ var e=document.getElementById(id); if(e) e.innerHTML=''; });
+  }
+  var left = Object.keys(GEOM).length;
+  document.getElementById('cLayers').hidden = !left;
+  document.getElementById('cCalc').hidden = !left;
+  if (full || !left){
+    document.getElementById('cEdit').hidden = true;
+    document.getElementById('cOut').hidden = true;
+  }
+  clearPick(); renderFiles(); renderLayers(); edBadge();
+  left ? fit() : draw();
+}
+window.clearFilesAll = function(){
+  if (FILELIST.length && !confirm('Remove every loaded file?')) return;
+  wipe([], true);
+};
+window.clearFilesUnticked = function(){
+  var off = {};
+  FILELIST.forEach(function(f){ if (!f.on) off[f.name] = 1; });
+  wipe(Object.keys(FILEOF).filter(function(n){ return off[FILEOF[n]]; }), false);
+};
+window.clearLayersHidden = function(){
+  wipe(Object.keys(GEOM).filter(function(n){ return !VIS[n] && (fileOn(n) || ROLE[n]); }), false);
+};
 
 /*  The elevation band. The surveyor types explicit limits; whatever falls
  *  outside is dropped before the surface is built — the tool does not guess,
@@ -629,7 +738,7 @@ function bounds(){
     if(p[0]<b[0])b[0]=p[0]; if(p[1]<b[1])b[1]=p[1];
     if(p[0]>b[2])b[2]=p[0]; if(p[1]>b[3])b[3]=p[1]; }
   Object.keys(GEOM).forEach(function(n){
-    if (!VIS[n]) return;
+    if (!VIS[n] || (!fileOn(n) && !ROLE[n])) return;
     GEOM[n].points.forEach(ext);
     GEOM[n].lines.forEach(function(L){ L.forEach(ext); });
   });
@@ -750,7 +859,7 @@ function draw(){
   ctx.lineWidth = 1;
   var bseen = {};
   Object.keys(GEOM).forEach(function(n){
-    if (!VIS[n] || ROLE[n]) return;
+    if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
     var col = LYCOLOR[n] || COLORS.base;
     ctx.strokeStyle = col; ctx.fillStyle = col;
     ctx.beginPath();
@@ -768,7 +877,7 @@ function draw(){
   if (SHOW.txt && T.s > 3){
     ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
-      if (!VIS[n]) return;
+      if (!VIS[n] || (!fileOn(n) && !ROLE[n])) return;
       ctx.fillStyle = LYCOLOR[n] || COLORS.base;
       GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
     });
