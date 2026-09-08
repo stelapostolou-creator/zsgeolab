@@ -6,7 +6,12 @@
 <style>
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
-    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;
+    /*  Two AutoCAD-style aiming cursors: crosshair with a small pickbox while
+     *  idle, plain crosshair while a tool runs. A dark halo keeps both legible
+     *  on any background. */
+    --cur-pick:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='60'%20height='60'%3E%3Cg%20fill='none'%20stroke='%23000'%20stroke-opacity='.5'%20stroke-width='3'%3E%3Cpath%20d='M30%204V25M30%2035V56M4%2030H25M35%2030H56'/%3E%3Crect%20x='26'%20y='26'%20width='8'%20height='8'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='1'%3E%3Cpath%20d='M30%204V25M30%2035V56M4%2030H25M35%2030H56'/%3E%3Crect%20x='26'%20y='26'%20width='8'%20height='8'/%3E%3C/g%3E%3C/svg%3E") 30 30,crosshair;
+    --cur-cross:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='60'%20height='60'%3E%3Cg%20fill='none'%20stroke='%23000'%20stroke-opacity='.5'%20stroke-width='3'%3E%3Cpath%20d='M30%203V57M3%2030H57'/%3E%3C/g%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='1'%3E%3Cpath%20d='M30%203V57M3%2030H57'/%3E%3C/g%3E%3C/svg%3E") 30 30,crosshair;}
   html,body{height:100%;}
   /*  A CAD-style shell: a fixed top bar, then a full-height workspace — the
    *  tool panel flush to the left edge, the canvas taking all the rest. The
@@ -265,8 +270,11 @@
   .menu button .chk{margin-left:auto;color:var(--ok);width:14px;text-align:center;font-weight:800;}
   .menu .div{height:1px;background:var(--line);margin:4px 6px;}
   .cv-wrap{position:relative;flex:1 1 auto;background:#080d18;overflow:hidden;min-height:0;}
-  #cv{display:block;width:100%;height:100%;cursor:grab;}
-  #cv.drag{cursor:grabbing;}
+  /*  The aiming cursor. #cv shows the pickbox crosshair; setMode adds .tool
+   *  while a command runs, which drops the box (see :root --cur-*). No "hand"
+   *  anywhere — the wheel button pans. */
+  #cv{display:block;width:100%;height:100%;cursor:var(--cur-pick);}
+  #cv.tool{cursor:var(--cur-cross);}
   .cv-info{position:absolute;right:10px;bottom:10px;background:rgba(8,13,24,.85);border:1px solid var(--line);
     border-radius:7px;padding:5px 9px;font-size:11.5px;color:var(--mut);
     font-family:ui-monospace,Consolas,monospace;}
@@ -1725,9 +1733,25 @@ var SY = function(y){ return -y*T.s + T.y; };
 /*  PANNED separates a click from a drag: the same button both moves the
  *  drawing and asks what is under it, and letting go after a pan must not
  *  select whatever happened to be beneath the cursor. */
-var drag = null, PANNED = false;
-cv.addEventListener('mousedown', function(e){ if (MODE !== 'pan') return; drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y}; PANNED = false; cv.classList.add('drag'); });
-window.addEventListener('mouseup', function(){ drag = null; cv.classList.remove('drag'); });
+var drag = null, PANNED = false, MIDT = 0;
+/*  The middle button (the wheel pressed) pans the view in EVERY mode, the way
+ *  a CAD program does; a double press of it is Zoom Extents. The left button
+ *  still pans while the canvas is in its plain pan state. */
+cv.addEventListener('mousedown', function(e){
+  var mid = e.button === 1;
+  if (mid) e.preventDefault();                 // else the browser starts autoscroll
+  else if (MODE !== 'pan') return;
+  drag = {x:e.clientX, y:e.clientY, tx:T.x, ty:T.y, mid:mid}; PANNED = false;
+  cv.classList.add('drag');
+});
+window.addEventListener('mouseup', function(e){
+  if (drag && drag.mid && !PANNED && e.button === 1){
+    var now = Date.now();
+    if (now - MIDT < 350) fit();               // wheel double-click = Zoom Extents
+    MIDT = now;
+  }
+  drag = null; cv.classList.remove('drag');
+});
 window.addEventListener('mousemove', function(e){
   var r = cv.getBoundingClientRect();
   if (drag){
@@ -2028,6 +2052,63 @@ function draw(){
     }
   }
 
+  // 7. The selection set — a bright overlay that reads on any layer, and the
+  //    rubber-band box while a drag is in progress.
+  if (typeof SEL !== 'undefined' && SEL.length){
+    var triN = 0;
+    SEL.forEach(function(it){ if (it.t === 'tri') triN++; });
+    ctx.save();
+    SEL.forEach(function(it){
+      if (it.t === 'pt'){
+        var ix = SX(it.x), iy = SY(it.y);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 3.5; ctx.strokeRect(ix-4, iy-4, 8, 8);
+        ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 1.5; ctx.strokeRect(ix-4, iy-4, 8, 8);
+      } else if (it.t === 'tri'){
+        var P = it.p, s0 = P.map(function(v){ return [SX(v[0]), SY(v[1])]; });
+        ctx.beginPath();
+        ctx.moveTo(s0[0][0],s0[0][1]); ctx.lineTo(s0[1][0],s0[1][1]);
+        ctx.lineTo(s0[2][0],s0[2][1]); ctx.closePath();
+        ctx.fillStyle = 'rgba(77,182,255,.18)'; ctx.fill();
+        ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 1.5; ctx.stroke();
+        // Few enough to read: colour the corners and label z and side lengths.
+        if (triN <= 3){
+          ctx.font = '11px Consolas,monospace'; ctx.textBaseline = 'middle';
+          for (var e = 0; e < 3; e++){
+            var m = [(s0[e][0]+s0[(e+1)%3][0])/2, (s0[e][1]+s0[(e+1)%3][1])/2];
+            var len = Math.hypot(P[(e+1)%3][0]-P[e][0], P[(e+1)%3][1]-P[e][1]);
+            ctx.fillStyle = 'rgba(0,0,0,.65)';
+            ctx.fillText(len.toFixed(2), m[0]+1, m[1]+1);
+            ctx.fillStyle = '#dfe8f5';
+            ctx.fillText(len.toFixed(2), m[0], m[1]);
+          }
+          for (var k = 0; k < 3; k++){
+            ctx.beginPath(); ctx.fillStyle = TRI_COLS[k];
+            ctx.arc(s0[k][0], s0[k][1], 4.5, 0, 6.284); ctx.fill();
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.fillStyle = 'rgba(0,0,0,.7)';
+            ctx.fillText(P[k][2].toFixed(3), s0[k][0]+8, s0[k][1]-7);
+            ctx.fillStyle = TRI_COLS[k];
+            ctx.fillText(P[k][2].toFixed(3), s0[k][0]+7, s0[k][1]-8);
+          }
+        }
+      } else if (it.line){
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 4.5; poly(it.line);
+        ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 2; poly(it.line);
+      }
+    });
+    ctx.restore();
+  }
+  if (typeof BOX !== 'undefined' && BOX){
+    var bWhole = BOX.x1 >= BOX.x0;
+    var bxL = Math.min(BOX.x0,BOX.x1), bxT = Math.min(BOX.y0,BOX.y1);
+    var bxW = Math.abs(BOX.x1-BOX.x0), bxH = Math.abs(BOX.y1-BOX.y0);
+    ctx.fillStyle = bWhole ? 'rgba(77,138,255,.12)' : 'rgba(60,200,110,.12)';
+    ctx.fillRect(bxL, bxT, bxW, bxH);
+    ctx.strokeStyle = bWhole ? '#4d8aff' : '#3cc86e';
+    ctx.lineWidth = 1; ctx.setLineDash(bWhole ? [] : [5,3]);
+    ctx.strokeRect(bxL, bxT, bxW, bxH); ctx.setLineDash([]);
+  }
+
   if (MOVING){
     ctx.strokeStyle = '#7CFFB2'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
     ctx.beginPath(); ctx.moveTo(SX(MOVING.from[0]),SY(MOVING.from[1]));
@@ -2049,7 +2130,7 @@ function draw(){
    *  every new triangulation. The original DXF stays untouched and every
    *  operation can be undone.
    */
-  var MODE = 'pan';
+  var MODE = 'select';        // the canvas rests in Select, like a CAD editor
   /*  These are the ACTIVE surface's edit lists — the same objects held in
    *  SURFACES[ACTIVE]. switchSurface() swaps them. */
   var EDITS = SURFACES[0].edits;
@@ -2059,12 +2140,16 @@ function draw(){
   var HOVER = null;
 
   var MODE_NAME = {
-    pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
+    select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     brk:'New line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
-    MODE = (MODE === m && m !== 'pan') ? 'pan' : m;
+    // Picking a tool again drops back to Select, the resting state of a CAD
+    // canvas; picking Select while already there does nothing.
+    MODE = (MODE === m && m !== 'select') ? 'select' : m;
     DRAWING = null; MOVING = null;
+    if (MODE === 'select' && typeof selClear === 'function') { /* keep the set */ }
+    else if (typeof SEL !== 'undefined') { SEL = []; showSel(); }
     [].slice.call(document.querySelectorAll('.ed')).forEach(function(b){
       var on = b.getAttribute('data-m') === MODE;
       b.classList.toggle('active', on);          // menu items keep their own look via .active
@@ -2079,8 +2164,10 @@ function draw(){
     });
     var lbl = document.getElementById('modeLbl');
     if (lbl) lbl.textContent = 'Mode: ' + (MODE_NAME[MODE] || MODE);
-    cv.style.cursor = (MODE === 'pan') ? 'grab' : 'crosshair';
+    // A running command drops the pickbox, the way a CAD program does.
+    cv.classList.toggle('tool', MODE !== 'pan' && MODE !== 'select');
     document.getElementById('edHint').textContent = {
+      select:'Click to select · drag a box (left→right whole, right→left touching) · Esc clears.',
       pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
       del:   'Click a point to take it OUT of the calculation.',
       move:  'Drag a point to a new position. Its elevation stays the same.',
@@ -2273,6 +2360,7 @@ function draw(){
 
   cv.addEventListener('click', function(ev){
     if (MOVING) return;
+    if (MODE === 'select') return;               // the selection handlers own the click
     var r = cv.getBoundingClientRect();
     var mx = ev.clientX - r.left, my = ev.clientY - r.top;
     // In pan mode a click that did not move the drawing is a question.
@@ -2314,7 +2402,9 @@ function draw(){
     var mb = document.getElementById('modalBack');
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
     if (ev.key === 'Enter' && MODE === 'brk') endLine();
-    if (ev.key === 'Escape'){ DRAWING = null; clearPick(); setMode('pan');
+    if (ev.key === 'Escape'){ DRAWING = null; clearPick();
+      if (typeof selClear === 'function') selClear();
+      setMode('select');                    // Esc always lands back in Select
       document.getElementById('lyMenu').hidden = true;
       if (typeof closeMenus === 'function') closeMenus(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
@@ -2357,10 +2447,274 @@ function draw(){
     afterEdit();
   });
 
+  /*  ============================ SELECTION ============================
+   *
+   *  The canvas rests in "select", the way a CAD editor does. The left button
+   *  picks what is under it, or drags a box: left-to-right takes only what lies
+   *  WHOLLY inside (a window, solid blue); right-to-left takes anything the box
+   *  TOUCHES (a crossing, dashed green). Shift adds to the set; Esc clears it.
+   *  Nothing here changes the surface — Delete comes in a later step. */
+  var SEL = [];                        // the selected items
+  var BOX = null;                      // the rubber-band box while dragging
+
+  function selClear(){ if (SEL.length){ SEL = []; showSel(); draw(); } }
+  window.selClear = selClear;
+
+  function ptInTri(px, py, ax, ay, bx, by, cx, cy){
+    var d1 = (px-bx)*(ay-by) - (ax-bx)*(py-by);
+    var d2 = (px-cx)*(by-cy) - (bx-cx)*(py-cy);
+    var d3 = (px-ax)*(cy-ay) - (cx-ax)*(py-ay);
+    return !(((d1<0)||(d2<0)||(d3<0)) && ((d1>0)||(d2>0)||(d3>0)));
+  }
+
+  /*  The triangle whose screen shape holds the cursor. Vertices keep their z. */
+  function hitTri(mx, my){
+    if (!RES || !RES.mesh) return null;
+    var V = RES.mesh.vertices, TR = RES.mesh.triangles;
+    for (var i = 0; i < TR.length; i++){
+      var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
+      if (ptInTri(mx, my, SX(a[0]),SY(a[1]), SX(b[0]),SY(b[1]), SX(c[0]),SY(c[1])))
+        return {t:'tri', i:i, p:[[a[0],a[1],a[2]],[b[0],b[1],b[2]],[c[0],c[1],c[2]]]};
+    }
+    return null;
+  }
+
+  /*  Every breakline / boundary polyline on screen, tagged with its kind. */
+  function linePool(){
+    var pool = [];
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'brk', line:L, layer:n}); });
+    });
+    EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
+    selS('bnd').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'bnd', line:L, layer:n}); });
+    });
+    return pool;
+  }
+  /*  The nearest polyline in a pool, within "px" screen pixels. */
+  function nearestPoly(mx, my, pool, px){
+    var best = null, bd = px;
+    pool.forEach(function(e){
+      var L = e.line;
+      for (var i = 1; i < L.length; i++){
+        var d = segDist(mx, my, SX(L[i-1][0]),SY(L[i-1][1]), SX(L[i][0]),SY(L[i][1]));
+        if (d < bd){ bd = d; best = e; }
+      }
+    });
+    return best;
+  }
+  /*  Length, nodes and whether a polyline carries real relief. */
+  function lineMetrics(L){
+    var h = 0, s = 0, zmin = Infinity, zmax = -Infinity;
+    for (var i = 0; i < L.length; i++){
+      var z = L[i][2];
+      if (z != null){ if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+      if (i){
+        var dh = Math.hypot(L[i][0]-L[i-1][0], L[i][1]-L[i-1][1]);
+        var dz = (L[i][2] != null && L[i-1][2] != null) ? L[i][2]-L[i-1][2] : 0;
+        h += dh; s += Math.hypot(dh, dz);
+      }
+    }
+    var threeD = isFinite(zmin) && (zmax - zmin) > 1e-6;
+    return {nodes: L.length, hlen: h, slen: s, threeD: threeD, zmin: zmin, zmax: zmax};
+  }
+
+  /*  One thing under the cursor. Thin things you aim at (a point, a line, a
+   *  contour) win over the triangle that fills the area behind them. */
+  function hitOne(mx, my){
+    var p = pickPoint(mx, my, 9);
+    if (p) return {t:'pt', x:p[0], y:p[1], z:p[2]};
+    var ln = nearestPoly(mx, my, linePool(), 10);
+    if (ln) return ln;
+    var c = pickContour(mx, my, 9);
+    if (c) return {t:'iso', z:c.z, line:c.line, main:c.main, len:c.len, n:c.n};
+    var tr = hitTri(mx, my);
+    if (tr) return tr;
+    return null;
+  }
+
+  function sameItem(a, b){
+    if (a.t !== b.t) return false;
+    if (a.t === 'pt')  return Math.abs(a.x-b.x) < 1e-6 && Math.abs(a.y-b.y) < 1e-6;
+    if (a.t === 'tri') return a.i === b.i;
+    return a.line === b.line;
+  }
+  function selAdd(item, shift){
+    var at = -1;
+    for (var i = 0; i < SEL.length; i++) if (sameItem(SEL[i], item)) at = i;
+    if (shift){ if (at >= 0) SEL.splice(at, 1); else SEL.push(item); }
+    else SEL = [item];
+  }
+
+  /*  Screen segment against the rectangle (edges L,T,R,B). */
+  function segX(ax,ay,bx,by, cx,cy,dx,dy){
+    var d = (bx-ax)*(dy-cy) - (by-ay)*(dx-cx);
+    if (!d) return false;
+    var t = ((cx-ax)*(dy-cy) - (cy-ay)*(dx-cx)) / d;
+    var u = ((cx-ax)*(by-ay) - (cy-ay)*(bx-ax)) / d;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+  }
+  function segTouchesRect(x0,y0,x1,y1, L,T0,R,B){
+    if ((x0>=L&&x0<=R&&y0>=T0&&y0<=B) || (x1>=L&&x1<=R&&y1>=T0&&y1<=B)) return true;
+    return segX(x0,y0,x1,y1,L,T0,L,B) || segX(x0,y0,x1,y1,R,T0,R,B) ||
+           segX(x0,y0,x1,y1,L,T0,R,T0) || segX(x0,y0,x1,y1,L,B,R,B);
+  }
+
+  /*  Everything the box catches. whole = window (all inside), else = crossing
+   *  (anything the box touches). */
+  function selBox(x0, y0, x1, y1){
+    var rx0 = Math.min(x0,x1), rx1 = Math.max(x0,x1),
+        ry0 = Math.min(y0,y1), ry1 = Math.max(y0,y1);
+    var whole = x1 >= x0, out = [];
+    var inR = function(sx, sy){ return sx>=rx0 && sx<=rx1 && sy>=ry0 && sy<=ry1; };
+
+    selS('pts').forEach(function(n){
+      GEOM[n].points.forEach(function(p){
+        if (isDeleted(p[0], p[1])) return;
+        if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
+      });
+    });
+    EDITS.add.forEach(function(p){
+      if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
+    });
+
+    if (RES && RES.mesh){
+      var V = RES.mesh.vertices, TR = RES.mesh.triangles;
+      for (var i = 0; i < TR.length; i++){
+        var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
+        var ax=SX(a[0]),ay=SY(a[1]), bx=SX(b[0]),by=SY(b[1]), cx=SX(c[0]),cy=SY(c[1]);
+        var ia=inR(ax,ay), ib=inR(bx,by), ic=inR(cx,cy);
+        var take = whole ? (ia && ib && ic)
+          : (ia || ib || ic || ptInTri((rx0+rx1)/2,(ry0+ry1)/2, ax,ay,bx,by,cx,cy) ||
+             segTouchesRect(ax,ay,bx,by,rx0,ry0,rx1,ry1) ||
+             segTouchesRect(bx,by,cx,cy,rx0,ry0,rx1,ry1) ||
+             segTouchesRect(cx,cy,ax,ay,rx0,ry0,rx1,ry1));
+        if (take) out.push({t:'tri', i:i, p:[[a[0],a[1],a[2]],[b[0],b[1],b[2]],[c[0],c[1],c[2]]]});
+      }
+    }
+
+    /*  A polyline is caught when every node is inside (window) or any node or
+     *  segment touches the box (crossing). Breaklines, boundary and contours
+     *  all go through here. */
+    var scanLine = function(PL, make){
+      var hit = false, allin = true;
+      for (var k = 0; k < PL.length; k++){
+        var sx = SX(PL[k][0]), sy = SY(PL[k][1]), here = inR(sx, sy);
+        if (here) hit = true; else allin = false;
+        if (!whole && !here && k > 0 &&
+            segTouchesRect(SX(PL[k-1][0]),SY(PL[k-1][1]), sx, sy, rx0,ry0,rx1,ry1)) hit = true;
+      }
+      if (whole ? allin : hit) out.push(make());
+    };
+    linePool().forEach(function(e){
+      scanLine(e.line, function(){ return {t:e.t, line:e.line, layer:e.layer}; });
+    });
+    if (RES && RES.contours && SHOW.iso){
+      RES.contours.levels.forEach(function(lv){
+        if (ISODENSE && !isMainLevel(lv.z)) return;
+        lv.lines.forEach(function(Ln){
+          scanLine(Ln, function(){ return {t:'iso', z:lv.z, line:Ln, main:isMainLevel(lv.z)}; });
+        });
+      });
+    }
+    return out;
+  }
+
+  /*  The three bold corner colours, shared with the on-canvas triangle read-out. */
+  var TRI_COLS = ['#ff4d4d', '#33d17a', '#4d9bff'];
+
+  /*  What one selected item says about itself. Fuller than the old popup —
+   *  the Properties panel proper, with *VARIES*, is a later step. */
+  function selOne(s){
+    if (s.t === 'pt')
+      return '<div class="k" style="color:'+COLORS.pts+'">Point</div>' +
+        '<div class="v">' + (s.z == null ? '— no elevation' : fmt(s.z,3)+' m') + '</div>' +
+        '<div class="d">X ' + fmt(s.x,3) + '<br>Y ' + fmt(s.y,3) + '</div>';
+    if (s.t === 'brk' || s.t === 'bnd'){
+      var m = lineMetrics(s.line);
+      return '<div class="k" style="color:'+(s.t==='bnd'?COLORS.bnd:COLORS.brk)+'">' +
+        (s.t === 'bnd' ? 'Boundary' : 'Breakline') + '</div>' +
+        '<div class="v">' + (m.threeD ? '3D' : '2D') + ' · ' + m.nodes + ' nodes</div>' +
+        '<div class="d">Horizontal ' + fmt(m.hlen,2) + ' m' +
+        (m.threeD ? '<br>Along slope ' + fmt(m.slen,2) + ' m<br>Elevation ' +
+          fmt(m.zmin,3) + ' – ' + fmt(m.zmax,3) + ' m' : '') + '</div>';
+    }
+    if (s.t === 'iso'){
+      var il = lineMetrics(s.line);
+      return '<div class="k" style="color:'+(s.main?COLORS.index:COLORS.minor)+'">' +
+        (s.main ? 'Index contour' : 'Contour') + '</div>' +
+        '<div class="v">' + fmt(s.z,3) + ' m</div>' +
+        '<div class="d">' + fmt(il.hlen,1) + ' m long · ' + il.nodes + ' vertices</div>';
+    }
+    // triangle
+    var P = s.p;
+    var e01 = Math.hypot(P[1][0]-P[0][0], P[1][1]-P[0][1]);
+    var e12 = Math.hypot(P[2][0]-P[1][0], P[2][1]-P[1][1]);
+    var e20 = Math.hypot(P[0][0]-P[2][0], P[0][1]-P[2][1]);
+    var vd = P.map(function(v, i){
+      return '<span style="color:'+TRI_COLS[i]+'">■</span> ' + fmt(v[2],3) + ' m';
+    }).join('<br>');
+    return '<div class="k" style="color:'+COLORS.mesh+'">Triangle #' + (s.i+1) + '</div>' +
+      '<div class="d">' + vd + '</div>' +
+      '<div class="d">Sides ' + fmt(e01,2) + ' · ' + fmt(e12,2) + ' · ' + fmt(e20,2) + ' m</div>';
+  }
+
+  function showSel(){
+    var el = document.getElementById('pick');
+    if (!el) return;
+    if (!SEL.length){ el.hidden = true; el.innerHTML = ''; return; }
+    PICK = null;                                  // the two never show at once
+    var h = '<span class="x" onclick="selClear()" title="Clear">✕</span>';
+    if (SEL.length === 1){
+      h += selOne(SEL[0]);
+    } else {
+      var c = {pt:0, tri:0, brk:0, bnd:0, iso:0};
+      SEL.forEach(function(s){ c[s.t]++; });
+      var LABEL = {pt:'point', tri:'triangle', brk:'breakline', bnd:'boundary', iso:'contour'};
+      var parts = [];
+      Object.keys(c).forEach(function(k){
+        if (c[k]) parts.push(c[k] + ' ' + LABEL[k] + (c[k] > 1 ? 's' : ''));
+      });
+      h += '<div class="k">Selected</div><div class="v">' + SEL.length + '</div>' +
+           '<div class="d">' + parts.join('<br>') + '</div>';
+    }
+    el.innerHTML = h; el.hidden = false;
+  }
+
+  var sdown = null;
+  cv.addEventListener('mousedown', function(ev){
+    if (MODE !== 'select' || ev.button !== 0) return;
+    var r = cv.getBoundingClientRect();
+    sdown = {x: ev.clientX - r.left, y: ev.clientY - r.top, shift: ev.shiftKey, moved: false};
+  }, true);
+  window.addEventListener('mousemove', function(ev){
+    if (!sdown) return;
+    var r = cv.getBoundingClientRect();
+    var x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (!sdown.moved && Math.hypot(x - sdown.x, y - sdown.y) > 3) sdown.moved = true;
+    if (sdown.moved){ BOX = {x0: sdown.x, y0: sdown.y, x1: x, y1: y}; draw(); }
+  });
+  window.addEventListener('mouseup', function(ev){
+    if (!sdown) return;
+    var s = sdown; sdown = null;
+    if (s.moved && BOX){
+      var hits = selBox(BOX.x0, BOX.y0, BOX.x1, BOX.y1);
+      BOX = null;
+      if (s.shift) hits.forEach(function(h){ selAdd(h, true); });
+      else SEL = hits;
+    } else {
+      var r = cv.getBoundingClientRect();
+      var it = hitOne(ev.clientX - r.left, ev.clientY - r.top);
+      if (it) selAdd(it, s.shift);
+      else if (!s.shift) SEL = [];
+    }
+    showSel(); draw();
+  });
+
 buildColorUI();
 resize();
 vChecks();
-setMode('pan');
+setMode('select');
 renderSurfaceChips();
 
 // The calculation settings are part of the job too.
