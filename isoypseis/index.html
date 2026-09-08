@@ -58,6 +58,16 @@
     font-size:11.5px;padding:3px 5px;}
   td input[type=color]{width:26px;height:19px;padding:0;border:1px solid var(--line);
     border-radius:4px;background:var(--bg2);cursor:pointer;vertical-align:middle;}
+  .lblmark{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--navy2);
+    border:1px solid var(--navy2);border-radius:3px;padding:0 3px;vertical-align:1px;}
+  .lymenu{position:fixed;z-index:100;background:var(--card);border:1px solid var(--line);
+    border-radius:8px;padding:5px;min-width:180px;box-shadow:0 10px 28px rgba(0,0,0,.45);}
+  .lymenu .hd{font-size:10px;color:var(--mut);padding:4px 9px 6px;text-transform:uppercase;letter-spacing:.5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+  .lymenu button{display:flex;width:100%;align-items:center;gap:7px;background:none;border:0;
+    color:var(--ink);font-size:12.5px;padding:7px 9px;border-radius:5px;cursor:pointer;text-align:left;}
+  .lymenu button:hover{background:var(--bg2);}
+  .lymenu .chk{width:12px;text-align:center;color:var(--ok);font-weight:800;}
   .mono{font-family:ui-monospace,Consolas,monospace;}
   .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
@@ -207,6 +217,7 @@
 </main>
 
 <footer>ZS-GeoLab · ZSGround · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
+<div class="lymenu" id="lyMenu" hidden></div>
 
 <script src="../lib/server-check.js?v=20260907b"></script>
 <script>
@@ -306,6 +317,56 @@ function lyUsable(m){ return m.points > 0 || m.lines > 0 || m.inserts > 0 || m.t
 var SHOWALL_LY = false;
 window.toggleAllLayers = function(){ SHOWALL_LY = !SHOWALL_LY; renderLayers(); };
 
+/*  Which attribute labels a layer shows on the canvas — {z, disc}. Only a
+ *  layer read from a TXT/CSV carries a description; every points layer has an
+ *  elevation. Turned on by a right click on the layer row, kept by name. */
+var LYTEXT = (function(){
+  try {
+    var s = JSON.parse(localStorage.getItem('isoypseis.lytext') || '{}'), o = {};
+    for (var k in s) o[k] = {z: !!s[k].z, disc: !!s[k].disc};
+    return o;
+  } catch (e) { return {}; }
+})();
+function saveLyText(){
+  try { localStorage.setItem('isoypseis.lytext', JSON.stringify(LYTEXT)); } catch (e) {}
+}
+function lyHasDisc(name){
+  var pa = (GEOM[name] && GEOM[name].point_attrs) || [];
+  return pa.some(function(a){ return a && a.disc; });
+}
+function lyHasZ(name){
+  return ((GEOM[name] && GEOM[name].points) || []).some(function(p){ return p[2] != null; });
+}
+window.lyMenu = function(ev, name){
+  if (!lyHasZ(name) && !lyHasDisc(name)) return;   // nothing to label
+  ev.preventDefault();
+  var lt = LYTEXT[name] || {}, hasD = lyHasDisc(name);
+  var m = document.getElementById('lyMenu');
+  m.innerHTML = '<div class="hd">' + esc(name) + '</div>' +
+    '<button onclick="lyText(\'' + esc(name) + '\',\'z\')"><span class="chk">' +
+      (lt.z ? '✓' : '') + '</span>Show elevation</button>' +
+    (hasD ? '<button onclick="lyText(\'' + esc(name) + '\',\'disc\')"><span class="chk">' +
+      (lt.disc ? '✓' : '') + '</span>Show description</button>' : '');
+  m.style.left = Math.min(ev.clientX, window.innerWidth - 200) + 'px';
+  m.style.top  = Math.min(ev.clientY, window.innerHeight - 110) + 'px';
+  m.hidden = false;
+};
+window.lyText = function(name, key){
+  var lt = LYTEXT[name] || (LYTEXT[name] = {z:false, disc:false});
+  lt[key] = !lt[key];
+  saveLyText();
+  document.getElementById('lyMenu').hidden = true;
+  renderLayers(); draw();
+};
+document.addEventListener('click', function(e){
+  var m = document.getElementById('lyMenu');
+  if (m && !m.hidden && !m.contains(e.target)) m.hidden = true;
+});
+document.addEventListener('scroll', function(){
+  var m = document.getElementById('lyMenu');
+  if (m && !m.hidden) m.hidden = true;
+}, true);
+
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function numIn(id){ var e=document.getElementById(id); return parseFloat(String(e.value||'').trim().replace(',','.')); }
 function fmt(v,d){ return v==null?'—':Number(v).toFixed(d==null?2:d); }
@@ -359,9 +420,13 @@ function renderLayers(){
     var m = META[n];
     if (!lyUsable(m)) { unused++; if (!SHOWALL_LY) return; }
     var noRole = !ROLE[n];
-    h += '<tr>' +
+    var lt = LYTEXT[n] || {}, labels = (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
+    var canLabel = lyHasZ(n) || lyHasDisc(n);
+    h += '<tr oncontextmenu="lyMenu(event,\''+esc(n)+'\')"' +
+        (canLabel ? ' title="Right-click for elevation / description labels"' : '') + '>' +
       '<td><input type="checkbox" '+(VIS[n]?'checked':'')+' onchange="VIS[\''+esc(n)+'\']=this.checked;draw()"></td>' +
-      '<td title="'+esc(n)+'">'+esc(n.length>18?n.slice(0,17)+'…':n)+'</td>' +
+      '<td title="'+esc(n)+'">'+esc(n.length>16?n.slice(0,15)+'…':n)+
+        (labels ? ' <span class="lblmark">'+labels+'</span>' : '')+'</td>' +
       '<td><select onchange="ROLE[\''+esc(n)+'\']=this.value;renderLayers();draw()">' +
         ['','pts','brk','bnd'].map(function(v){
           var lbl = {'':'background','pts':'📍 points','brk':'📐 breaklines','bnd':'▣ boundary'}[v];
@@ -387,6 +452,8 @@ function renderLayers(){
   else if (p.some(function(n){ return META[n].flat; }))
     note += '<div class="warnbox">The points layer is <b>flat</b> — every elevation is the same. The drawing is two-dimensional; give the elevations from a text file.</div>';
   else note += '<div class="okbox">'+np+' points · '+sel('brk').length+' breakline layers'+(b.length?' · boundary ✓':'')+'</div>';
+  if (p.some(function(n){ return lyHasZ(n) || lyHasDisc(n); }))
+    note += '<div class="hint">Right-click a layer for elevation / description labels on the drawing.</div>';
   document.getElementById('lyNote').innerHTML = note;
   refreshZRange();
 }
@@ -797,9 +864,15 @@ function draw(){
    *  The ceiling is there for the whole 50 km project in view: past a certain
    *  point the screen is full and every extra label is only cost. */
   var LBL = SHOW.z ? [] : null, lseen = {};
+  /*  Per-layer labels: elevation and/or description, switched on by a right
+   *  click on the layer row. Their own coarse grid — a description is wider
+   *  than a number — so two never land one on top of the other. */
+  var ATXT = [], aseen = {};
   sel('pts').forEach(function(n){
     if (!VIS[n]) return;
-    GEOM[n].points.forEach(function(p){
+    var lt = LYTEXT[n] || {}, pa = GEOM[n].point_attrs || [];
+    var wantZ = !!lt.z, wantD = !!lt.disc;
+    GEOM[n].points.forEach(function(p, pi){
       if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
       var x = SX(p[0]), y = SY(p[1]);
       var k = (x|0) + ',' + (y|0);
@@ -812,14 +885,23 @@ function draw(){
         var lk = ((x/58)|0) + ',' + ((y/14)|0);
         if (!lseen[lk]){ lseen[lk] = 1; LBL.push([x, y, p[2]]); }
       }
+      if ((wantZ || wantD) && ATXT.length < 800){
+        var s = '';
+        if (wantZ && p[2] != null) s = fmt(p[2], 2);
+        if (wantD){ var av = pa[pi]; if (av && av.disc) s += (s ? '  ' : '') + av.disc; }
+        if (s){
+          var ak = ((x/72)|0) + ',' + ((y/14)|0);
+          if (!aseen[ak]){ aseen[ak] = 1; ATXT.push([x, y, s]); }
+        }
+      }
     });
   });
   PTSDRAWN = np;
-  if (LBL && LBL.length){
-    ctx.font = '11px Consolas,monospace'; ctx.fillStyle = COLORS.pts;
-    for (var li = 0; li < LBL.length; li++)
-      ctx.fillText(fmt(LBL[li][2], 2), LBL[li][0] + 5, LBL[li][1] - 4);
-  }
+  ctx.font = '11px Consolas,monospace'; ctx.fillStyle = COLORS.pts;
+  if (LBL) for (var li = 0; li < LBL.length; li++)
+    ctx.fillText(fmt(LBL[li][2], 2), LBL[li][0] + 5, LBL[li][1] - 4);
+  for (var ti = 0; ti < ATXT.length; ti++)
+    ctx.fillText(ATXT[ti][2], ATXT[ti][0] + 6, ATXT[ti][1] + 4);
 
   // 5. The edits, so that what you touched can be seen.
   ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
@@ -1129,7 +1211,8 @@ function draw(){
   cv.addEventListener('dblclick', function(){ if (MODE === 'brk') endLine(); });
   window.addEventListener('keydown', function(ev){
     if (ev.key === 'Enter' && MODE === 'brk') endLine();
-    if (ev.key === 'Escape'){ DRAWING = null; clearPick(); setMode('pan'); }
+    if (ev.key === 'Escape'){ DRAWING = null; clearPick(); setMode('pan');
+      document.getElementById('lyMenu').hidden = true; }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
   });
