@@ -25,6 +25,7 @@
   .fld input,.fld select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
     border-radius:8px;color:var(--ink);font-size:14px;}
   .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .row2b{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   details.card > summary{font-size:15px;font-weight:700;cursor:pointer;display:flex;
     align-items:center;gap:9px;list-style:none;}
   details.card > summary::-webkit-details-marker{display:none;}
@@ -117,6 +118,13 @@
           <input id="iv" type="text" inputmode="decimal" value="0.50"></div>
         <button class="btn" id="go" onclick="build()">📈 Calculate</button>
       </div>
+      <div class="fld" style="margin-top:10px"><label>Elevation limits (m) — points outside are left out</label>
+        <div class="row2b">
+          <input id="zlo" type="text" inputmode="decimal" placeholder="min">
+          <input id="zhi" type="text" inputmode="decimal" placeholder="max">
+        </div>
+        <div class="hint" id="zRange">Pick the points layer to see its range.</div>
+      </div>
       <div class="fld" style="margin-top:10px"><label>Elevations of the breaklines</label>
         <select id="blz">
           <option value="file">From the drawing (3D polyline or LINE)</option>
@@ -198,6 +206,8 @@ var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
 var VIS = {};           // layer -> boolean
 var RES = null;         // the server's result
 var PICK = null;        // what the last click identified
+var MEANZ = null;       // mean elevation of the points last sent
+var ZCUT = {p:0, v:0};  // points / line vertices left out by the elevation limits
 var SHOW = {mesh:true, iso:true, txt:false, z:false};
 var T = {s:1, x:0, y:0};
 
@@ -350,8 +360,31 @@ function renderLayers(){
     note += '<div class="warnbox">The points layer is <b>flat</b> — every elevation is the same. The drawing is two-dimensional; give the elevations from a text file.</div>';
   else note += '<div class="okbox">'+np+' points · '+sel('brk').length+' breakline layers'+(b.length?' · boundary ✓':'')+'</div>';
   document.getElementById('lyNote').innerHTML = note;
+  refreshZRange();
 }
 function sel(role){ return Object.keys(GEOM).filter(function(n){ return ROLE[n]===role; }); }
+
+/*  The elevation band. The surveyor types explicit limits; whatever falls
+ *  outside is dropped before the surface is built — the tool does not guess,
+ *  it only removes what was asked and reports how much. */
+function zStats(){
+  var lo = Infinity, hi = -Infinity, s = 0, n = 0;
+  var eat = function(p){ var z = p[2]; if (z == null) return;
+    if (z < lo) lo = z; if (z > hi) hi = z; s += z; n++; };
+  sel('pts').forEach(function(nm){
+    if (!VIS[nm]) return;
+    GEOM[nm].points.forEach(eat);
+    GEOM[nm].lines.forEach(function(L){ L.forEach(eat); });
+  });
+  return n ? {min:lo, max:hi, mean:s/n, n:n} : null;
+}
+function refreshZRange(){
+  var el = document.getElementById('zRange'); if (!el) return;
+  var st = zStats();
+  el.textContent = st
+    ? 'range ' + fmt(st.min,2) + ' – ' + fmt(st.max,2) + ' m · mean ' + fmt(st.mean,2)
+    : 'Pick the points layer to see its range.';
+}
 
 // -------------------------------------------------------- what is sent ---
 
@@ -362,15 +395,36 @@ function payload(){
   EDITS.del.forEach(function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; });
   var keep = function(p){ return !gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)]; };
 
+  /*  The elevation band. NaN when the field is empty — then that side is off. */
+  var zlo = numIn('zlo'), zhi = numIn('zhi');
+  var loOn = !isNaN(zlo), hiOn = !isNaN(zhi);
+  var inband = function(z){ return z == null || ((!loOn || z >= zlo) && (!hiOn || z <= zhi)); };
+  ZCUT = {p:0, v:0};
+
   var pts = [];
-  sel('pts').forEach(function(n){ GEOM[n].points.forEach(function(p){ if (keep(p)) pts.push(p); }); });
+  var takePt = function(p){ if (!keep(p)) return; if (inband(p[2])) pts.push(p); else ZCUT.p++; };
+  sel('pts').forEach(function(n){ GEOM[n].points.forEach(takePt); });
   // Line vertices on a points layer count as measured points too.
-  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(function(p){ if (keep(p)) pts.push(p); }); }); });
-  EDITS.add.forEach(function(p){ pts.push(p); });
+  sel('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(takePt); }); });
+  EDITS.add.forEach(function(p){ if (inband(p[2])) pts.push(p); else ZCUT.p++; });
 
   var brk = [];
-  sel('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) brk.push(L); }); });
-  EDITS.brk.forEach(function(L){ brk.push(L); });
+  /*  A 3D breakline "from the drawing" is split where it leaves the band —
+   *  the runs of two or more vertices still inside stay as constraints. A
+   *  breakline that takes its z from the points has no real z here yet, and a
+   *  line the user drew is kept as drawn. */
+  var splitBrk = document.getElementById('blz').value === 'file' && (loOn || hiOn);
+  var addBrk = function(L){
+    if (!splitBrk){ if (L.length >= 2) brk.push(L); return; }
+    var run = [];
+    L.forEach(function(p){
+      if (inband(p[2])) { run.push(p); }
+      else { ZCUT.v++; if (run.length >= 2) brk.push(run); run = []; }
+    });
+    if (run.length >= 2) brk.push(run);
+  };
+  sel('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2) addBrk(L); }); });
+  EDITS.brk.forEach(function(L){ if (L.length>=2) brk.push(L); });
 
   var bnd = null, best = -1;
   sel('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
@@ -391,7 +445,13 @@ function payload(){
 function build(quiet){
   document.getElementById('edStale').hidden = true;
   var b = payload();
-  if (b.points.length < 3){ warn('out','At least 3 points with an elevation are needed.'); return; }
+  var mz = 0; for (var mi = 0; mi < b.points.length; mi++) mz += b.points[mi][2];
+  MEANZ = b.points.length ? mz / b.points.length : null;
+  if (b.points.length < 3){
+    warn('out', ZCUT.p ? 'Fewer than 3 points are left inside the elevation limits.'
+                       : 'At least 3 points with an elevation are needed.');
+    return;
+  }
   if (!(b.interval > 0)){ warn('out','Give a contour interval in metres.'); return; }
   var btn = document.getElementById('go'); btn.disabled = true;
   document.getElementById('out').innerHTML = '<div class="hint">Calculating…</div>';
@@ -416,9 +476,16 @@ function show(j){
     '<tr><td>Triangles</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' outside the boundary'):'')+'</td></tr>' +
     '<tr><td>Constraints</td><td class="mono">'+r.constraints+(r.constraints_failed?(' · '+r.constraints_failed+' unmet'):' ✓')+'</td></tr>' +
     '<tr><td>Area</td><td class="mono">'+fmt(r.area,1)+' m² · '+fmt(r.area/10000,4)+' ha</td></tr>' +
-    '<tr><td>Elevations</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m</td></tr>';
+    '<tr><td>Elevations</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m'+
+      (MEANZ!=null?' · mean '+fmt(MEANZ,3):'')+'</td></tr>';
   if (c) h += '<tr><td>Contours</td><td class="mono">'+c.count+' levels every '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
   h += '</tbody></table></div>';
+  if (ZCUT.p || ZCUT.v){
+    var parts = [];
+    if (ZCUT.p) parts.push(ZCUT.p + ' point' + (ZCUT.p===1?'':'s'));
+    if (ZCUT.v) parts.push(ZCUT.v + ' line ' + (ZCUT.v===1?'vertex':'vertices'));
+    h += '<div class="hint">'+parts.join(' and ')+' outside the elevation limits — left out.</div>';
+  }
   if (r.swapped || r.removed) h += '<div class="hint">Edits: '+
     (r.swapped?r.swapped+' swapped edges':'')+(r.swapped&&r.removed?' · ':'')+
     (r.removed?r.removed+' deleted triangles':'')+'</div>';
