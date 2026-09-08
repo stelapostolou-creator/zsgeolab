@@ -269,6 +269,7 @@
   .menu button .k{width:15px;text-align:center;flex:0 0 auto;}
   .menu button .chk{margin-left:auto;color:var(--ok);width:14px;text-align:center;font-weight:800;}
   .menu .div{height:1px;background:var(--line);margin:4px 6px;}
+  .menu .mnote{font-size:10.5px;color:var(--mut);line-height:1.45;padding:4px 10px 7px;}
   .cv-wrap{position:relative;flex:1 1 auto;background:#080d18;overflow:hidden;min-height:0;}
   /*  The aiming cursor. #cv shows the pickbox crosshair; setMode adds .tool
    *  while a command runs, which drops the box (see :root --cur-*). No "hand"
@@ -487,6 +488,7 @@
               The <b>eye</b> only hides a layer from the drawing; whether it feeds the surface is
               decided by its <b>role</b>. A hidden points / breakline / boundary layer still
               counts, and is shown in <span style="color:#ff9a9d">red&nbsp;•</span>.</div>
+            <div id="drawLy"></div>
             <div id="lyTree"></div>
             <div id="lyNote"></div>
             <div class="lybar">
@@ -509,6 +511,18 @@
     <div class="menubar">
       <div class="mgroup">
         <div class="mi ed" data-m="pan" onclick="setMode('pan');closeMenus()" title="Pan / zoom">👆&nbsp;Pan</div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)" title="What a click or a box is allowed to pick">Select</div>
+        <div class="menu">
+          <div class="mnote">A click or a box picks only the kinds ticked here.</div>
+          <button id="fPt"   onclick="togSel('pt')"><span class="k">📍</span>Points<span class="chk"></span></button>
+          <button id="fTri"  onclick="togSel('tri')"><span class="k">△</span>Triangles<span class="chk"></span></button>
+          <button id="fIso"  onclick="togSel('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
+          <button id="fBrk"  onclick="togSel('brk')"><span class="k">📐</span>Breaklines<span class="chk"></span></button>
+          <button id="fBnd"  onclick="togSel('bnd')"><span class="k">▣</span>Boundary<span class="chk"></span></button>
+          <button id="fBase" onclick="togSel('base')"><span class="k">▦</span>Background<span class="chk"></span></button>
+        </div>
       </div>
       <div class="mgroup">
         <div class="mi" onclick="cmenu(this)">Points</div>
@@ -773,6 +787,64 @@ window.resetColors = function(){
   for (var k in COLOR_DEF) COLORS[k] = COLOR_DEF[k];
   saveColors(); buildColorUI(); renderLayers(); draw();
 };
+
+/*  The two things drawn on the canvas — added points (EDITS.add) and drawn
+ *  lines (EDITS.brk) of the ACTIVE surface — are shown at the top of the
+ *  LAYERS tab as a pair of pseudo-layers with a locked role. This holds only
+ *  their VIEW state: the eye and the canvas colour, kept on this computer. The
+ *  geometry itself stays in the surface's edit list (Undo/Redo, autosave). */
+var DRAWVIS = { add:true, brk:true };
+var DRAWCOL = { add:'#7cffb2', brk:'#00d5ff' };
+(function(){
+  try {
+    var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
+    ['add','brk'].forEach(function(k){
+      if (!s[k]) return;
+      if (s[k].on === false) DRAWVIS[k] = false;
+      if (/^#[0-9a-f]{6}$/i.test(s[k].col)) DRAWCOL[k] = s[k].col;
+    });
+  } catch (e) {}
+})();
+function saveDrawLy(){
+  try {
+    localStorage.setItem('isoypseis.drawly', JSON.stringify({
+      add: { on: DRAWVIS.add, col: DRAWCOL.add },
+      brk: { on: DRAWVIS.brk, col: DRAWCOL.brk }
+    }));
+  } catch (e) {}
+}
+window.drawLyEye = function(k){ DRAWVIS[k] = !DRAWVIS[k]; saveDrawLy(); renderDrawLayers(); draw(); };
+window.drawLyCol = function(k, v){ DRAWCOL[k] = v; saveDrawLy(); draw(); };
+
+/*  The DrawPoints / DrawLines rows. Shown only once the active surface has
+ *  such edits; the count updates through edBadge() like the rest of the edit
+ *  UI. Role is fixed — a drawn point is a point, a drawn line is a breakline —
+ *  so there is a locked badge, not a select. */
+function renderDrawLayers(){
+  var box = document.getElementById('drawLy'); if (!box) return;
+  var na = (typeof EDITS !== 'undefined' && EDITS.add) ? EDITS.add.length : 0;
+  var nb = (typeof EDITS !== 'undefined' && EDITS.brk) ? EDITS.brk.length : 0;
+  if (!na && !nb){ box.innerHTML = ''; return; }
+  var mk = function(k, name, role, n, unit){
+    return '<div class="lyrow' + (DRAWVIS[k] ? '' : ' off') + '">' +
+      '<span class="eye" onclick="drawLyEye(\'' + k + '\')">' + (DRAWVIS[k] ? '👁' : '🚫') + '</span>' +
+      '<span class="nm" title="Drawn on the canvas — held in the edit list, can be undone">' +
+        esc(name) + ' <span class="lblmark">' + role + '</span></span>' +
+      '<input type="color" value="' + DRAWCOL[k] + '" title="Colour on the canvas" ' +
+        'onchange="drawLyCol(\'' + k + '\',this.value)">' +
+      '<span class="cnt2">' + n + ' ' + unit + '</span>' +
+    '</div>';
+  };
+  var rows = '';
+  if (na) rows += mk('add', 'DrawPoints', 'points', na, 'pt');
+  if (nb) rows += mk('brk', 'DrawLines', 'breakline', nb, nb === 1 ? 'line' : 'lines');
+  box.innerHTML =
+    '<div class="lyfile">' +
+      '<div class="row" style="cursor:default">' +
+        '<span class="tw">▾</span><span class="fn">Drawn on the canvas</span></div>' +
+      '<div class="lykids">' + rows + '</div>' +
+    '</div>';
+}
 
 /*  A colour per layer, for the ones with no role — so two background layers
  *  can be told apart. Layers that carry a role follow the role's colour
@@ -1422,6 +1494,7 @@ function renderLayers(){
   if (typeof renderSurfaceUI === 'function') renderSurfaceUI();   // roles changed → refresh the pickers
   refreshZRange();
   updClearBtns();
+  renderDrawLayers();
   touch();
 }
 function updClearBtns(){
@@ -2011,15 +2084,17 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
     ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
   });
-  ctx.fillStyle = '#7CFFB2'; ctx.font = '11px Consolas,monospace';
-  EDITS.add.forEach(function(p){
+  ctx.fillStyle = DRAWCOL.add; ctx.font = '11px Consolas,monospace';
+  if (DRAWVIS.add) EDITS.add.forEach(function(p){
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
     if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
   });
-  ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.beginPath();
-  EDITS.brk.forEach(function(L){ addPoly(L); });
-  ctx.stroke();
+  if (DRAWVIS.brk){
+    ctx.strokeStyle = DRAWCOL.brk; ctx.lineWidth = 2; ctx.beginPath();
+    EDITS.brk.forEach(function(L){ addPoly(L); });
+    ctx.stroke();
+  }
   ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
   EDITS.swap.forEach(function(e){
     ctx.beginPath(); ctx.moveTo(SX(e[0]),SY(e[1])); ctx.lineTo(SX(e[2]),SY(e[3])); ctx.stroke();
@@ -2220,6 +2295,7 @@ function draw(){
   }
   function edBadge(){
     var n = UNDO.length;
+    renderDrawLayers();                 // the DrawPoints / DrawLines counts
     document.getElementById('edN').textContent = n;
     document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
     document.getElementById('edUndo').disabled = !UNDO.length;
@@ -2457,6 +2533,31 @@ function draw(){
   var SEL = [];                        // the selected items
   var BOX = null;                      // the rubber-band box while dragging
 
+  /*  A STANDING FILTER, set from the Select menu. A click or a box only ever
+   *  picks a kind that is ticked here — it is not a mode, it stays on across
+   *  tools. Everything is pickable until it is turned off. The keys are the
+   *  item's own `.t`: 'base' is a line on a layer with no role (the drawing
+   *  kept only for orientation). */
+  var SELF = { pt:true, tri:true, iso:true, brk:true, bnd:true, base:true };
+  function selChecks(){
+    [['pt','fPt'],['tri','fTri'],['iso','fIso'],['brk','fBrk'],['bnd','fBnd'],['base','fBase']]
+      .forEach(function(p){
+        var b = document.getElementById(p[1]); if (!b) return;
+        var c = b.querySelector('.chk'); if (c) c.textContent = SELF[p[0]] ? '✓' : '';
+      });
+  }
+  window.togSel = function(k){
+    SELF[k] = !SELF[k];
+    selChecks();
+    // Whatever is already selected but no longer allowed drops out of the set.
+    if (SEL.length){
+      var n = SEL.length;
+      SEL = SEL.filter(function(it){ return SELF[it.t]; });
+      if (SEL.length !== n) showSel();
+    }
+    draw();
+  };
+
   function selClear(){ if (SEL.length){ SEL = []; showSel(); draw(); } }
   window.selClear = selClear;
 
@@ -2479,23 +2580,43 @@ function draw(){
     return null;
   }
 
-  /*  Every breakline / boundary polyline on screen, tagged with its kind. */
+  /*  Every pickable polyline on screen, tagged with its kind — honouring the
+   *  Select-menu filter. Breaklines and boundary follow the active surface;
+   *  'base' is every line on a role-less, shown layer (the orientation
+   *  drawing), which can be a lot of geometry — the callers cull it by
+   *  bounding box before they walk its vertices. */
   function linePool(){
     var pool = [];
-    selS('brk').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'brk', line:L, layer:n}); });
-    });
-    EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
-    selS('bnd').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'bnd', line:L, layer:n}); });
-    });
+    if (SELF.brk){
+      selS('brk').forEach(function(n){
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'brk', line:L, layer:n}); });
+      });
+      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
+    }
+    if (SELF.bnd){
+      selS('bnd').forEach(function(n){
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'bnd', line:L, layer:n}); });
+      });
+    }
+    if (SELF.base){
+      Object.keys(GEOM).forEach(function(n){
+        if (!VIS[n] || ROLE[n] || !fileOn(n)) return;      // only a shown layer with no role
+        GEOM[n].lines.forEach(function(L){ pool.push({t:'base', line:L, layer:n}); });
+      });
+    }
     return pool;
   }
-  /*  The nearest polyline in a pool, within "px" screen pixels. */
+  /*  The nearest polyline in a pool, within "px" screen pixels. The line's
+   *  bounding box (already cached for drawing) rules it out before its
+   *  vertices are walked — a big background drawing would be swept whole
+   *  otherwise. */
   function nearestPoly(mx, my, pool, px){
     var best = null, bd = px;
+    var w = px / T.s;
+    var wx = (mx - T.x)/T.s, wy = -(my - T.y)/T.s;
     pool.forEach(function(e){
-      var L = e.line;
+      var L = e.line, b = bbox(L);
+      if (wx < b[0]-w || wx > b[2]+w || wy < b[1]-w || wy > b[3]+w) return;
       for (var i = 1; i < L.length; i++){
         var d = segDist(mx, my, SX(L[i-1][0]),SY(L[i-1][1]), SX(L[i][0]),SY(L[i][1]));
         if (d < bd){ bd = d; best = e; }
@@ -2522,14 +2643,20 @@ function draw(){
   /*  One thing under the cursor. Thin things you aim at (a point, a line, a
    *  contour) win over the triangle that fills the area behind them. */
   function hitOne(mx, my){
-    var p = pickPoint(mx, my, 9);
-    if (p) return {t:'pt', x:p[0], y:p[1], z:p[2]};
-    var ln = nearestPoly(mx, my, linePool(), 10);
+    if (SELF.pt){
+      var p = pickPoint(mx, my, 9);
+      if (p) return {t:'pt', x:p[0], y:p[1], z:p[2]};
+    }
+    var ln = nearestPoly(mx, my, linePool(), 10);   // linePool already honours the filter
     if (ln) return ln;
-    var c = pickContour(mx, my, 9);
-    if (c) return {t:'iso', z:c.z, line:c.line, main:c.main, len:c.len, n:c.n};
-    var tr = hitTri(mx, my);
-    if (tr) return tr;
+    if (SELF.iso){
+      var c = pickContour(mx, my, 9);
+      if (c) return {t:'iso', z:c.z, line:c.line, main:c.main, len:c.len, n:c.n};
+    }
+    if (SELF.tri){
+      var tr = hitTri(mx, my);
+      if (tr) return tr;
+    }
     return null;
   }
 
@@ -2568,17 +2695,19 @@ function draw(){
     var whole = x1 >= x0, out = [];
     var inR = function(sx, sy){ return sx>=rx0 && sx<=rx1 && sy>=ry0 && sy<=ry1; };
 
-    selS('pts').forEach(function(n){
-      GEOM[n].points.forEach(function(p){
-        if (isDeleted(p[0], p[1])) return;
+    if (SELF.pt){
+      selS('pts').forEach(function(n){
+        GEOM[n].points.forEach(function(p){
+          if (isDeleted(p[0], p[1])) return;
+          if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
+        });
+      });
+      if (DRAWVIS.add) EDITS.add.forEach(function(p){
         if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
       });
-    });
-    EDITS.add.forEach(function(p){
-      if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
-    });
+    }
 
-    if (RES && RES.mesh){
+    if (SELF.tri && RES && RES.mesh){
       var V = RES.mesh.vertices, TR = RES.mesh.triangles;
       for (var i = 0; i < TR.length; i++){
         var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
@@ -2597,6 +2726,12 @@ function draw(){
      *  segment touches the box (crossing). Breaklines, boundary and contours
      *  all go through here. */
     var scanLine = function(PL, make){
+      /*  The line's screen bounding box first — a background drawing has far
+       *  too many vertices to walk one that the box cannot reach. */
+      var wb = bbox(PL);
+      var sA = SX(wb[0]), sB = SX(wb[2]), tA = SY(wb[1]), tB = SY(wb[3]);
+      if (Math.max(sA,sB) < rx0 || Math.min(sA,sB) > rx1 ||
+          Math.max(tA,tB) < ry0 || Math.min(tA,tB) > ry1) return;
       var hit = false, allin = true;
       for (var k = 0; k < PL.length; k++){
         var sx = SX(PL[k][0]), sy = SY(PL[k][1]), here = inR(sx, sy);
@@ -2609,7 +2744,7 @@ function draw(){
     linePool().forEach(function(e){
       scanLine(e.line, function(){ return {t:e.t, line:e.line, layer:e.layer}; });
     });
-    if (RES && RES.contours && SHOW.iso){
+    if (SELF.iso && RES && RES.contours && SHOW.iso){
       RES.contours.levels.forEach(function(lv){
         if (ISODENSE && !isMainLevel(lv.z)) return;
         lv.lines.forEach(function(Ln){
@@ -2630,6 +2765,13 @@ function draw(){
       return '<div class="k" style="color:'+COLORS.pts+'">Point</div>' +
         '<div class="v">' + (s.z == null ? '— no elevation' : fmt(s.z,3)+' m') + '</div>' +
         '<div class="d">X ' + fmt(s.x,3) + '<br>Y ' + fmt(s.y,3) + '</div>';
+    if (s.t === 'base'){
+      var mb = lineMetrics(s.line);
+      return '<div class="k" style="color:'+(LYCOLOR[s.layer]||COLORS.base)+'">Background line</div>' +
+        '<div class="v">' + (mb.threeD ? '3D' : '2D') + ' · ' + mb.nodes + ' nodes</div>' +
+        '<div class="d">' + esc(s.layer) + '<br>Horizontal ' + fmt(mb.hlen,2) + ' m' +
+        (mb.threeD ? '<br>Elevation ' + fmt(mb.zmin,3) + ' – ' + fmt(mb.zmax,3) + ' m' : '') + '</div>';
+    }
     if (s.t === 'brk' || s.t === 'bnd'){
       var m = lineMetrics(s.line);
       return '<div class="k" style="color:'+(s.t==='bnd'?COLORS.bnd:COLORS.brk)+'">' +
@@ -2668,9 +2810,9 @@ function draw(){
     if (SEL.length === 1){
       h += selOne(SEL[0]);
     } else {
-      var c = {pt:0, tri:0, brk:0, bnd:0, iso:0};
+      var c = {pt:0, tri:0, brk:0, bnd:0, iso:0, base:0};
       SEL.forEach(function(s){ c[s.t]++; });
-      var LABEL = {pt:'point', tri:'triangle', brk:'breakline', bnd:'boundary', iso:'contour'};
+      var LABEL = {pt:'point', tri:'triangle', brk:'breakline', bnd:'boundary', iso:'contour', base:'background line'};
       var parts = [];
       Object.keys(c).forEach(function(k){
         if (c[k]) parts.push(c[k] + ' ' + LABEL[k] + (c[k] > 1 ? 's' : ''));
@@ -2714,6 +2856,7 @@ function draw(){
 buildColorUI();
 resize();
 vChecks();
+selChecks();
 setMode('select');
 renderSurfaceChips();
 
