@@ -7,17 +7,27 @@
   *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
   :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
     --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
-  body{background:var(--bg);color:var(--ink);min-height:100vh;}
-  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg2);
-    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
+  html,body{height:100%;}
+  /*  A CAD-style shell: a fixed top bar, then a full-height workspace — the
+   *  tool panel flush to the left edge, the canvas taking all the rest. The
+   *  page itself never scrolls; only the panel does. */
+  body{background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+  header{display:flex;align-items:center;gap:14px;padding:9px 16px;background:var(--bg2);
+    border-bottom:1px solid var(--line);flex:0 0 auto;z-index:20;}
   header .logo-img{height:36px;width:auto;display:block;background:#fff;padding:4px 7px;border-radius:8px;}
   header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
   header .pro{margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.5px;
     background:linear-gradient(135deg,#c9a227,#f0d264);color:#231a00;padding:4px 10px;border-radius:6px;}
-  main{max-width:1400px;margin:0 auto;padding:14px;display:grid;grid-template-columns:380px 1fr;gap:14px;align-items:start;}
-  @media(max-width:1000px){main{grid-template-columns:1fr;}}
-  .col{display:flex;flex-direction:column;gap:14px;}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;}
+  main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:330px 1fr;
+    grid-template-rows:auto minmax(0,1fr);}
+  /*  The "server missing" notice is injected as a direct child of <main>; it
+   *  takes its own top row across both columns so the workspace below fills
+   *  the rest. With no notice the row collapses to nothing. */
+  main > [role="status"]{grid-row:1;grid-column:1 / -1;margin:10px 12px !important;max-width:none !important;}
+  .col{grid-row:2;grid-column:1;display:flex;flex-direction:column;gap:12px;padding:12px;
+    overflow-y:auto;min-height:0;background:var(--bg2);border-right:1px solid var(--line);}
+  .cv-wrap{grid-row:2;grid-column:2;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;}
   .card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
   .card h2 .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
   .hint{color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:6px;}
@@ -53,8 +63,8 @@
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
   .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
-  .cv-wrap{position:relative;background:#080d18;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
-  #cv{display:block;width:100%;height:74vh;cursor:grab;}
+  .cv-wrap{position:relative;background:#080d18;overflow:hidden;height:100%;min-height:0;}
+  #cv{display:block;width:100%;height:100%;cursor:grab;}
   #cv.drag{cursor:grabbing;}
   .cv-bar{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;}
   .cv-bar button{background:rgba(19,29,51,.92);border:1px solid var(--line);color:var(--ink);
@@ -72,8 +82,16 @@
     font-size:14px;line-height:1;padding:3px 6px;}
   .cv-pick .x:hover{color:var(--ink);}
   .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
-  footer{color:var(--mut);font-size:12px;text-align:center;padding:18px;}
+  footer{color:var(--mut);font-size:11px;text-align:center;padding:5px 12px;flex:0 0 auto;
+    border-top:1px solid var(--line);background:var(--bg2);}
   footer a{color:inherit;}
+  @media(max-width:900px){
+    body{height:auto;overflow:visible;display:block;}
+    main{display:block;}
+    .col{overflow:visible;border-right:0;border-bottom:1px solid var(--line);}
+    .cv-wrap{height:72vh;}
+    footer{padding:12px;}
+  }
 </style>
 
 <header>
