@@ -106,9 +106,11 @@
 <main>
   <div class="col">
     <div class="card">
-      <h2><span class="c"></span>1. Drawing</h2>
-      <div class="hint">Accepts <b>DXF</b> (points, lines, blocks) or <b>TXT/CSV</b> with "x y z". Load as many files as you like — all their layers are collected together.</div>
-      <button class="btn" style="width:100%;margin-top:10px" onclick="document.getElementById('file').click()">📂 Open file</button>
+      <h2><span class="c"></span>1. Files</h2>
+      <button class="btn" style="width:100%" onclick="document.getElementById('file').click()">📂 Open file</button>
+      <div class="hint" style="margin-top:8px"><b>Upload</b> DXF, TXT or CSV.<br>
+        <b>DXF</b>: any version — points, lines, blocks.<br>
+        <b>TXT / CSV</b>: <span class="mono">pt, x, y, z, description</span>. Three columns are read as <span class="mono">x y z</span>. Anything after the description is ignored.</div>
       <div id="info"></div>
     </div>
 
@@ -323,11 +325,17 @@ document.getElementById('file').addEventListener('change', function(ev){
       if (!j.ok){ info.innerHTML = '<div class="warnbox">'+esc(j.error)+'</div>'; return; }
       // The layers accumulate: the user may give points from a TXT and lines
       // from a DXF, as requested.
+      //
+      // A TXT/CSV is nothing but a list of points — no layer names to read
+      // wrong — so it takes the "points" role straight away. Everything from a
+      // DXF still waits for the user to say what it is.
+      var isText = /\.(txt|csv)$/i.test(j.file);
       j.layers.forEach(function(r){
         var n = r.name;
         if (GEOM[n]){ n = r.name + ' (' + j.file + ')'; }
-        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[]};
-        META[n] = r; ROLE[n] = ROLE[n] || ''; VIS[n] = true;
+        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[],point_attrs:[]};
+        if (!GEOM[n].point_attrs) GEOM[n].point_attrs = [];
+        META[n] = r; ROLE[n] = ROLE[n] || (isText ? 'pts' : ''); VIS[n] = true;
       });
       info.innerHTML = '<div class="okbox"><b>'+esc(j.file)+'</b> — '+j.layers.length+' layers</div>';
       clearPick(); renderLayers(); fit();
@@ -337,11 +345,13 @@ document.getElementById('file').addEventListener('change', function(ev){
     .catch(function(e){ info.innerHTML = '<div class="warnbox">The server did not answer: '+esc(e.message)+'</div>'; });
 });
 
-/*  NO ROLE IS EVER SUGGESTED. Layer names do not mean the same thing in two
- *  offices, and a wrong guess would be dangerous: a line taken for a breakline
- *  by mistake is FORCED onto the surface, and the terrain that comes out is
- *  wrong while looking right. Two roles are required and one is optional —
- *  the user states them. */
+/*  NO ROLE IS EVER GUESSED FROM A LAYER NAME. Names do not mean the same thing
+ *  in two offices, and a wrong guess would be dangerous: a line taken for a
+ *  breakline by mistake is FORCED onto the surface, and the terrain that comes
+ *  out is wrong while looking right. The user states the roles.
+ *
+ *  The one exception is a TXT/CSV upload: a file of "x y z" rows can only be
+ *  points, so it is given that role directly. The user can still change it. */
 
 function renderLayers(){
   var h = '', unused = 0;
