@@ -240,6 +240,10 @@
     color:var(--ink);font-size:12.5px;padding:7px 9px;border-radius:5px;cursor:pointer;text-align:left;}
   .lymenu button:hover{background:var(--bg2);}
   .lymenu .chk{width:12px;text-align:center;color:var(--ok);font-weight:800;}
+  .lymenu .sep{height:1px;background:var(--line);margin:4px 2px;}
+  .lymenu button:disabled{opacity:.4;cursor:default;}
+  .lymenu button:disabled:hover{background:none;}
+  #cvMenu{max-height:88vh;overflow-y:auto;}
   .mono{font-family:ui-monospace,Consolas,monospace;}
   .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;
     padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.55;}
@@ -582,6 +586,7 @@
 
 <footer>ZS-GeoLab · ZSGround · Stylianos F. Apostolou · <a href="../index.html">Back</a></footer>
 <div class="lymenu" id="lyMenu" hidden></div>
+<div class="lymenu" id="cvMenu" hidden></div>
 <div class="modal-back" id="modalBack" hidden><div class="modal" id="modal"></div></div>
 
 <script>
@@ -2224,6 +2229,8 @@ function draw(){
     // canvas; picking Select while already there does nothing.
     MODE = (MODE === m && m !== 'select') ? 'select' : m;
     DRAWING = null; MOVING = null;
+    if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
+    if (typeof cvmClose === 'function') cvmClose();
     if (MODE === 'select' && typeof selClear === 'function') { /* keep the set */ }
     else if (typeof SEL !== 'undefined') { SEL = []; showSel(); }
     [].slice.call(document.querySelectorAll('.ed')).forEach(function(b){
@@ -2540,6 +2547,16 @@ function draw(){
    *  item's own `.t`: 'base' is a line on a layer with no role (the drawing
    *  kept only for orientation). */
   var SELF = { pt:true, tri:true, iso:true, brk:true, bnd:true, base:true };
+
+  /*  A ONE-SHOT override, armed from the canvas right-click menu on empty
+   *  ground: the very next pick (a click or a box) takes only this kind, then
+   *  it clears itself and the standing filter above is back in charge. */
+  var SELNEXT = null;
+  function eff(k){ return SELNEXT ? (SELNEXT === k) : SELF[k]; }
+  function selHint(){
+    setStatusEd('Click to select · drag a box (left→right whole, right→left touching) · Esc clears.');
+  }
+
   function selChecks(){
     [['pt','fPt'],['tri','fTri'],['iso','fIso'],['brk','fBrk'],['bnd','fBnd'],['base','fBase']]
       .forEach(function(p){
@@ -2588,18 +2605,18 @@ function draw(){
    *  bounding box before they walk its vertices. */
   function linePool(){
     var pool = [];
-    if (SELF.brk){
+    if (eff('brk')){
       selS('brk').forEach(function(n){
         if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'brk', line:L, layer:n}); });
       });
       if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
     }
-    if (SELF.bnd){
+    if (eff('bnd')){
       selS('bnd').forEach(function(n){
         if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'bnd', line:L, layer:n}); });
       });
     }
-    if (SELF.base){
+    if (eff('base')){
       Object.keys(GEOM).forEach(function(n){
         if (!VIS[n] || ROLE[n] || !fileOn(n)) return;      // only a shown layer with no role
         GEOM[n].lines.forEach(function(L){ pool.push({t:'base', line:L, layer:n}); });
@@ -2644,17 +2661,17 @@ function draw(){
   /*  One thing under the cursor. Thin things you aim at (a point, a line, a
    *  contour) win over the triangle that fills the area behind them. */
   function hitOne(mx, my){
-    if (SELF.pt){
+    if (eff('pt')){
       var p = pickPoint(mx, my, 9);
       if (p) return {t:'pt', x:p[0], y:p[1], z:p[2]};
     }
     var ln = nearestPoly(mx, my, linePool(), 10);   // linePool already honours the filter
     if (ln) return ln;
-    if (SELF.iso){
+    if (eff('iso')){
       var c = pickContour(mx, my, 9);
       if (c) return {t:'iso', z:c.z, line:c.line, main:c.main, len:c.len, n:c.n};
     }
-    if (SELF.tri){
+    if (eff('tri')){
       var tr = hitTri(mx, my);
       if (tr) return tr;
     }
@@ -2696,7 +2713,7 @@ function draw(){
     var whole = x1 >= x0, out = [];
     var inR = function(sx, sy){ return sx>=rx0 && sx<=rx1 && sy>=ry0 && sy<=ry1; };
 
-    if (SELF.pt){
+    if (eff('pt')){
       selS('pts').forEach(function(n){
         GEOM[n].points.forEach(function(p){
           if (isDeleted(p[0], p[1])) return;
@@ -2708,7 +2725,7 @@ function draw(){
       });
     }
 
-    if (SELF.tri && RES && RES.mesh){
+    if (eff('tri') && RES && RES.mesh){
       var V = RES.mesh.vertices, TR = RES.mesh.triangles;
       for (var i = 0; i < TR.length; i++){
         var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
@@ -2745,7 +2762,7 @@ function draw(){
     linePool().forEach(function(e){
       scanLine(e.line, function(){ return {t:e.t, line:e.line, layer:e.layer}; });
     });
-    if (SELF.iso && RES && RES.contours && SHOW.iso){
+    if (eff('iso') && RES && RES.contours && SHOW.iso){
       RES.contours.levels.forEach(function(lv){
         if (ISODENSE && !isMainLevel(lv.z)) return;
         lv.lines.forEach(function(Ln){
@@ -2852,6 +2869,192 @@ function draw(){
       else if (!s.shift) SEL = [];
     }
     showSel(); draw();
+    if (SELNEXT){ SELNEXT = null; selHint(); }   // the one-shot pick is spent
+  });
+
+  /*  ===================== RIGHT-CLICK CONTEXT MENU =====================
+   *
+   *  A right-click on the canvas is a shortcut, the way it is in a CAD editor.
+   *  On an object it offers that object's own tools; on empty ground — or on a
+   *  background line, which counts as empty here — it offers what the next pick
+   *  should catch and a "select all of a kind". Deleting a breakline and
+   *  bringing a deleted point back are wired in the next step; their entries
+   *  show here, disabled, so the shape of the menu is already in place.
+   */
+  var CVM = document.getElementById('cvMenu');
+  function cvmClose(){ if (CVM){ CVM.hidden = true; CVM.innerHTML = ''; } }
+  function cvmOpen(px, py, items){
+    var html = '';
+    items.forEach(function(it, i){
+      if (it.sep){ html += '<div class="sep"></div>'; return; }
+      if (it.hd != null){ html += '<div class="hd">' + esc(it.hd) + '</div>'; return; }
+      html += '<button data-i="' + i + '"' + (it.disabled ? ' disabled' : '') + '>' +
+        '<span class="chk">' + (it.k || '') + '</span>' + esc(it.label) + '</button>';
+    });
+    CVM.innerHTML = html;
+    [].slice.call(CVM.querySelectorAll('button[data-i]')).forEach(function(b){
+      var it = items[+b.getAttribute('data-i')];
+      if (it && !it.disabled && it.run)
+        b.addEventListener('click', function(){ cvmClose(); it.run(); });
+    });
+    CVM.hidden = false;
+    var w = CVM.offsetWidth, h = CVM.offsetHeight;
+    CVM.style.left = Math.max(4, Math.min(px, window.innerWidth  - w - 6)) + 'px';
+    CVM.style.top  = Math.max(4, Math.min(py, window.innerHeight - h - 6)) + 'px';
+  }
+  document.addEventListener('pointerdown', function(e){
+    if (CVM && !CVM.hidden && !CVM.contains(e.target)) cvmClose();
+  }, true);
+  document.addEventListener('scroll', function(){ cvmClose(); }, true);
+  window.addEventListener('blur', cvmClose);
+
+  /*  A right-click hit test — like hitOne but blind to the Select filter (a
+   *  shortcut should reach whatever is under the cursor) and aware of points
+   *  that have been deleted, so they can be offered back. */
+  function pickDeletedPoint(mx, my, px){
+    px = px || 10; var best = null, bd = px * px;
+    selS('pts').forEach(function(n){
+      GEOM[n].points.forEach(function(p){
+        if (!isDeleted(p[0], p[1])) return;
+        var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
+        if (d < bd){ bd = d; best = p; }
+      });
+    });
+    return best;
+  }
+  function rcHit(mx, my){
+    var dp = pickDeletedPoint(mx, my, 10);
+    if (dp) return { t:'delpt', x:dp[0], y:dp[1] };
+    var p = pickPoint(mx, my, 10);
+    if (p) return { t:'pt', x:p[0], y:p[1], z:p[2] };
+    var pool = [];
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'brk', line:L, layer:n }); });
+    });
+    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({ t:'brk', line:L, layer:null }); });
+    selS('bnd').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'bnd', line:L, layer:n }); });
+    });
+    Object.keys(GEOM).forEach(function(n){
+      if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
+      GEOM[n].lines.forEach(function(L){ pool.push({ t:'base', line:L, layer:n }); });
+    });
+    var ln = nearestPoly(mx, my, pool, 11);
+    if (ln) return ln;
+    var tr = hitTri(mx, my);
+    if (tr) return tr;
+    return null;
+  }
+
+  function armNext(k, name){
+    setMode('select');                 // the one-shot pick only means something in Select
+    SELNEXT = k;
+    setStatusEd('Next pick takes ' + name + ' only — then the Select filter is back.');
+  }
+  function selectAllOf(t){
+    setMode('select');
+    var out = [];
+    if (t === 'pt'){
+      selS('pts').forEach(function(n){
+        GEOM[n].points.forEach(function(p){
+          if (!isDeleted(p[0], p[1])) out.push({ t:'pt', x:p[0], y:p[1], z:p[2] });
+        });
+      });
+      if (DRAWVIS.add) EDITS.add.forEach(function(p){ out.push({ t:'pt', x:p[0], y:p[1], z:p[2] }); });
+    } else if (t === 'tri' && RES && RES.mesh){
+      var V = RES.mesh.vertices, TR = RES.mesh.triangles;
+      for (var i = 0; i < TR.length; i++){
+        var a = V[TR[i][0]], b = V[TR[i][1]], c = V[TR[i][2]];
+        out.push({ t:'tri', i:i, p:[[a[0],a[1],a[2]],[b[0],b[1],b[2]],[c[0],c[1],c[2]]] });
+      }
+    } else if (t === 'iso' && RES && RES.contours){
+      RES.contours.levels.forEach(function(lv){
+        if (ISODENSE && !isMainLevel(lv.z)) return;
+        lv.lines.forEach(function(Ln){ out.push({ t:'iso', z:lv.z, line:Ln, main:isMainLevel(lv.z) }); });
+      });
+    } else if (t === 'brk'){
+      selS('brk').forEach(function(n){
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ out.push({ t:'brk', line:L, layer:n }); });
+      });
+      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ out.push({ t:'brk', line:L, layer:null }); });
+    } else if (t === 'bnd'){
+      selS('bnd').forEach(function(n){
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ out.push({ t:'bnd', line:L, layer:n }); });
+      });
+    } else if (t === 'base'){
+      Object.keys(GEOM).forEach(function(n){
+        if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
+        GEOM[n].lines.forEach(function(L){ out.push({ t:'base', line:L, layer:n }); });
+      });
+    }
+    SEL = out; showSel(); draw();
+    setStatusEd(out.length + ' selected.');
+  }
+  function groundMenu(){
+    var haveMesh = !!(RES && RES.mesh), haveIso = !!(RES && RES.contours && SHOW.iso);
+    return [
+      { hd:'Select with the next click' },
+      { label:'Point',      k:'📍', run:function(){ armNext('pt', 'points'); } },
+      { label:'Breakline',  k:'📐', run:function(){ armNext('brk', 'breaklines'); } },
+      { label:'Triangle',   k:'△', disabled:!haveMesh, run:function(){ armNext('tri', 'triangles'); } },
+      { label:'Contour',    k:'〰', disabled:!haveIso, run:function(){ armNext('iso', 'contours'); } },
+      { label:'Boundary',   k:'▣', run:function(){ armNext('bnd', 'the boundary'); } },
+      { label:'Background',  k:'▦', run:function(){ armNext('base', 'background lines'); } },
+      { sep:true },
+      { hd:'Select every one of a kind' },
+      { label:'All points',           k:'📍', run:function(){ selectAllOf('pt'); } },
+      { label:'All breaklines',       k:'📐', run:function(){ selectAllOf('brk'); } },
+      { label:'All triangles',        k:'△', disabled:!haveMesh, run:function(){ selectAllOf('tri'); } },
+      { label:'All contours',         k:'〰', disabled:!haveIso, run:function(){ selectAllOf('iso'); } },
+      { label:'All boundary lines',   k:'▣', run:function(){ selectAllOf('bnd'); } },
+      { label:'All background lines', k:'▦', run:function(){ selectAllOf('base'); } }
+    ];
+  }
+  function startFloatingMove(x, y, z){
+    setMode('move');
+    MOVING = { from:[x, y], z:z, to:[x, y], floating:true };
+    setStatusEd('Move the cursor and click where the point should go — its elevation stays ' +
+      (z == null ? '—' : fmt(z, 3)) + '.');
+    draw();
+  }
+  function triCentroid(P){
+    return [(P[0][0] + P[1][0] + P[2][0]) / 3, (P[0][1] + P[1][1] + P[2][1]) / 3];
+  }
+  cv.addEventListener('contextmenu', function(ev){
+    ev.preventDefault();
+    if (typeof closeMenus === 'function') closeMenus();
+    if (MODE === 'brk' && DRAWING) return;      // the line tool takes it over — next step
+    var r = cv.getBoundingClientRect();
+    var hit = rcHit(ev.clientX - r.left, ev.clientY - r.top);
+    var items;
+    if (hit && hit.t === 'pt'){
+      items = [
+        { hd:'Point' + (hit.z == null ? '' : '   ' + fmt(hit.z, 3) + ' m') },
+        { label:'Move', k:'✥', run:function(){ startFloatingMove(hit.x, hit.y, hit.z); } },
+        { label:'Delete point', k:'✖', run:function(){ push('del', [hit.x, hit.y]); } }
+      ];
+    } else if (hit && hit.t === 'delpt'){
+      items = [
+        { hd:'Deleted point' },
+        { label:'Restore this point (next step)', k:'↺', disabled:true },
+        { sep:true }
+      ].concat(groundMenu());
+    } else if (hit && hit.t === 'tri'){
+      items = [
+        { hd:'Triangle #' + (hit.i + 1) },
+        { label:'Swap an edge', k:'⇄', run:function(){ setMode('swap'); } },
+        { label:'Delete triangle', k:'🕳', run:function(){ push('hole', triCentroid(hit.p)); } }
+      ];
+    } else if (hit && (hit.t === 'brk' || hit.t === 'bnd')){
+      items = [
+        { hd:hit.t === 'bnd' ? 'Boundary' : 'Breakline' },
+        { label:'Delete line (next step)', k:'✖', disabled:true },
+        { sep:true }
+      ].concat(groundMenu());
+    } else {
+      items = groundMenu();
+    }
+    cvmOpen(ev.clientX, ev.clientY, items);
   });
 
 buildColorUI();
