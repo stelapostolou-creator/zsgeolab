@@ -717,11 +717,11 @@ var ACTIVE = 0;
  *  their own default. */
 var COLOR_DEF = {
   bg:    '#080d18',   // canvas background
-  base:  '#33456a',   // layers with no role — orientation only
-  pts:   '#ff6b6e',   // measured points (and the elevation labels)
-  minor: '#4fd18b',   // contours
-  index: '#ffd166',   // index contours
-  mesh:  '#5a9678',   // model triangles (drawn faint)
+  base:  '#2a3856',   // layers with no role — orientation only, kept faint
+  pts:   '#ffffff',   // measured points (and the elevation labels)
+  minor: '#ffe14d',   // contours — yellow
+  index: '#ff8f3a',   // index contours — brighter orange, to stand out from the minor ones
+  mesh:  '#9aa3b2',   // model triangles (drawn faint) — light grey
   brk:   '#00d5ff',   // breaklines
   bnd:   '#ff3df0'    // area boundary
 };
@@ -770,6 +770,10 @@ function tintOf(hex, i, n){
   if (n <= 1 || i < 0) return hex;
   var c = hexToHsl(hex);
   var t = n === 1 ? 0.5 : i / (n - 1);          // 0..1 across the layers
+  /*  A white or near-grey Points colour has no hue to fan into shades, so the
+   *  layers are separated by hue instead — spread around the wheel and kept
+   *  bright, lightly desaturated, so they still read as "the points". */
+  if (c.s < 12 || c.l > 92) return hslToHex(200 + t * 300, 62, 70);
   var l  = Math.max(32, Math.min(90, c.l + (t - 0.5) * 62));   // wide lightness fan
   var hh = c.h + (t - 0.5) * 46;                                // noticeable hue fan
   var ss = Math.max(28, Math.min(100, c.s - (t - 0.5) * 40));   // and a saturation fan
@@ -810,7 +814,7 @@ window.resetColors = function(){
  *  their VIEW state: the eye and the canvas colour, kept on this computer. The
  *  geometry itself stays in the surface's edit list (Undo/Redo, autosave). */
 var DRAWVIS = { add:true, brk:true };
-var DRAWCOL = { add:'#7cffb2', brk:'#00d5ff' };
+var DRAWCOL = { add:'#ffd633', brk:'#00d5ff' };   // added points draw as a yellow cross
 (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
@@ -883,13 +887,14 @@ function lyUsable(m){ return m.points > 0 || m.lines > 0 || m.inserts > 0 || m.t
 var SHOWALL_LY = false;
 window.toggleAllLayers = function(){ SHOWALL_LY = !SHOWALL_LY; renderLayers(); };
 
-/*  Which attribute labels a layer shows on the canvas — {z, disc}. Only a
- *  layer read from a TXT/CSV carries a description; every points layer has an
- *  elevation. Turned on by a right click on the layer row, kept by name. */
+/*  Which attribute labels a layer shows on the canvas — {num, z, disc}. Every
+ *  points layer has a number (its own from a "pt x y z" file, otherwise its
+ *  order) and an elevation; only a layer read from a TXT/CSV carries a
+ *  description. Turned on by a right click on the layer row, kept by name. */
 var LYTEXT = (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.lytext') || '{}'), o = {};
-    for (var k in s) o[k] = {z: !!s[k].z, disc: !!s[k].disc};
+    for (var k in s) o[k] = {num: !!s[k].num, z: !!s[k].z, disc: !!s[k].disc};
     return o;
   } catch (e) { return {}; }
 })();
@@ -906,19 +911,21 @@ function lyHasZ(name){
 window.lyMenu = function(ev, name){
   if (!lyHasZ(name) && !lyHasDisc(name)) return;   // nothing to label
   ev.preventDefault();
-  var lt = LYTEXT[name] || {}, hasD = lyHasDisc(name);
+  var lt = LYTEXT[name] || {}, hasD = lyHasDisc(name), hasZ = lyHasZ(name);
   var m = document.getElementById('lyMenu');
   m.innerHTML = '<div class="hd">' + esc(name) + '</div>' +
+    (hasZ ? '<button onclick="lyText(\'' + esc(name) + '\',\'num\')"><span class="chk">' +
+      (lt.num ? '✓' : '') + '</span>Show point number</button>' : '') +
     '<button onclick="lyText(\'' + esc(name) + '\',\'z\')"><span class="chk">' +
       (lt.z ? '✓' : '') + '</span>Show elevation</button>' +
     (hasD ? '<button onclick="lyText(\'' + esc(name) + '\',\'disc\')"><span class="chk">' +
       (lt.disc ? '✓' : '') + '</span>Show description</button>' : '');
   m.style.left = Math.min(ev.clientX, window.innerWidth - 200) + 'px';
-  m.style.top  = Math.min(ev.clientY, window.innerHeight - 110) + 'px';
+  m.style.top  = Math.min(ev.clientY, window.innerHeight - 140) + 'px';
   m.hidden = false;
 };
 window.lyText = function(name, key){
-  var lt = LYTEXT[name] || (LYTEXT[name] = {z:false, disc:false});
+  var lt = LYTEXT[name] || (LYTEXT[name] = {num:false, z:false, disc:false});
   lt[key] = !lt[key];
   saveLyText();
   document.getElementById('lyMenu').hidden = true;
@@ -1442,7 +1449,7 @@ function renderLayers(){
       var orphan = !fon;                             // role layer of an unticked file
       if (orphan) orphans++;
       var off = !VIS[n], feeds = off && !!role;      // hidden but still in the calculation
-      var lt = LYTEXT[n] || {}, labels = (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
+      var lt = LYTEXT[n] || {}, labels = (lt.num ? 'N' : '') + (lt.z ? 'Z' : '') + (lt.disc ? 'D' : '');
       var canLabel = lyHasZ(n) || lyHasDisc(n);
       var cnt = m.points ? m.points + (m.inserts ? '+' + m.inserts + 'b' : '') + ' pt'
               : m.lines ? m.lines + ' ln'
@@ -1968,18 +1975,10 @@ function draw(){
       ctx.fillRect(x-1, y-1, 2, 2);
     });
   });
-  /*  Background lines the user erased — a faint dashed ghost, so a right-click
-   *  can still bring them back. */
-  if (EDITS.basecut && EDITS.basecut.length){
-    ctx.save();
-    ctx.strokeStyle = COLORS.base; ctx.globalAlpha = 0.3;
-    ctx.lineWidth = 1; ctx.setLineDash([3,4]); ctx.beginPath();
-    Object.keys(GEOM).forEach(function(n){
-      if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
-      GEOM[n].lines.forEach(function(L){ if (isCutLine(L)) addPoly(L); });
-    });
-    ctx.stroke(); ctx.restore();
-  }
+  /*  Background lines the user erased are gone from the canvas entirely — no
+   *  ghost. They are only for orientation and play no part in the surface, so
+   *  "erase" means erase. A right-click where the line ran still offers
+   *  Restore (rcHit keeps the geometry), and Ctrl+Z brings it straight back. */
   if (SHOW.txt && T.s > 3){
     ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
@@ -2034,16 +2033,18 @@ function draw(){
 
   // 3. Contours. Every fifth one heavier, as on a drawing.
   if (RES && RES.contours && SHOW.iso){
-    /*  ONCE THE CONTOURS FALL ON TOP OF EACH OTHER, ONLY THE INDEX ONES STAY.
-     *  Across a whole 50 km project the 616 levels are fractions of a pixel
-     *  apart: the result is a green smear that costs real time. Every CAD and
-     *  every map does the same. As soon as you zoom in, they all come back. */
+    /*  ONLY WHEN THE CONTOURS ARE A SMEAR — sub-pixel apart — do the minor
+     *  ones drop out and the index ones carry on alone. Across a whole 50 km
+     *  project the 616 levels can be fractions of a pixel apart: drawing them
+     *  all is a smear that costs real time. As soon as you zoom in they return.
+     *  The threshold is deliberately tight: at any normal zoom every contour
+     *  is drawn. */
     /*  The mean spacing between contours is area / total length — it works
      *  even in the long narrow corridor of a road, where "the square root of
      *  the area over the count" gave 3.6 m instead of 81 m and erased the
      *  contours even when zoomed in. */
     var gap = RES.report.area / Math.max(RES.contours.length, 1);
-    var dense = gap * T.s < 4;
+    var dense = gap * T.s < 1.5;
     ISODENSE = dense;
 
     ctx.strokeStyle = COLORS.minor; ctx.lineWidth = 1; ctx.beginPath();
@@ -2093,15 +2094,17 @@ function draw(){
    *  The ceiling is there for the whole 50 km project in view: past a certain
    *  point the screen is full and every extra label is only cost. */
   var LBL = SHOW.z ? [] : null, lseen = {};
-  /*  Per-layer labels: elevation and/or description, switched on by a right
-   *  click on the layer row. Their own coarse grid — a description is wider
-   *  than a number — so two never land one on top of the other. */
+  /*  Per-layer labels: point number, elevation and/or description, switched on
+   *  by a right click on the layer row. Each entry is the stack of lines for
+   *  one point — number on top, then elevation, then description. Their own
+   *  coarse grid, as tall as the stack, so two never land one over the other. */
   var ATXT = [], aseen = {};
   selS('pts').forEach(function(n){
     if (!VIS[n]) return;
-    ctx.fillStyle = tintOn ? (LYCOLOR[n] || tintOf(COLORS.pts, ptsL.indexOf(n), ptsL.length)) : COLORS.pts;
+    var lcol = tintOn ? (LYCOLOR[n] || tintOf(COLORS.pts, ptsL.indexOf(n), ptsL.length)) : COLORS.pts;
+    ctx.fillStyle = lcol;
     var lt = LYTEXT[n] || {}, pa = GEOM[n].point_attrs || [];
-    var wantZ = !!lt.z, wantD = !!lt.disc;
+    var wantN = !!lt.num, wantZ = !!lt.z, wantD = !!lt.disc;
     GEOM[n].points.forEach(function(p, pi){
       if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
       var x = SX(p[0]), y = SY(p[1]);
@@ -2113,38 +2116,86 @@ function draw(){
       np++;
       if (LBL && p[2] != null && LBL.length < 700){
         var lk = ((x/58)|0) + ',' + ((y/14)|0);
-        if (!lseen[lk]){ lseen[lk] = 1; LBL.push([x, y, p[2]]); }
+        if (!lseen[lk]){ lseen[lk] = 1; LBL.push([x, y, p[2], lcol]); }
       }
-      if ((wantZ || wantD) && ATXT.length < 800){
-        var s = '';
-        if (wantZ && p[2] != null) s = fmt(p[2], 2);
-        if (wantD){ var av = pa[pi]; if (av && av.disc) s += (s ? '  ' : '') + av.disc; }
-        if (s){
-          var ak = ((x/72)|0) + ',' + ((y/14)|0);
-          if (!aseen[ak]){ aseen[ak] = 1; ATXT.push([x, y, s]); }
+      if ((wantN || wantZ || wantD) && ATXT.length < 800){
+        var av = pa[pi], lines = [];
+        if (wantN) lines.push('#' + (av && av.pt != null ? av.pt : (pi + 1)));
+        if (wantZ && p[2] != null) lines.push(fmt(p[2], 2));
+        if (wantD && av && av.disc) lines.push(av.disc);
+        if (lines.length){
+          var ak = ((x/72)|0) + ',' + ((y / (14 * lines.length))|0);
+          if (!aseen[ak]){ aseen[ak] = 1; ATXT.push([x, y, lines, lcol]); }
         }
       }
     });
   });
   PTSDRAWN = np;
-  ctx.font = '11px Consolas,monospace'; ctx.fillStyle = COLORS.pts;
-  if (LBL) for (var li = 0; li < LBL.length; li++)
+  /*  The labels take the colour of their own points layer — the tint, or the
+   *  per-layer override — so text and dot always match. */
+  ctx.font = '11px Consolas,monospace';
+  if (LBL) for (var li = 0; li < LBL.length; li++){
+    ctx.fillStyle = LBL[li][3] || COLORS.pts;
     ctx.fillText(fmt(LBL[li][2], 2), LBL[li][0] + 5, LBL[li][1] - 4);
-  for (var ti = 0; ti < ATXT.length; ti++)
-    ctx.fillText(ATXT[ti][2], ATXT[ti][0] + 6, ATXT[ti][1] + 4);
+  }
+  for (var ti = 0; ti < ATXT.length; ti++){
+    var alines = ATXT[ti][2], atx = ATXT[ti][0] + 6, aty = ATXT[ti][1] + 4;
+    ctx.fillStyle = ATXT[ti][3] || COLORS.pts;
+    for (var aj = 0; aj < alines.length; aj++) ctx.fillText(alines[aj], atx, aty + aj * 12);
+  }
 
   // 5. The edits, so that what you touched can be seen.
+  /*  A move is stored as a delete + an add in one undo group. Found here so the
+   *  two ends read as one thing — an orange X where the point was, an orange
+   *  ring where it is now — instead of an unrelated red deletion and yellow
+   *  addition. No line joins them: on a surface with many moves that would be
+   *  clutter. The link is drawn only while a drag is live, or for a pair whose
+   *  end is in the selection. */
+  var MP = [];
+  for (var mi = 0; mi < UNDO.length; mi++){
+    var mg = UNDO[mi];
+    if (!mg || mg.op !== 'group' || !mg.items || mg.items.length !== 2) continue;
+    var m0 = mg.items[0], m1 = mg.items[1];
+    var mDel = m0.kind === 'del' ? m0 : m1.kind === 'del' ? m1 : null;
+    var mAdd = m0.kind === 'add' ? m0 : m1.kind === 'add' ? m1 : null;
+    if (mDel && mAdd && mDel.item && mAdd.item) MP.push({ from: mDel.item, to: mAdd.item });
+  }
+  var near2 = function(a, b){ return Math.abs(a[0]-b[0]) < 0.005 && Math.abs(a[1]-b[1]) < 0.005; };
+  var inPairFrom = function(p){ return MP.some(function(m){ return near2(m.from, p); }); };
+  var inPairTo   = function(p){ return MP.some(function(m){ return near2(m.to, p); }); };
+  var selHasPt = function(p){
+    return typeof SEL !== 'undefined' && SEL.some(function(it){
+      return it.t === 'pt' && near2([it.x, it.y], p);
+    });
+  };
+
   ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
   EDITS.del.forEach(function(p){
+    if (inPairFrom(p)) return;                 // a moved point's old spot — drawn with the pair
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
     ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
   });
-  ctx.fillStyle = DRAWCOL.add; ctx.font = '11px Consolas,monospace';
+  ctx.strokeStyle = DRAWCOL.add; ctx.fillStyle = DRAWCOL.add; ctx.lineWidth = 1.5;
+  ctx.font = '11px Consolas,monospace';
   if (DRAWVIS.add) EDITS.add.forEach(function(p){
+    if (inPairTo(p)) return;                   // a moved point's new spot — drawn with the pair
     var x = SX(p[0]), y = SY(p[1]);
-    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.284); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.moveTo(x,y-4); ctx.lineTo(x,y+4); ctx.stroke();
     if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
+  });
+  /*  The moved-point pairs. */
+  MP.forEach(function(m){
+    var fx = SX(m.from[0]), fy = SY(m.from[1]), tx = SX(m.to[0]), ty = SY(m.to[1]);
+    if (selHasPt(m.from) || selHasPt(m.to)){
+      ctx.strokeStyle = 'rgba(255,154,61,.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(fx-4,fy-4); ctx.lineTo(fx+4,fy+4); ctx.moveTo(fx+4,fy-4); ctx.lineTo(fx-4,fy+4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
   });
   if (DRAWVIS.brk){
     ctx.strokeStyle = DRAWCOL.brk; ctx.lineWidth = 2; ctx.beginPath();
@@ -2155,10 +2206,13 @@ function draw(){
   EDITS.swap.forEach(function(e){
     ctx.beginPath(); ctx.moveTo(SX(e[0]),SY(e[1])); ctx.lineTo(SX(e[2]),SY(e[3])); ctx.stroke();
   });
-  ctx.fillStyle = 'rgba(255,77,77,.85)';
+  /*  Deleted triangles: a light-grey ring over a faint dark centre — visible
+   *  against the mesh without shouting, and still the target of a right-click
+   *  "Restore triangle" (rcHit looks for a marker within 9 px). */
+  ctx.strokeStyle = '#c3c9d4'; ctx.lineWidth = 1.4; ctx.fillStyle = 'rgba(8,13,24,.55)';
   EDITS.hole.forEach(function(p){
     var x = SX(p[0]), y = SY(p[1]);
-    ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.284); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.284); ctx.fill(); ctx.stroke();
   });
 
   // The line being drawn right now, and the point being dragged.
@@ -2241,11 +2295,14 @@ function draw(){
   }
 
   if (MOVING){
-    ctx.strokeStyle = '#7CFFB2'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
-    ctx.beginPath(); ctx.moveTo(SX(MOVING.from[0]),SY(MOVING.from[1]));
-    ctx.lineTo(SX(MOVING.to[0]),SY(MOVING.to[1])); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = '#7CFFB2';
-    ctx.beginPath(); ctx.arc(SX(MOVING.to[0]), SY(MOVING.to[1]), 4, 0, 6.284); ctx.fill();
+    var mfx = SX(MOVING.from[0]), mfy = SY(MOVING.from[1]);
+    var mtx = SX(MOVING.to[0]),   mty = SY(MOVING.to[1]);
+    ctx.strokeStyle = 'rgba(255,154,61,.6)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(mfx,mfy); ctx.lineTo(mtx,mty); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(mfx-4,mfy-4); ctx.lineTo(mfx+4,mfy+4); ctx.moveTo(mfx+4,mfy-4); ctx.lineTo(mfx-4,mfy+4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(mtx, mty, 4.5, 0, 6.284); ctx.stroke();
   }
 }
 
@@ -2591,9 +2648,6 @@ function draw(){
     // A modal owns the keyboard while it is open.
     var mb = document.getElementById('modalBack');
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
-    /*  While a field has focus the keyboard belongs to it — Ctrl+Z there is the
-     *  browser's own text undo, not the surface's, and Delete edits the text.
-     *  The canvas shortcuts only fire when nothing is being typed into. */
     var tn = ((ev.target && ev.target.tagName) || '').toLowerCase();
     var typing = tn === 'input' || tn === 'textarea' || tn === 'select';
     if (ev.key === 'Enter' && MODE === 'brk' && !typing) endLine();   // finish, stay in the tool
@@ -2604,9 +2658,17 @@ function draw(){
       setMode('select');                    // Esc always lands back in Select
       document.getElementById('lyMenu').hidden = true;
       if (typeof closeMenus === 'function') closeMenus(); }
+    /*  Ctrl+Z / Ctrl+Y are the surface's Undo / Redo everywhere — the same as
+     *  the Undo and Redo buttons — in every tool and whatever holds focus, the
+     *  way a CAD editor works. In a text field, Esc clears it: that is the
+     *  field's own undo. `ev.code` is the physical key, so it also works with a
+     *  Greek (or any non-Latin) keyboard layout, where `ev.key` would be "ζ". */
+    var ctrl = ev.ctrlKey || ev.metaKey;
+    var kz = ev.code === 'KeyZ' || ev.key === 'z' || ev.key === 'Z';
+    var ky = ev.code === 'KeyY' || ev.key === 'y' || ev.key === 'Y';
+    if (ctrl && kz){ ev.preventDefault(); (ev.shiftKey ? redoEdit : undoEdit)(); return; }
+    if (ctrl && ky){ ev.preventDefault(); redoEdit(); return; }
     if (typing) return;
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
     // Delete removes the selection — the same as the right-click "Delete them".
     if (ev.key === 'Delete' && MODE === 'select' && typeof SEL !== 'undefined' && SEL.length){
       ev.preventDefault();
