@@ -2288,7 +2288,7 @@ function draw(){
       del:   'Click a point to take it OUT of the calculation.',
       move:  'Drag a point to a new position. Its elevation stays the same.',
       add:   'Click for a new point — you will be asked for its elevation.',
-      brk:   'Click the vertices; a double click or Enter ends the line.',
+      brk:   'Click the vertices · Enter keeps drawing, Esc finishes · right-click for options.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
     }[MODE] || '';
@@ -2549,7 +2549,13 @@ function draw(){
     else if (MODE === 'brk'){
       var snap = pickPoint(mx, my, 12);
       var v = snap ? [snap[0], snap[1], snap[2]] : [w[0], w[1], null];
-      if (!DRAWING) DRAWING = [v]; else DRAWING.push(v);
+      if (!DRAWING){ DRAWING = [v]; }
+      else {
+        // A second click on the same spot (a habitual double-click) is not a
+        // second vertex — the line now ends with Enter / Esc / right-click.
+        var last = DRAWING[DRAWING.length - 1];
+        if (Math.hypot(SX(last[0]) - mx, SY(last[1]) - my) > 4) DRAWING.push(v);
+      }
       draw();
     }
     else if (MODE === 'swap'){
@@ -2563,13 +2569,14 @@ function draw(){
     }
   });
 
-  cv.addEventListener('dblclick', function(){ if (MODE === 'brk') endLine(); });
   window.addEventListener('keydown', function(ev){
     // A modal owns the keyboard while it is open.
     var mb = document.getElementById('modalBack');
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
-    if (ev.key === 'Enter' && MODE === 'brk') endLine();
-    if (ev.key === 'Escape'){ DRAWING = null; clearPick();
+    if (ev.key === 'Enter' && MODE === 'brk') endLine();   // finish, stay in the tool
+    if (ev.key === 'Escape'){
+      if (MODE === 'brk' && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line
+      DRAWING = null; clearPick();
       if (typeof selClear === 'function') selClear();
       setMode('select');                    // Esc always lands back in Select
       document.getElementById('lyMenu').hidden = true;
@@ -3148,7 +3155,17 @@ function draw(){
   cv.addEventListener('contextmenu', function(ev){
     ev.preventDefault();
     if (typeof closeMenus === 'function') closeMenus();
-    if (MODE === 'brk' && DRAWING) return;      // the line tool takes it over — step 5γ
+    if (MODE === 'brk' && DRAWING){            // a line is being drawn — its own menu
+      cvmOpen(ev.clientX, ev.clientY, [
+        { hd:'Drawing a line · ' + DRAWING.length + (DRAWING.length === 1 ? ' point' : ' points') },
+        { label:'Finish the line', k:'✔', disabled:DRAWING.length < 2,
+          run:function(){ endLine(); setMode('select'); } },
+        { label:'Undo last point', k:'↶',
+          run:function(){ DRAWING.pop(); if (!DRAWING.length) DRAWING = null; draw(); } },
+        { label:'Discard & exit', k:'✖', run:function(){ DRAWING = null; setMode('select'); } }
+      ]);
+      return;
+    }
     var r = cv.getBoundingClientRect();
     var hit = rcHit(ev.clientX - r.left, ev.clientY - r.top);
     var items;
