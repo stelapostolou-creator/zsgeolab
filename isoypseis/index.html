@@ -676,8 +676,9 @@ function newSurface(name){
     sel: { pts:{}, brk:{}, bnd:{} },
     /*  del: deleted points · add: new points · brk: drawn lines · swap: swapped
      *  edges · hole: deleted triangles · brkcut: layer breaklines taken out of
-     *  the surface (kept by coordinates, put back on demand). */
-    edits: { del:[], add:[], brk:[], swap:[], hole:[], brkcut:[] },
+     *  the surface · basecut: background lines erased (both kept by coordinates,
+     *  put back on demand). */
+    edits: { del:[], add:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -688,7 +689,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','add','brk','swap','hole','brkcut'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','add','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -1630,15 +1631,19 @@ function refreshZRange(){
  *  by its vertices (x, y) — the surface is re-read on every calculation and
  *  indices do not survive. Costs nothing while nothing is cut. */
 function isCutLine(L){
-  var cuts = (typeof EDITS !== 'undefined' && EDITS.brkcut) || [];
-  for (var i = 0; i < cuts.length; i++){
-    var C = cuts[i];
-    if (C.length !== L.length) continue;
-    var same = true;
-    for (var k = 0; k < C.length; k++){
-      if (C[k][0] !== L[k][0] || C[k][1] !== L[k][1]){ same = false; break; }
+  if (typeof EDITS === 'undefined') return false;
+  var lists = [EDITS.brkcut, EDITS.basecut];
+  for (var j = 0; j < lists.length; j++){
+    var cuts = lists[j] || [];
+    for (var i = 0; i < cuts.length; i++){
+      var C = cuts[i];
+      if (C.length !== L.length) continue;
+      var same = true;
+      for (var k = 0; k < C.length; k++){
+        if (C[k][0] !== L[k][0] || C[k][1] !== L[k][1]){ same = false; break; }
+      }
+      if (same) return true;
     }
-    if (same) return true;
   }
   return false;
 }
@@ -1952,7 +1957,7 @@ function draw(){
     var col = LYCOLOR[n] || COLORS.base;
     ctx.strokeStyle = col; ctx.fillStyle = col;
     ctx.beginPath();
-    GEOM[n].lines.forEach(function(L){ addPoly(L); });
+    GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) addPoly(L); });
     ctx.stroke();
     GEOM[n].points.forEach(function(p){
       if (p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
@@ -1963,6 +1968,18 @@ function draw(){
       ctx.fillRect(x-1, y-1, 2, 2);
     });
   });
+  /*  Background lines the user erased — a faint dashed ghost, so a right-click
+   *  can still bring them back. */
+  if (EDITS.basecut && EDITS.basecut.length){
+    ctx.save();
+    ctx.strokeStyle = COLORS.base; ctx.globalAlpha = 0.3;
+    ctx.lineWidth = 1; ctx.setLineDash([3,4]); ctx.beginPath();
+    Object.keys(GEOM).forEach(function(n){
+      if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
+      GEOM[n].lines.forEach(function(L){ if (isCutLine(L)) addPoly(L); });
+    });
+    ctx.stroke(); ctx.restore();
+  }
   if (SHOW.txt && T.s > 3){
     ctx.font = '10px Consolas,monospace';
     Object.keys(GEOM).forEach(function(n){
@@ -2283,7 +2300,7 @@ function draw(){
     // A running command drops the pickbox, the way a CAD program does.
     cv.classList.toggle('tool', MODE !== 'pan' && MODE !== 'select');
     document.getElementById('edHint').textContent = {
-      select:'Click to select · drag a box (left→right whole, right→left touching) · Esc clears.',
+      select:'Click / box to select (L→R whole, R→L touching) · Delete removes · right-click for tools · Esc clears.',
       pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
       del:   'Click a point to take it OUT of the calculation.',
       move:  'Drag a point to a new position. Its elevation stays the same.',
@@ -2362,7 +2379,7 @@ function draw(){
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','add','brk','swap','hole','brkcut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','add','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2401,7 +2418,8 @@ function draw(){
       '<div class="hint">' +
       [[d.del.length,'deleted points'], [d.add.length,'new points'],
        [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
-       [d.hole.length,'deleted triangles'], [(d.brkcut||[]).length,'lines removed']]
+       [d.hole.length,'deleted triangles'],
+       [(d.brkcut||[]).length + (d.basecut||[]).length,'lines removed']]
       .filter(function(p){ return p[0]; })
       .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
   }
@@ -2573,7 +2591,12 @@ function draw(){
     // A modal owns the keyboard while it is open.
     var mb = document.getElementById('modalBack');
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
-    if (ev.key === 'Enter' && MODE === 'brk') endLine();   // finish, stay in the tool
+    /*  While a field has focus the keyboard belongs to it — Ctrl+Z there is the
+     *  browser's own text undo, not the surface's, and Delete edits the text.
+     *  The canvas shortcuts only fire when nothing is being typed into. */
+    var tn = ((ev.target && ev.target.tagName) || '').toLowerCase();
+    var typing = tn === 'input' || tn === 'textarea' || tn === 'select';
+    if (ev.key === 'Enter' && MODE === 'brk' && !typing) endLine();   // finish, stay in the tool
     if (ev.key === 'Escape'){
       if (MODE === 'brk' && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line
       DRAWING = null; clearPick();
@@ -2581,8 +2604,14 @@ function draw(){
       setMode('select');                    // Esc always lands back in Select
       document.getElementById('lyMenu').hidden = true;
       if (typeof closeMenus === 'function') closeMenus(); }
+    if (typing) return;
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z'){ ev.preventDefault(); undoEdit(); }
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y'){ ev.preventDefault(); redoEdit(); }
+    // Delete removes the selection — the same as the right-click "Delete them".
+    if (ev.key === 'Delete' && MODE === 'select' && typeof SEL !== 'undefined' && SEL.length){
+      ev.preventDefault();
+      deleteSelection();
+    }
   });
   function endLine(){
     if (DRAWING && DRAWING.length >= 2){
@@ -2646,7 +2675,7 @@ function draw(){
   var SELNEXT = null;
   function eff(k){ return SELNEXT ? (SELNEXT === k) : SELF[k]; }
   function selHint(){
-    setStatusEd('Click to select · drag a box (left→right whole, right→left touching) · Esc clears.');
+    setStatusEd('Click or drag a box to select · Delete removes it · Esc clears.');
   }
 
   function selChecks(){
@@ -2699,7 +2728,7 @@ function draw(){
     var pool = [];
     if (eff('brk')){
       selS('brk').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'brk', line:L, layer:n}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:L, layer:n}); });
       });
       if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
     }
@@ -2711,7 +2740,7 @@ function draw(){
     if (eff('base')){
       Object.keys(GEOM).forEach(function(n){
         if (!VIS[n] || ROLE[n] || !fileOn(n)) return;      // only a shown layer with no role
-        GEOM[n].lines.forEach(function(L){ pool.push({t:'base', line:L, layer:n}); });
+        GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'base', line:L, layer:n}); });
       });
     }
     return pool;
@@ -3017,6 +3046,11 @@ function draw(){
   function rcHit(mx, my){
     var dp = pickDeletedPoint(mx, my, 10);
     if (dp) return { t:'delpt', x:dp[0], y:dp[1] };
+    // A deleted-triangle marker — click it to bring the triangle back.
+    for (var hi = 0; hi < EDITS.hole.length; hi++){
+      var hp = EDITS.hole[hi];
+      if (Math.hypot(SX(hp[0]) - mx, SY(hp[1]) - my) < 9) return { t:'delhole', item:hp };
+    }
     var p = pickPoint(mx, my, 10);
     if (p) return { t:'pt', x:p[0], y:p[1], z:p[2] };
     var pool = [];
@@ -3066,7 +3100,7 @@ function draw(){
       });
     } else if (t === 'brk'){
       selS('brk').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L){ out.push({ t:'brk', line:L, layer:n }); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) out.push({ t:'brk', line:L, layer:n }); });
       });
       if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ out.push({ t:'brk', line:L, layer:null }); });
     } else if (t === 'bnd'){
@@ -3076,7 +3110,7 @@ function draw(){
     } else if (t === 'base'){
       Object.keys(GEOM).forEach(function(n){
         if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
-        GEOM[n].lines.forEach(function(L){ out.push({ t:'base', line:L, layer:n }); });
+        GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) out.push({ t:'base', line:L, layer:n }); });
       });
     }
     SEL = out; showSel(); draw();
@@ -3120,18 +3154,20 @@ function draw(){
         return EDITS.del[i];
     return null;
   }
-  function cutOf(L){                       // the brkcut record standing for this layer line
-    for (var i = 0; i < EDITS.brkcut.length; i++){
-      var C = EDITS.brkcut[i];
-      if (C.length === L.length && C[0][0] === L[0][0] && C[0][1] === L[0][1] &&
-          C[C.length-1][0] === L[L.length-1][0] && C[C.length-1][1] === L[L.length-1][1]) return C;
-    }
+  function cutOf(L){          // the brkcut / basecut record standing for this layer line
+    var lists = [EDITS.brkcut || [], EDITS.basecut || []];
+    for (var j = 0; j < lists.length; j++)
+      for (var i = 0; i < lists[j].length; i++){
+        var C = lists[j][i];
+        if (C.length === L.length && C[0][0] === L[0][0] && C[0][1] === L[0][1] &&
+            C[C.length-1][0] === L[L.length-1][0] && C[C.length-1][1] === L[L.length-1][1]) return C;
+      }
     return null;
   }
   /*  Delete a whole selection in one step — each item handled by its kind
    *  (point → out of the calc, triangle → a hole, layer breakline → cut,
-   *  drawn line → removed, boundary → dropped from this surface). Contours and
-   *  background lines have nothing to delete. One Ctrl+Z takes it all back. */
+   *  background line → erased, drawn line → removed, boundary → dropped from this
+   *  surface). Contours have nothing to delete. One Ctrl+Z takes it all back. */
   function deleteSelection(){
     var steps = [], n = 0;
     SEL.forEach(function(it){
@@ -3142,6 +3178,8 @@ function draw(){
       } else if (it.t === 'brk'){
         if (it.layer == null){ var e = edDel('brk', it.line); if (e){ steps.push(e); n++; } }
         else if (!isCutLine(it.line)){ steps.push(edAdd('brkcut', it.line.map(function(p){ return p.slice(); }))); n++; }
+      } else if (it.t === 'base'){
+        if (!isCutLine(it.line)){ steps.push(edAdd('basecut', it.line.map(function(p){ return p.slice(); }))); n++; }
       } else if (it.t === 'bnd'){
         surfSel('bnd', it.layer, false); n++;      // a surface toggle — re-tick brings it back
       }
@@ -3187,6 +3225,12 @@ function draw(){
         { label:'Restore this point', k:'↺', run:function(){ pullOut('del', findDel(hit.x, hit.y)); } },
         { sep:true }
       ].concat(groundMenu());
+    } else if (hit && hit.t === 'delhole'){
+      items = [
+        { hd:'Deleted triangle' },
+        { label:'Restore triangle', k:'↺', run:function(){ pullOut('hole', hit.item); } },
+        { sep:true }
+      ].concat(groundMenu());
     } else if (hit && hit.t === 'tri'){
       items = [
         { hd:'Triangle #' + (hit.i + 1) },
@@ -3212,6 +3256,15 @@ function draw(){
             surfSel('bnd', hit.layer, false);
             setStatusEd('Boundary dropped from this surface — re-tick it in Surface ▸ Boundary to bring it back.');
           } },
+        { sep:true }
+      ].concat(groundMenu());
+    } else if (hit && hit.t === 'base'){
+      var bcut = isCutLine(hit.line);
+      items = [
+        { hd:bcut ? 'Erased background line' : 'Background line' },
+        bcut
+          ? { label:'Restore line', k:'↺', run:function(){ pullOut('basecut', cutOf(hit.line)); } }
+          : { label:'Erase line', k:'✖', run:function(){ push('basecut', hit.line.map(function(p){ return p.slice(); })); } },
         { sep:true }
       ].concat(groundMenu());
     } else {
