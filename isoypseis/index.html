@@ -683,13 +683,14 @@ function newSurface(name){
      *  ({layer:false}); a layer not listed is included. So a new layer is on
      *  for every surface by default. */
     sel: { pts:{}, brk:{}, bnd:{} },
-    /*  del: deleted points · add: new points · move: a measured point carried to
-     *  a new spot ({from,to,keep}) · setz: a measured point given a new
-     *  elevation ({at,z}) · brk: drawn lines · swap: swapped edges · hole:
-     *  deleted triangles · brkcut: layer breaklines taken out of the surface ·
-     *  basecut: background lines erased (all kept by coordinates, put back on
-     *  demand). */
-    edits: { del:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
+    /*  del: deleted points · delhide: deleted points a second delete has tucked
+     *  away (still out of the calc, no red cross, only Ctrl+Z or Restore brings
+     *  them back) · add: new points · move: a measured point carried to a new
+     *  spot ({from,to,keep}) · setz: a measured point given a new elevation
+     *  ({at,z}) · brk: drawn lines · swap: swapped edges · hole: deleted
+     *  triangles · brkcut: layer breaklines taken out of the surface · basecut:
+     *  background lines erased (all kept by coordinates, put back on demand). */
+    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -700,7 +701,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -1674,6 +1675,7 @@ function payload(){
   var gone = {};
   var mark = function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; };
   EDITS.del.forEach(mark);
+  (EDITS.delhide || []).forEach(mark);
   (EDITS.move || []).forEach(function(m){ mark(m.from); });
   var keep = function(p){ return !gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)]; };
   /*  A measured point given a new elevation (Elevation change / Match elevation).
@@ -2188,7 +2190,7 @@ function draw(){
   var near2 = function(a, b){ return Math.abs(a[0]-b[0]) < 0.005 && Math.abs(a[1]-b[1]) < 0.005; };
   var selHasPt = function(p){
     return typeof SEL !== 'undefined' && SEL.some(function(it){
-      return it.t === 'pt' && near2([it.x, it.y], p);
+      return (it.t === 'pt' || it.t === 'movefrom' || it.t === 'delpt') && near2([it.x, it.y], p);
     });
   };
 
@@ -2284,7 +2286,7 @@ function draw(){
     SEL.forEach(function(it){ if (it.t === 'tri') triN++; });
     ctx.save();
     SEL.forEach(function(it){
-      if (it.t === 'pt'){
+      if (it.t === 'pt' || it.t === 'delpt' || it.t === 'movefrom'){
         var ix = SX(it.x), iy = SY(it.y);
         ctx.strokeStyle = '#000'; ctx.lineWidth = 3.5; ctx.strokeRect(ix-4, iy-4, 8, 8);
         ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 1.5; ctx.strokeRect(ix-4, iy-4, 8, 8);
@@ -2419,7 +2421,7 @@ function draw(){
     document.getElementById('edHint').textContent = {
       select:'Click / box to select (L→R whole, R→L touching) · Delete removes · right-click for tools · Esc clears.',
       pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
-      del:   'Click a point to take it OUT of the calculation.',
+      del:   'Click a point to take it OUT of the calculation · a deleted one again hides its cross · a moved point’s origin splits the move.',
       move:  'Drag a point to a new position. Its elevation stays the same.',
       add:   'Click for a new point — you will be asked for its elevation.',
       elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
@@ -2498,7 +2500,7 @@ function draw(){
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2535,7 +2537,7 @@ function draw(){
     var d = EDITS;
     document.getElementById('edList').innerHTML = !n ? '' :
       '<div class="hint">' +
-      [[d.del.length,'deleted points'], [d.add.length,'new points'],
+      [[d.del.length + (d.delhide||[]).length,'deleted points'], [d.add.length,'new points'],
        [(d.move||[]).length,'moved points'], [(d.setz||[]).length,'elevations changed'],
        [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
        [d.hole.length,'deleted triangles'],
@@ -2654,11 +2656,20 @@ function draw(){
     el.innerHTML = h; el.hidden = false;
   }
 
+  /*  A deleted point a second delete has tucked away: no longer drawn, no
+   *  longer picked, but still out of the calculation. Only Ctrl+Z (which
+   *  returns it to the plain deleted state) or Restore brings it back. */
+  function isHidden(x, y){
+    var h = EDITS.delhide || [];
+    for (var i = 0; i < h.length; i++)
+      if (Math.abs(h[i][0]-x) < 0.005 && Math.abs(h[i][1]-y) < 0.005) return true;
+    return false;
+  }
   function isDeleted(x, y){
     for (var i = 0; i < EDITS.del.length; i++){
       if (Math.abs(EDITS.del[i][0]-x) < 0.005 && Math.abs(EDITS.del[i][1]-y) < 0.005) return true;
     }
-    return false;
+    return isHidden(x, y);
   }
   /*  The point once sat here but has been carried elsewhere — its original spot
    *  is no longer a point in its own right (the ring at the new home is). */
@@ -2702,7 +2713,13 @@ function draw(){
     if (MODE === 'del'){
       var p = pickPoint(mx, my);
       if (p) deletePoint(p[0], p[1]);
-      else setStatusEd('No point found there.');
+      else {
+        var dp = pickDeletedPoint(mx, my, 10);
+        var mf = dp ? null : pickMovedFrom(mx, my, 10);
+        if (dp) hideDeleted(dp[0], dp[1]);          // click a deleted point again to hide it
+        else if (mf) splitMove(mf);                 // click a moved point's origin to split the move
+        else setStatusEd('No point found there.');
+      }
     }
     else if (MODE === 'matchz'){
       var mp = pickPoint(mx, my);
@@ -2873,6 +2890,33 @@ function draw(){
     } else {
       push('del', [x, y]);
     }
+  }
+
+  /*  Splitting a move: the user deleted the origin marker of a moved point. The
+   *  move record goes; the origin is left as a plain deletion (selectable, and a
+   *  second delete hides it), and the moved point becomes a plain new point with
+   *  its current elevation — so there is no paired "was … / now …" any more. */
+  function moveSplitSteps(rec){
+    return [ edDel('move', rec),
+             edAdd('del', [rec.from[0], rec.from[1]]),
+             edAdd('add', [rec.to[0], rec.to[1], rec.to[2]]) ];
+  }
+  function splitMove(rec){
+    UNDO.push({ op:'group', items: moveSplitSteps(rec) });
+    REDO.length = 0; afterEdit();
+    setStatusEd('Origin removed — the moved point is now a new point.');
+  }
+
+  /*  A second delete on an already-deleted point tucks it away — the red cross
+   *  goes and it stops being pickable, but it stays out of the calculation the
+   *  whole time. One Ctrl+Z returns it to the plain deleted state, a second one
+   *  restores the point. */
+  function hideDeleted(x, y){
+    var dr = findDel(x, y);
+    if (!dr || isHidden(x, y)) return;
+    UNDO.push({ op:'group', items:[ edDel('del', dr), edAdd('delhide', [x, y]) ] });
+    REDO.length = 0; afterEdit();
+    setStatusEd('Deleted point hidden — Ctrl+Z brings it back.');
   }
 
   /*  ---------------------- changing an elevation ----------------------
@@ -3144,6 +3188,10 @@ function draw(){
     if (eff('pt')){
       var p = pickPoint(mx, my, 9);
       if (p) return {t:'pt', x:p[0], y:p[1], z:p[2]};
+      var dp = pickDeletedPoint(mx, my, 9);         // a deleted point is still an object you can select
+      if (dp) return {t:'delpt', x:dp[0], y:dp[1]};
+      var mf = pickMovedFrom(mx, my, 9);            // the origin marker of a moved point
+      if (mf) return {t:'movefrom', x:mf.from[0], y:mf.from[1], rec:mf};
     }
     var ln = nearestPoly(mx, my, linePool(), 10);   // linePool already honours the filter
     if (ln) return ln;
@@ -3160,7 +3208,8 @@ function draw(){
 
   function sameItem(a, b){
     if (a.t !== b.t) return false;
-    if (a.t === 'pt')  return Math.abs(a.x-b.x) < 1e-6 && Math.abs(a.y-b.y) < 1e-6;
+    if (a.t === 'pt' || a.t === 'delpt' || a.t === 'movefrom')
+      return Math.abs(a.x-b.x) < 1e-6 && Math.abs(a.y-b.y) < 1e-6;
     if (a.t === 'tri') return a.i === b.i;
     return a.line === b.line;
   }
@@ -3196,7 +3245,11 @@ function draw(){
     if (eff('pt')){
       selS('pts').forEach(function(n){
         GEOM[n].points.forEach(function(p){
-          if (isDeleted(p[0], p[1]) || isMovedFrom(p[0], p[1])) return;
+          if (isMovedFrom(p[0], p[1])) return;
+          if (isDeleted(p[0], p[1])){
+            if (!isHidden(p[0], p[1]) && inR(SX(p[0]), SY(p[1]))) out.push({t:'delpt', x:p[0], y:p[1]});
+            return;
+          }
           if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
         });
       });
@@ -3205,6 +3258,8 @@ function draw(){
       });
       (EDITS.move || []).forEach(function(m){
         if (inR(SX(m.to[0]), SY(m.to[1]))) out.push({t:'pt', x:m.to[0], y:m.to[1], z:m.to[2]});
+        if (m.keep !== false && inR(SX(m.from[0]), SY(m.from[1])))
+          out.push({t:'movefrom', x:m.from[0], y:m.from[1], rec:m});
       });
     }
 
@@ -3281,6 +3336,20 @@ function draw(){
         '<div class="v">' + (cur == null ? '— no elevation' : fmt(cur,3)+' m') + '</div>' +
         '<div class="d">' + lines.join('<br>') + '</div>';
     }
+    if (s.t === 'delpt'){
+      var dz = origZ(s.x, s.y);
+      return '<div class="k" style="color:#ff4d4d">Deleted point</div>' +
+        '<div class="v">' + (dz == null ? '— no elevation' : fmt(dz, 3) + ' m') + '</div>' +
+        '<div class="d">Out of the calculation<br>Delete again to hide it · Ctrl+Z brings it back<br>' +
+        'X ' + fmt(s.x, 3) + '<br>Y ' + fmt(s.y, 3) + '</div>';
+    }
+    if (s.t === 'movefrom'){
+      var mz = origZ(s.x, s.y);
+      return '<div class="k" style="color:#ff9a3d">Moved point · origin</div>' +
+        '<div class="v">' + (mz == null ? '— no elevation' : fmt(mz, 3) + ' m') + '</div>' +
+        '<div class="d">Delete it to split the move — the origin becomes a deleted point, ' +
+        'the moved point a new one<br>X ' + fmt(s.x, 3) + '<br>Y ' + fmt(s.y, 3) + '</div>';
+    }
     if (s.t === 'base'){
       var mb = lineMetrics(s.line);
       return '<div class="k" style="color:'+(LYCOLOR[s.layer]||COLORS.base)+'">Background line</div>' +
@@ -3326,9 +3395,9 @@ function draw(){
     if (SEL.length === 1){
       h += selOne(SEL[0]);
     } else {
-      var c = {pt:0, tri:0, brk:0, bnd:0, iso:0, base:0};
+      var c = {pt:0, delpt:0, movefrom:0, tri:0, brk:0, bnd:0, iso:0, base:0};
       SEL.forEach(function(s){ c[s.t]++; });
-      var LABEL = {pt:'point', tri:'triangle', brk:'breakline', bnd:'boundary', iso:'contour', base:'background line'};
+      var LABEL = {pt:'point', delpt:'deleted point', movefrom:'moved-point origin', tri:'triangle', brk:'breakline', bnd:'boundary', iso:'contour', base:'background line'};
       var parts = [];
       Object.keys(c).forEach(function(k){
         if (c[k]) parts.push(c[k] + ' ' + LABEL[k] + (c[k] > 1 ? 's' : ''));
@@ -3413,16 +3482,30 @@ function draw(){
     px = px || 10; var best = null, bd = px * px;
     selS('pts').forEach(function(n){
       GEOM[n].points.forEach(function(p){
-        if (!isDeleted(p[0], p[1])) return;
+        if (!isDeleted(p[0], p[1]) || isHidden(p[0], p[1])) return;   // hidden ones are not offered back here
         var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
         if (d < bd){ bd = d; best = p; }
       });
     });
     return best;
   }
+  /*  The origin marker of a moved measured point (the orange cross). Selectable
+   *  like a deleted point: removing it splits the move into a deleted origin and
+   *  a plain new point. */
+  function pickMovedFrom(mx, my, px){
+    px = px || 10; var best = null, bd = px * px;
+    (EDITS.move || []).forEach(function(m){
+      if (m.keep === false) return;
+      var dx = SX(m.from[0]) - mx, dy = SY(m.from[1]) - my, d = dx*dx + dy*dy;
+      if (d < bd){ bd = d; best = m; }
+    });
+    return best;
+  }
   function rcHit(mx, my){
     var dp = pickDeletedPoint(mx, my, 10);
     if (dp) return { t:'delpt', x:dp[0], y:dp[1] };
+    var mf0 = pickMovedFrom(mx, my, 10);
+    if (mf0) return { t:'movefrom', x:mf0.from[0], y:mf0.from[1], rec:mf0 };
     // A deleted-triangle marker — click it to bring the triangle back.
     for (var hi = 0; hi < EDITS.hole.length; hi++){
       var hp = EDITS.hole[hi];
@@ -3552,7 +3635,18 @@ function draw(){
   function deleteSelection(){
     var steps = [], n = 0;
     SEL.forEach(function(it){
-      if (it.t === 'pt'){
+      if (it.t === 'delpt'){
+        /*  A second delete on an already-deleted point hides it — the cross
+         *  goes, one Ctrl+Z returns it to the plain deleted state. */
+        if (!isHidden(it.x, it.y)){
+          var dr = findDel(it.x, it.y);
+          if (dr){ steps.push(edDel('del', dr)); steps.push(edAdd('delhide', [it.x, it.y])); n++; }
+        }
+      } else if (it.t === 'movefrom'){
+        /*  Deleting a moved point's origin splits the move: the origin becomes a
+         *  deletion, the moved point a plain new point. */
+        moveSplitSteps(it.rec).forEach(function(e){ steps.push(e); }); n++;
+      } else if (it.t === 'pt'){
         /*  Same three cases as deletePoint(): a new point is dropped, a moved
          *  point's copy is dropped and its origin left behind as a deletion, a
          *  measured point becomes a deletion. */
@@ -3624,9 +3718,18 @@ function draw(){
           run:function(){ deletePoint(hit.x, hit.y); } }
       ];
     } else if (hit && hit.t === 'delpt'){
+      var dpz = origZ(hit.x, hit.y);
       items = [
-        { hd:'Deleted point' },
+        { hd:'Deleted point' + (dpz == null ? '' : '   was ' + fmt(dpz, 3) + ' m') },
         { label:'Restore this point', k:'↺', run:function(){ pullOut('del', findDel(hit.x, hit.y)); } },
+        { label:'Hide it — Ctrl+Z brings it back', k:'🚫', run:function(){ hideDeleted(hit.x, hit.y); } },
+        { sep:true }
+      ].concat(groundMenu());
+    } else if (hit && hit.t === 'movefrom'){
+      var mfz = origZ(hit.x, hit.y);
+      items = [
+        { hd:'Moved point · origin' + (mfz == null ? '' : '   was ' + fmt(mfz, 3) + ' m') },
+        { label:'Delete it — moved point becomes a new point', k:'✖', run:function(){ splitMove(hit.rec); } },
         { sep:true }
       ].concat(groundMenu());
     } else if (hit && hit.t === 'delhole'){
