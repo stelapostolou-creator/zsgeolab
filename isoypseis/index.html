@@ -67,6 +67,9 @@
   .modal p b{color:var(--ink);}
   .modal input[type=text]{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
     border-radius:8px;color:var(--ink);font-size:14px;margin-bottom:12px;}
+  .modal .mrow{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:13px;color:var(--ink);}
+  .modal .mrow input[type=text]{width:8em;margin-bottom:0;padding:6px 8px;}
+  .modal .mrow input[type=radio]{flex:0 0 auto;}
   .modal .mbtns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
   .modal .mbtns button{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;
     cursor:pointer;border:0;color:#fff;background:var(--navy2);}
@@ -515,7 +518,15 @@
   <div class="stage">
     <div class="menubar">
       <div class="mgroup">
-        <div class="mi ed" data-m="pan" onclick="setMode('pan');closeMenus()" title="Pan / zoom">👆&nbsp;Pan</div>
+        <div class="mi" onclick="cmenu(this)" title="Edit the measured points">Points</div>
+        <div class="menu">
+          <button class="ed" data-m="add"  onclick="setMode('add');closeMenus()"><span class="k">➕</span>Add point</button>
+          <button class="ed" data-m="move" onclick="setMode('move');closeMenus()"><span class="k">✥</span>Move point</button>
+          <button class="ed" data-m="del"  onclick="setMode('del');closeMenus()"><span class="k">✖</span>Delete point</button>
+          <div class="div"></div>
+          <button class="ed" data-m="elev"   onclick="setMode('elev');closeMenus()"><span class="k">↕</span>Elevation change</button>
+          <button class="ed" data-m="matchz" onclick="setMode('matchz');closeMenus()"><span class="k">=</span>Match elevation</button>
+        </div>
       </div>
       <div class="mgroup">
         <div class="mi" onclick="cmenu(this)" title="What a click or a box is allowed to pick">Select</div>
@@ -527,14 +538,6 @@
           <button id="fBrk"  onclick="togSel('brk')"><span class="k">📐</span>Breaklines<span class="chk"></span></button>
           <button id="fBnd"  onclick="togSel('bnd')"><span class="k">▣</span>Boundary<span class="chk"></span></button>
           <button id="fBase" onclick="togSel('base')"><span class="k">▦</span>Background<span class="chk"></span></button>
-        </div>
-      </div>
-      <div class="mgroup">
-        <div class="mi" onclick="cmenu(this)">Points</div>
-        <div class="menu">
-          <button class="ed" data-m="add"  onclick="setMode('add');closeMenus()"><span class="k">➕</span>Add point</button>
-          <button class="ed" data-m="move" onclick="setMode('move');closeMenus()"><span class="k">✥</span>Move point</button>
-          <button class="ed" data-m="del"  onclick="setMode('del');closeMenus()"><span class="k">✖</span>Delete point</button>
         </div>
       </div>
       <div class="mgroup">
@@ -554,6 +557,7 @@
       <div class="mgroup">
         <div class="mi" onclick="cmenu(this)">View</div>
         <div class="menu">
+          <button class="ed" data-m="pan" onclick="setMode('pan');closeMenus()"><span class="k">👆</span>Pan mode<span class="chk"></span></button>
           <button onclick="fit();closeMenus()"><span class="k">⤢</span>Fit to screen</button>
           <button onclick="zoom(1.4)"><span class="k">＋</span>Zoom in</button>
           <button onclick="zoom(1/1.4)"><span class="k">−</span>Zoom out</button>
@@ -573,7 +577,7 @@
           <button onclick="clearEdits()"><span class="k">🗑</span>Clear all edits</button>
         </div>
       </div>
-      <div class="mode" id="modeLbl">Mode: Pan</div>
+      <div class="mode" id="modeLbl">Mode: Select</div>
     </div>
    <div class="cv-wrap">
     <canvas id="cv"></canvas>
@@ -618,6 +622,11 @@ function tw(row){
 function closeMenus(){
   [].slice.call(document.querySelectorAll('.menubar .mi')).forEach(function(m){ m.classList.remove('open'); });
   [].slice.call(document.querySelectorAll('.menu')).forEach(function(m){ m.classList.remove('on'); });
+  /*  Drop keyboard focus off the menu button that was just used — otherwise
+   *  Enter (e.g. to confirm an Elevation-change selection) re-fires that
+   *  button instead of reaching the canvas. */
+  var ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('.menubar') && ae.blur) ae.blur();
 }
 function cmenu(mi){
   var menu = mi.parentElement.querySelector('.menu');
@@ -674,11 +683,13 @@ function newSurface(name){
      *  ({layer:false}); a layer not listed is included. So a new layer is on
      *  for every surface by default. */
     sel: { pts:{}, brk:{}, bnd:{} },
-    /*  del: deleted points · add: new points · brk: drawn lines · swap: swapped
-     *  edges · hole: deleted triangles · brkcut: layer breaklines taken out of
-     *  the surface · basecut: background lines erased (both kept by coordinates,
-     *  put back on demand). */
-    edits: { del:[], add:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
+    /*  del: deleted points · add: new points · move: a measured point carried to
+     *  a new spot ({from,to,keep}) · setz: a measured point given a new
+     *  elevation ({at,z}) · brk: drawn lines · swap: swapped edges · hole:
+     *  deleted triangles · brkcut: layer breaklines taken out of the surface ·
+     *  basecut: background lines erased (all kept by coordinates, put back on
+     *  demand). */
+    edits: { del:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -689,7 +700,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','add','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -843,6 +854,7 @@ window.drawLyCol = function(k, v){ DRAWCOL[k] = v; saveDrawLy(); draw(); };
 function renderDrawLayers(){
   var box = document.getElementById('drawLy'); if (!box) return;
   var na = (typeof EDITS !== 'undefined' && EDITS.add) ? EDITS.add.length : 0;
+  if (typeof EDITS !== 'undefined' && EDITS.move) na += EDITS.move.length;   // moved points live here too
   var nb = (typeof EDITS !== 'undefined' && EDITS.brk) ? EDITS.brk.length : 0;
   if (!na && !nb){ box.innerHTML = ''; return; }
   var mk = function(k, name, role, n, unit){
@@ -1656,11 +1668,22 @@ function isCutLine(L){
 }
 
 function payload(){
-  /*  Deleted points are recognised by their POSITION, rounded to the
-   *  centimetre: indices would change every time the drawing is read again. */
+  /*  Points taken out of the surface are recognised by their POSITION, rounded
+   *  to the centimetre: indices would change every time the drawing is read
+   *  again. A deleted point is out; so is the OLD spot of a moved point. */
   var gone = {};
-  EDITS.del.forEach(function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; });
+  var mark = function(p){ gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)] = 1; };
+  EDITS.del.forEach(mark);
+  (EDITS.move || []).forEach(function(m){ mark(m.from); });
   var keep = function(p){ return !gone[Math.round(p[0]*100)+','+Math.round(p[1]*100)]; };
+  /*  A measured point given a new elevation (Elevation change / Match elevation).
+   *  It stays where it is; only its z is overridden on the way to the server. */
+  var zover = {};
+  (EDITS.setz || []).forEach(function(s){ zover[Math.round(s.at[0]*100)+','+Math.round(s.at[1]*100)] = s.z; });
+  var withZ = function(p){
+    var o = zover[Math.round(p[0]*100)+','+Math.round(p[1]*100)];
+    return o == null ? p : [p[0], p[1], o];
+  };
 
   /*  The elevation band. NaN when the field is empty — then that side is off. */
   var zlo = numIn('zlo'), zhi = numIn('zhi');
@@ -1671,11 +1694,22 @@ function payload(){
   /*  Only the layers this surface pulls from (Points / Breaklines / Boundary
    *  nodes). The role is declared once; a surface picks a subset. */
   var pts = [];
-  var takePt = function(p){ if (!keep(p)) return; if (inband(p[2])) pts.push(p); else ZCUT.p++; };
+  var takePt = function(p){
+    if (!keep(p)) return;
+    var q = withZ(p);
+    if (inband(q[2])) pts.push(q); else ZCUT.p++;
+  };
   selS('pts').forEach(function(n){ GEOM[n].points.forEach(takePt); });
   // Line vertices on a points layer count as measured points too.
   selS('pts').forEach(function(n){ GEOM[n].lines.forEach(function(L){ L.forEach(takePt); }); });
-  EDITS.add.forEach(function(p){ if (inband(p[2])) pts.push(p); else ZCUT.p++; });
+  /*  A new point counts unless it was deleted afterwards (deleting a new point
+   *  drops it from the list, so the keep() guard is only a safety net). A moved
+   *  point enters the surface at its new home, with its elevation unchanged. */
+  EDITS.add.forEach(function(p){ if (!keep(p)) return; if (inband(p[2])) pts.push(p); else ZCUT.p++; });
+  (EDITS.move || []).forEach(function(m){
+    var t = [m.to[0], m.to[1], m.to[2]];
+    if (inband(t[2])) pts.push(t); else ZCUT.p++;
+  });
 
   var brk = [];
   /*  A 3D breakline "from the drawing" is split where it leaves the band —
@@ -2111,7 +2145,7 @@ function draw(){
       var k = (x|0) + ',' + (y|0);
       if (seen[k]) return;
       seen[k] = 1;
-      if (isDeleted(p[0], p[1])) return;
+      if (isDeleted(p[0], p[1]) || isMovedFrom(p[0], p[1])) return;
       ctx.fillRect(x-ps/2, y-ps/2, ps, ps);
       np++;
       if (LBL && p[2] != null && LBL.length < 700){
@@ -2145,24 +2179,13 @@ function draw(){
   }
 
   // 5. The edits, so that what you touched can be seen.
-  /*  A move is stored as a delete + an add in one undo group. Found here so the
-   *  two ends read as one thing — an orange X where the point was, an orange
-   *  ring where it is now — instead of an unrelated red deletion and yellow
-   *  addition. No line joins them: on a surface with many moves that would be
-   *  clutter. The link is drawn only while a drag is live, or for a pair whose
-   *  end is in the selection. */
-  var MP = [];
-  for (var mi = 0; mi < UNDO.length; mi++){
-    var mg = UNDO[mi];
-    if (!mg || mg.op !== 'group' || !mg.items || mg.items.length !== 2) continue;
-    var m0 = mg.items[0], m1 = mg.items[1];
-    var mDel = m0.kind === 'del' ? m0 : m1.kind === 'del' ? m1 : null;
-    var mAdd = m0.kind === 'add' ? m0 : m1.kind === 'add' ? m1 : null;
-    if (mDel && mAdd && mDel.item && mAdd.item) MP.push({ from: mDel.item, to: mAdd.item });
-  }
+  /*  A move is one record in EDITS.move — {from, to, keep}. When the user chose
+   *  to keep the old spot it is an orange cross, and the point's new home an
+   *  orange ring; a line joins them only while a drag is live or when one end
+   *  is selected (on a busy surface a line per move would be clutter). When the
+   *  old spot was dropped ("new from move", keep:false) only the new point
+   *  shows, in its own colour, because the original is gone for good. */
   var near2 = function(a, b){ return Math.abs(a[0]-b[0]) < 0.005 && Math.abs(a[1]-b[1]) < 0.005; };
-  var inPairFrom = function(p){ return MP.some(function(m){ return near2(m.from, p); }); };
-  var inPairTo   = function(p){ return MP.some(function(m){ return near2(m.to, p); }); };
   var selHasPt = function(p){
     return typeof SEL !== 'undefined' && SEL.some(function(it){
       return it.t === 'pt' && near2([it.x, it.y], p);
@@ -2171,7 +2194,6 @@ function draw(){
 
   ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
   EDITS.del.forEach(function(p){
-    if (inPairFrom(p)) return;                 // a moved point's old spot — drawn with the pair
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
     ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
@@ -2179,24 +2201,42 @@ function draw(){
   ctx.strokeStyle = DRAWCOL.add; ctx.fillStyle = DRAWCOL.add; ctx.lineWidth = 1.5;
   ctx.font = '11px Consolas,monospace';
   if (DRAWVIS.add) EDITS.add.forEach(function(p){
-    if (inPairTo(p)) return;                   // a moved point's new spot — drawn with the pair
     var x = SX(p[0]), y = SY(p[1]);
     ctx.beginPath();
     ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.moveTo(x,y-4); ctx.lineTo(x,y+4); ctx.stroke();
     if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
   });
-  /*  The moved-point pairs. */
-  MP.forEach(function(m){
+  (EDITS.move || []).forEach(function(m){
     var fx = SX(m.from[0]), fy = SY(m.from[1]), tx = SX(m.to[0]), ty = SY(m.to[1]);
-    if (selHasPt(m.from) || selHasPt(m.to)){
-      ctx.strokeStyle = 'rgba(255,154,61,.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
-      ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]);
+    if (m.keep){
+      if (selHasPt(m.from) || selHasPt(m.to)){
+        ctx.strokeStyle = 'rgba(255,154,61,.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(fx-4,fy-4); ctx.lineTo(fx+4,fy+4); ctx.moveTo(fx+4,fy-4); ctx.lineTo(fx-4,fy+4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#ff7a3d'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(tx-4,ty); ctx.lineTo(tx+4,ty); ctx.moveTo(tx,ty-4); ctx.lineTo(tx,ty+4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
     }
-    ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(fx-4,fy-4); ctx.lineTo(fx+4,fy+4); ctx.moveTo(fx+4,fy-4); ctx.lineTo(fx-4,fy+4); ctx.stroke();
-    ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
   });
+  /*  Measured points whose elevation was changed — a ring in a colour of their
+   *  own, and the new value beside it when elevations are shown. */
+  ctx.strokeStyle = '#4dd0e1'; ctx.fillStyle = '#4dd0e1'; ctx.lineWidth = 1.5;
+  (EDITS.setz || []).forEach(function(s){
+    var x = SX(s.at[0]), y = SY(s.at[1]);
+    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 6.284); ctx.stroke();
+    if (SHOW.z) ctx.fillText(fmt(s.z, 2), x + 6, y - 5);
+  });
+  /*  Match elevation: the point the elevation is being copied from. */
+  if (MODE === 'matchz' && MZSRC){
+    ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(SX(MZSRC.x), SY(MZSRC.y), 7, 0, 6.284); ctx.stroke();
+  }
   if (DRAWVIS.brk){
     ctx.strokeStyle = DRAWCOL.brk; ctx.lineWidth = 2; ctx.beginPath();
     EDITS.brk.forEach(function(L){ addPoly(L); });
@@ -2297,11 +2337,23 @@ function draw(){
   if (MOVING){
     var mfx = SX(MOVING.from[0]), mfy = SY(MOVING.from[1]);
     var mtx = SX(MOVING.to[0]),   mty = SY(MOVING.to[1]);
+    var mox = MOVING.origin ? SX(MOVING.origin[0]) : null,
+        moy = MOVING.origin ? SY(MOVING.origin[1]) : null;
+    var cross = function(x, y){
+      ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4); ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4);
+    };
     ctx.strokeStyle = 'rgba(255,154,61,.6)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
-    ctx.beginPath(); ctx.moveTo(mfx,mfy); ctx.lineTo(mtx,mty); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(mfx,mfy); ctx.lineTo(mtx,mty);
+    // Re-moving a moved point: a second line back to the point's true origin,
+    // so both the last stop and the starting point stay in view.
+    if (MOVING.origin){ ctx.moveTo(mox,moy); ctx.lineTo(mtx,mty); }
+    ctx.stroke(); ctx.setLineDash([]);
     ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(mfx-4,mfy-4); ctx.lineTo(mfx+4,mfy+4); ctx.moveTo(mfx+4,mfy-4); ctx.lineTo(mfx-4,mfy+4); ctx.stroke();
+    cross(mfx,mfy);
+    if (MOVING.origin) cross(mox,moy);
+    ctx.stroke();
     ctx.beginPath(); ctx.arc(mtx, mty, 4.5, 0, 6.284); ctx.stroke();
   }
 }
@@ -2325,20 +2377,27 @@ function draw(){
   var UNDO = SURFACES[0].undo, REDO = SURFACES[0].redo;
   var DRAWING = null;        // the line being drawn right now
   var MOVING = null;         // the point being dragged right now
+  var MZSRC = null;          // Match elevation: the point the elevation is copied FROM
   var HOVER = null;
 
   var MODE_NAME = {
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
+    elev:'Elevation change', matchz:'Match elevation',
     brk:'New line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
-    // Picking a tool again drops back to Select, the resting state of a CAD
-    // canvas; picking Select while already there does nothing.
-    MODE = (MODE === m && m !== 'select') ? 'select' : m;
-    DRAWING = null; MOVING = null;
+    // Picking a click-tool again drops back to Select, the resting state of a
+    // CAD canvas. Elevation change and Match elevation are not click-tools —
+    // you stay in them to build a selection — so picking them again just
+    // re-arms rather than toggling off; Esc leaves.
+    var sticky = m === 'elev' || m === 'matchz';
+    MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
+    DRAWING = null; MOVING = null; MZSRC = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
-    if (MODE === 'select' && typeof selClear === 'function') { /* keep the set */ }
+    // Select and Elevation change both work on a selection — keep it across the
+    // switch; every other tool starts with a clean slate.
+    if ((MODE === 'select' || MODE === 'elev') && typeof selClear === 'function') { /* keep the set */ }
     else if (typeof SEL !== 'undefined') { SEL = []; showSel(); }
     [].slice.call(document.querySelectorAll('.ed')).forEach(function(b){
       var on = b.getAttribute('data-m') === MODE;
@@ -2354,7 +2413,8 @@ function draw(){
     });
     var lbl = document.getElementById('modeLbl');
     if (lbl) lbl.textContent = 'Mode: ' + (MODE_NAME[MODE] || MODE);
-    // A running command drops the pickbox, the way a CAD program does.
+    // A running command shows the CAD crosshair + pickbox. Select and Pan keep
+    // the plain arrow; Elevation change picks points, so it gets the crosshair.
     cv.classList.toggle('tool', MODE !== 'pan' && MODE !== 'select');
     document.getElementById('edHint').textContent = {
       select:'Click / box to select (L→R whole, R→L touching) · Delete removes · right-click for tools · Esc clears.',
@@ -2362,6 +2422,8 @@ function draw(){
       del:   'Click a point to take it OUT of the calculation.',
       move:  'Drag a point to a new position. Its elevation stays the same.',
       add:   'Click for a new point — you will be asked for its elevation.',
+      elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
+      matchz:'Click the point to copy the elevation FROM, then the point to copy it ONTO · Esc exits.',
       brk:   'Click the vertices · Enter keeps drawing, Esc finishes · right-click for options.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
@@ -2436,7 +2498,7 @@ function draw(){
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','add','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2474,6 +2536,7 @@ function draw(){
     document.getElementById('edList').innerHTML = !n ? '' :
       '<div class="hint">' +
       [[d.del.length,'deleted points'], [d.add.length,'new points'],
+       [(d.move||[]).length,'moved points'], [(d.setz||[]).length,'elevations changed'],
        [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
        [d.hole.length,'deleted triangles'],
        [(d.brkcut||[]).length + (d.basecut||[]).length,'lines removed']]
@@ -2489,7 +2552,7 @@ function draw(){
     var best = null, bd = px * px;
     selS('pts').forEach(function(n){
       GEOM[n].points.forEach(function(p){
-        if (isDeleted(p[0], p[1])) return;
+        if (isDeleted(p[0], p[1]) || isMovedFrom(p[0], p[1])) return;
         var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
         if (d < bd){ bd = d; best = p; }
       });
@@ -2497,6 +2560,10 @@ function draw(){
     EDITS.add.forEach(function(p){
       var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
       if (d < bd){ bd = d; best = p; }
+    });
+    (EDITS.move || []).forEach(function(m){
+      var dx = SX(m.to[0]) - mx, dy = SY(m.to[1]) - my, d = dx*dx + dy*dy;
+      if (d < bd){ bd = d; best = m.to; }
     });
     return best;
   }
@@ -2593,6 +2660,29 @@ function draw(){
     }
     return false;
   }
+  /*  The point once sat here but has been carried elsewhere — its original spot
+   *  is no longer a point in its own right (the ring at the new home is). */
+  function isMovedFrom(x, y){
+    var mv = EDITS.move || [];
+    for (var i = 0; i < mv.length; i++){
+      if (Math.abs(mv[i].from[0]-x) < 0.005 && Math.abs(mv[i].from[1]-y) < 0.005) return true;
+    }
+    return false;
+  }
+  /*  What kind of point is at (x, y)? 'add' a brand-new one (with its index),
+   *  'move' a carried one (with its record), else 'data' — a measured point or
+   *  nothing. Used by Move and Delete to act on the right thing. */
+  function classifyPoint(x, y){
+    for (var i = 0; i < EDITS.add.length; i++){
+      var a = EDITS.add[i];
+      if (Math.abs(a[0]-x) < 0.005 && Math.abs(a[1]-y) < 0.005) return { kind:'add', at:i };
+    }
+    var mv = EDITS.move || [];
+    for (var j = 0; j < mv.length; j++){
+      if (Math.abs(mv[j].to[0]-x) < 0.005 && Math.abs(mv[j].to[1]-y) < 0.005) return { kind:'move', rec:mv[j] };
+    }
+    return { kind:'data' };
+  }
   function world(ev){
     var r = cv.getBoundingClientRect();
     return [(ev.clientX - r.left - T.x)/T.s, -(ev.clientY - r.top - T.y)/T.s];
@@ -2602,7 +2692,7 @@ function draw(){
 
   cv.addEventListener('click', function(ev){
     if (MOVING) return;
-    if (MODE === 'select') return;               // the selection handlers own the click
+    if (MODE === 'select' || MODE === 'elev') return;   // the selection handlers own the click
     var r = cv.getBoundingClientRect();
     var mx = ev.clientX - r.left, my = ev.clientY - r.top;
     // In pan mode a click that did not move the drawing is a question.
@@ -2611,8 +2701,25 @@ function draw(){
 
     if (MODE === 'del'){
       var p = pickPoint(mx, my);
-      if (p) push('del', [p[0], p[1]]);
+      if (p) deletePoint(p[0], p[1]);
       else setStatusEd('No point found there.');
+    }
+    else if (MODE === 'matchz'){
+      var mp = pickPoint(mx, my);
+      if (!mp){ setStatusEd('No point found there.'); return; }
+      if (isDeleted(mp[0], mp[1])){ setStatusEd('A deleted point cannot be used.'); return; }
+      if (!MZSRC){
+        MZSRC = { x:mp[0], y:mp[1], z: effZ(mp[0], mp[1]) };
+        setStatusEd('Elevation ' + (MZSRC.z == null ? '—' : fmt(MZSRC.z, 3)) +
+          ' m — now click the point to copy it onto.');
+        draw();
+      } else if (Math.abs(mp[0]-MZSRC.x) < 0.005 && Math.abs(mp[1]-MZSRC.y) < 0.005){
+        setStatusEd('That is the source — click a different point.');
+      } else {
+        applyElev([{ x:mp[0], y:mp[1] }], { mode:'abs', value: MZSRC.z });
+        setStatusEd('Set to ' + fmt(MZSRC.z, 3) + ' m — pick a new source, or Esc to exit.');
+        MZSRC = null; draw();
+      }
     }
     else if (MODE === 'add'){
       var z = prompt('Elevation of the new point (m):', RES ? RES.report.zmin.toFixed(2) : '');
@@ -2651,6 +2758,13 @@ function draw(){
     var tn = ((ev.target && ev.target.tagName) || '').toLowerCase();
     var typing = tn === 'input' || tn === 'textarea' || tn === 'select';
     if (ev.key === 'Enter' && MODE === 'brk' && !typing) endLine();   // finish, stay in the tool
+    if (ev.key === 'Enter' && MODE === 'elev' && !typing){            // set the elevation of the selection
+      ev.preventDefault();
+      var ep = (typeof SEL !== 'undefined') ? SEL.filter(function(s){ return s.t === 'pt'; }) : [];
+      if (ep.length) openElevDialog(ep);
+      else setStatusEd('Select one or more points first, then press Enter.');
+      return;
+    }
     if (ev.key === 'Escape'){
       if (MODE === 'brk' && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line
       DRAWING = null; clearPick();
@@ -2691,7 +2805,12 @@ function draw(){
     if (MODE !== 'move') return;
     var r = cv.getBoundingClientRect();
     var p = pickPoint(ev.clientX - r.left, ev.clientY - r.top);
-    if (p){ MOVING = {from: [p[0], p[1]], z: p[2], to: [p[0], p[1]]}; ev.stopPropagation(); }
+    if (p){
+      var mc = classifyPoint(p[0], p[1]);
+      MOVING = { from:[p[0], p[1]], z:effZ(p[0], p[1]), to:[p[0], p[1]],
+                 origin: mc.kind === 'move' ? [mc.rec.from[0], mc.rec.from[1]] : null };
+      ev.stopPropagation();
+    }
   }, true);
   window.addEventListener('mousemove', function(ev){
     if (!MOVING) return;
@@ -2701,18 +2820,196 @@ function draw(){
     if (!MOVING) return;
     var m = MOVING; MOVING = null;
     if (Math.hypot(m.to[0]-m.from[0], m.to[1]-m.from[1]) < 1e-6) return;
-    // A move = a deletion at the old position + an addition at the new one,
-    // with the same elevation. That way it is undone in two steps and needs no
-    // separate operation on the server.
-    EDITS.del.push(m.from);
-    EDITS.add.push([m.to[0], m.to[1], m.z]);
-    UNDO.push({ op:'group', items:[
-      { op:'add', kind:'del', item: m.from },
-      { op:'add', kind:'add', item: EDITS.add[EDITS.add.length-1] }
-    ]});
-    REDO.length = 0;
-    afterEdit();
+    dropMove(m.from[0], m.from[1], m.to[0], m.to[1], m.z);
   });
+
+  /*  Land a dragged (or floating) point at (tx, ty), elevation unchanged.
+   *  What happens depends on what was picked up:
+   *   - a brand-new point  → it simply relocates, no trace at the old spot
+   *   - an already-moved one → its record's new home changes, the origin stays
+   *   - a measured point   → the origin is marked (keep:true; the "discard the
+   *                           origin" choice comes with the prompt in a later step)
+   *  Each is one Ctrl+Z. */
+  function dropMove(fx, fy, tx, ty, z){
+    var to = [tx, ty, z];
+    var c = classifyPoint(fx, fy);
+    if (c.kind === 'add'){
+      var old = EDITS.add[c.at];
+      UNDO.push({ op:'group', items:[ edDel('add', old), edAdd('add', to) ] });
+      REDO.length = 0; afterEdit();
+    } else if (c.kind === 'move'){
+      var rec = c.rec;
+      UNDO.push({ op:'group', items:[
+        edDel('move', rec),
+        edAdd('move', { from:[rec.from[0], rec.from[1]], to:to, keep:rec.keep })
+      ] });
+      REDO.length = 0; afterEdit();
+    } else {
+      /*  A measured point. Any elevation change it carried is now folded into
+       *  the moved copy, so drop the standalone setz for its old spot. */
+      var pre = [];
+      var sz = EDITS.setz || [];
+      for (var i = 0; i < sz.length; i++)
+        if (Math.abs(sz[i].at[0]-fx) < 0.005 && Math.abs(sz[i].at[1]-fy) < 0.005){ pre.push(edDel('setz', sz[i])); break; }
+      var mvAdd = edAdd('move', { from:[fx, fy], to:to, keep:true });
+      UNDO.push(pre.length ? { op:'group', items:pre.concat([mvAdd]) } : mvAdd);
+      REDO.length = 0; afterEdit();
+    }
+  }
+
+  /*  Take a point out of the surface. A new point vanishes; a moved point's
+   *  copy vanishes and its origin stays behind as a plain deletion; a measured
+   *  point becomes a red cross. Everything is one Ctrl+Z. */
+  function deletePoint(x, y){
+    var c = classifyPoint(x, y);
+    if (c.kind === 'add'){
+      pullOut('add', EDITS.add[c.at]);
+    } else if (c.kind === 'move'){
+      UNDO.push({ op:'group', items:[
+        edDel('move', c.rec),
+        edAdd('del', [c.rec.from[0], c.rec.from[1]])
+      ] });
+      REDO.length = 0; afterEdit();
+    } else {
+      push('del', [x, y]);
+    }
+  }
+
+  /*  ---------------------- changing an elevation ----------------------
+   *
+   *  Elevation change (type a value) and Match elevation (copy one point's z
+   *  onto another) both end here. A NEW or MOVED point keeps its z inside its
+   *  own record, so it is edited in place; a MEASURED point stays put and gets
+   *  an EDITS.setz override, replacing any earlier one. Never a deleted point.
+   */
+  /*  The measured elevation at (x, y) as it came from the drawing — before any
+   *  Elevation change. Point layers carry it on their points and line vertices. */
+  function origZ(x, y){
+    var z = null;
+    selS('pts').forEach(function(n){
+      GEOM[n].points.forEach(function(p){
+        if (Math.abs(p[0]-x) < 0.005 && Math.abs(p[1]-y) < 0.005) z = p[2];
+      });
+      GEOM[n].lines.forEach(function(L){ L.forEach(function(p){
+        if (Math.abs(p[0]-x) < 0.005 && Math.abs(p[1]-y) < 0.005) z = p[2];
+      }); });
+    });
+    return z;
+  }
+  /*  The elevation a point has NOW: a new/moved point keeps it in its record,
+   *  a measured point may have an EDITS.setz override, otherwise it is origZ. */
+  function effZ(x, y){
+    var c = classifyPoint(x, y);
+    if (c.kind === 'add')  return EDITS.add[c.at][2];
+    if (c.kind === 'move') return c.rec.to[2];
+    var sz = EDITS.setz || [];
+    for (var i = 0; i < sz.length; i++)
+      if (Math.abs(sz[i].at[0]-x) < 0.005 && Math.abs(sz[i].at[1]-y) < 0.005) return sz[i].z;
+    return origZ(x, y);
+  }
+  /*  The edit records that set (x, y) to elevation nz — already applied to the
+   *  lists, ready to be pushed onto UNDO (one entry, or a group). */
+  function zSteps(x, y, nz){
+    var c = classifyPoint(x, y);
+    if (c.kind === 'add'){
+      var oa = EDITS.add[c.at];
+      return [ edDel('add', oa), edAdd('add', [oa[0], oa[1], nz]) ];
+    }
+    if (c.kind === 'move'){
+      var r = c.rec;
+      return [ edDel('move', r),
+               edAdd('move', { from:[r.from[0], r.from[1]], to:[r.to[0], r.to[1], nz], keep:r.keep }) ];
+    }
+    var out = [];
+    var sz = EDITS.setz || [];
+    for (var i = 0; i < sz.length; i++)
+      if (Math.abs(sz[i].at[0]-x) < 0.005 && Math.abs(sz[i].at[1]-y) < 0.005){ out.push(edDel('setz', sz[i])); break; }
+    out.push(edAdd('setz', { at:[x, y], z:nz }));
+    return out;
+  }
+  /*  spec: {mode:'abs', value} sets every point to `value`; {mode:'delta', value}
+   *  shifts each by `value`. Deleted points are skipped. One Ctrl+Z for the lot. */
+  function applyElev(pts, spec){
+    var steps = [], n = 0;
+    pts.forEach(function(p){
+      if (isDeleted(p.x, p.y)) return;
+      var nz = spec.mode === 'abs' ? spec.value
+                                   : ((effZ(p.x, p.y) == null ? 0 : effZ(p.x, p.y)) + spec.value);
+      if (!Number.isFinite(nz)) return;
+      steps = steps.concat(zSteps(p.x, p.y, nz)); n++;
+    });
+    if (!steps.length){ setStatusEd('Nothing to change here.'); return; }
+    UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+    REDO.length = 0;
+    if (typeof SEL !== 'undefined'){ SEL = []; showSel(); }
+    afterEdit();
+    setStatusEd(n + (n === 1 ? ' point' : ' points') + ' — Ctrl+Z to undo.');
+  }
+  /*  The dialog. One point → a single elevation field, filled with its current
+   *  value. Several → set them all to one value, or shift them by an amount. */
+  function openElevDialog(pts){
+    pts = pts.filter(function(p){ return !isDeleted(p.x, p.y); });
+    if (!pts.length){ setStatusEd('A deleted point has no elevation to change.'); return; }
+    if (pts.length === 1){
+      var cz = effZ(pts[0].x, pts[0].y);
+      modalOpen(
+        '<h3>Elevation</h3>' +
+        '<input type="text" id="mZ" inputmode="decimal" placeholder="metres" value="' +
+          (cz == null ? '' : fmt(cz, 3)) + '">' +
+        '<div class="mbtns">' +
+          '<button class="ghost" onclick="modalClose()">Cancel</button>' +
+          '<button class="prim" id="mOk">Set</button>' +
+        '</div>'
+      );
+      var inp = document.getElementById('mZ');
+      inp.focus(); inp.select();
+      var go = function(){
+        var v = parseFloat(String(inp.value).trim().replace(',', '.'));
+        if (!Number.isFinite(v)){ inp.focus(); return; }
+        modalClose();
+        applyElev(pts, { mode:'abs', value:v });
+      };
+      document.getElementById('mOk').addEventListener('click', go);
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter'){ e.stopPropagation(); go(); }
+        if (e.key === 'Escape'){ e.stopPropagation(); modalClose(); }
+      });
+      return;
+    }
+    modalOpen(
+      '<h3>Elevation · ' + pts.length + ' points</h3>' +
+      '<label class="mrow"><input type="radio" name="mMode" value="abs" checked> Set all to ' +
+        '<input type="text" id="mAbs" inputmode="decimal" placeholder="metres" style="width:8em"> m</label>' +
+      '<label class="mrow"><input type="radio" name="mMode" value="delta"> Shift by ' +
+        '<input type="text" id="mDel" inputmode="decimal" placeholder="+ up / − down" style="width:8em"> m</label>' +
+      '<div class="mbtns">' +
+        '<button class="ghost" onclick="modalClose()">Cancel</button>' +
+        '<button class="prim" id="mOk">Apply</button>' +
+      '</div>'
+    );
+    var abs = document.getElementById('mAbs'), del = document.getElementById('mDel');
+    abs.focus();
+    var pick = function(which){
+      [].slice.call(document.getElementsByName('mMode')).forEach(function(r){ r.checked = r.value === which; });
+    };
+    abs.addEventListener('focus', function(){ pick('abs'); });
+    del.addEventListener('focus', function(){ pick('delta'); });
+    var go2 = function(){
+      var which = (document.querySelector('input[name="mMode"]:checked') || {}).value || 'abs';
+      var raw = which === 'abs' ? abs.value : del.value;
+      var v = parseFloat(String(raw).trim().replace(',', '.'));
+      if (!Number.isFinite(v)){ (which === 'abs' ? abs : del).focus(); return; }
+      modalClose();
+      applyElev(pts, { mode: which, value: v });
+    };
+    document.getElementById('mOk').addEventListener('click', go2);
+    var onKey = function(e){
+      if (e.key === 'Enter'){ e.stopPropagation(); go2(); }
+      if (e.key === 'Escape'){ e.stopPropagation(); modalClose(); }
+    };
+    abs.addEventListener('keydown', onKey);
+    del.addEventListener('keydown', onKey);
+  }
 
   /*  ============================ SELECTION ============================
    *
@@ -2899,12 +3196,15 @@ function draw(){
     if (eff('pt')){
       selS('pts').forEach(function(n){
         GEOM[n].points.forEach(function(p){
-          if (isDeleted(p[0], p[1])) return;
+          if (isDeleted(p[0], p[1]) || isMovedFrom(p[0], p[1])) return;
           if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
         });
       });
       if (DRAWVIS.add) EDITS.add.forEach(function(p){
         if (inR(SX(p[0]), SY(p[1]))) out.push({t:'pt', x:p[0], y:p[1], z:p[2]});
+      });
+      (EDITS.move || []).forEach(function(m){
+        if (inR(SX(m.to[0]), SY(m.to[1]))) out.push({t:'pt', x:m.to[0], y:m.to[1], z:m.to[2]});
       });
     }
 
@@ -2962,10 +3262,25 @@ function draw(){
   /*  What one selected item says about itself. Fuller than the old popup —
    *  the Properties panel proper, with *VARIES*, is a later step. */
   function selOne(s){
-    if (s.t === 'pt')
-      return '<div class="k" style="color:'+COLORS.pts+'">Point</div>' +
-        '<div class="v">' + (s.z == null ? '— no elevation' : fmt(s.z,3)+' m') + '</div>' +
-        '<div class="d">X ' + fmt(s.x,3) + '<br>Y ' + fmt(s.y,3) + '</div>';
+    if (s.t === 'pt'){
+      var pc = classifyPoint(s.x, s.y);
+      var kind = pc.kind === 'add' ? 'New point' : pc.kind === 'move' ? 'Moved point' : 'Point';
+      var cur = effZ(s.x, s.y);
+      var lines = [];
+      if (pc.kind === 'move'){
+        var oz = origZ(pc.rec.from[0], pc.rec.from[1]);
+        if (oz != null) lines.push('Original point ' + fmt(oz, 3) + ' m');
+      } else if (pc.kind === 'data'){
+        var raw = origZ(s.x, s.y);
+        if (raw != null && cur != null && Math.abs(raw - cur) > 1e-9)
+          lines.push('Was ' + fmt(raw, 3) + ' m');
+      }
+      lines.push('X ' + fmt(s.x, 3));
+      lines.push('Y ' + fmt(s.y, 3));
+      return '<div class="k" style="color:'+COLORS.pts+'">' + kind + '</div>' +
+        '<div class="v">' + (cur == null ? '— no elevation' : fmt(cur,3)+' m') + '</div>' +
+        '<div class="d">' + lines.join('<br>') + '</div>';
+    }
     if (s.t === 'base'){
       var mb = lineMetrics(s.line);
       return '<div class="k" style="color:'+(LYCOLOR[s.layer]||COLORS.base)+'">Background line</div>' +
@@ -3026,7 +3341,7 @@ function draw(){
 
   var sdown = null;
   cv.addEventListener('mousedown', function(ev){
-    if (MODE !== 'select' || ev.button !== 0) return;
+    if ((MODE !== 'select' && MODE !== 'elev') || ev.button !== 0) return;
     var r = cv.getBoundingClientRect();
     sdown = {x: ev.clientX - r.left, y: ev.clientY - r.top, shift: ev.shiftKey, moved: false};
   }, true);
@@ -3145,10 +3460,11 @@ function draw(){
     if (t === 'pt'){
       selS('pts').forEach(function(n){
         GEOM[n].points.forEach(function(p){
-          if (!isDeleted(p[0], p[1])) out.push({ t:'pt', x:p[0], y:p[1], z:p[2] });
+          if (!isDeleted(p[0], p[1]) && !isMovedFrom(p[0], p[1])) out.push({ t:'pt', x:p[0], y:p[1], z:p[2] });
         });
       });
       if (DRAWVIS.add) EDITS.add.forEach(function(p){ out.push({ t:'pt', x:p[0], y:p[1], z:p[2] }); });
+      (EDITS.move || []).forEach(function(m){ out.push({ t:'pt', x:m.to[0], y:m.to[1], z:m.to[2] }); });
     } else if (t === 'tri' && RES && RES.mesh){
       var V = RES.mesh.vertices, TR = RES.mesh.triangles;
       for (var i = 0; i < TR.length; i++){
@@ -3200,7 +3516,10 @@ function draw(){
   }
   function startFloatingMove(x, y, z){
     setMode('move');
-    MOVING = { from:[x, y], z:z, to:[x, y], floating:true };
+    var mc = classifyPoint(x, y);
+    var ez = effZ(x, y); if (ez != null) z = ez;    // carry any elevation change through the move
+    MOVING = { from:[x, y], z:z, to:[x, y], floating:true,
+               origin: mc.kind === 'move' ? [mc.rec.from[0], mc.rec.from[1]] : null };
     setStatusEd('Move the cursor and click where the point should go — its elevation stays ' +
       (z == null ? '—' : fmt(z, 3)) + '.');
     draw();
@@ -3234,7 +3553,19 @@ function draw(){
     var steps = [], n = 0;
     SEL.forEach(function(it){
       if (it.t === 'pt'){
-        if (!isDeleted(it.x, it.y)){ steps.push(edAdd('del', [it.x, it.y])); n++; }
+        /*  Same three cases as deletePoint(): a new point is dropped, a moved
+         *  point's copy is dropped and its origin left behind as a deletion, a
+         *  measured point becomes a deletion. */
+        var pc = classifyPoint(it.x, it.y);
+        if (pc.kind === 'add'){
+          var ea = edDel('add', EDITS.add[pc.at]); if (ea){ steps.push(ea); n++; }
+        } else if (pc.kind === 'move'){
+          steps.push(edDel('move', pc.rec));
+          steps.push(edAdd('del', [pc.rec.from[0], pc.rec.from[1]]));
+          n++;
+        } else if (!isDeleted(it.x, it.y)){
+          steps.push(edAdd('del', [it.x, it.y])); n++;
+        }
       } else if (it.t === 'tri'){
         steps.push(edAdd('hole', triCentroid(it.p))); n++;
       } else if (it.t === 'brk'){
@@ -3269,17 +3600,28 @@ function draw(){
     var r = cv.getBoundingClientRect();
     var hit = rcHit(ev.clientX - r.left, ev.clientY - r.top);
     var items;
-    if (hit && SEL.length > 1 && SEL.some(function(s){ return sameItem(s, hit); })){
+    var selPts = (typeof SEL !== 'undefined') ? SEL.filter(function(s){ return s.t === 'pt'; }) : [];
+    var hitInSel = hit && SEL.some(function(s){ return sameItem(s, hit); });
+    if (hit && SEL.length > 1 && hitInSel){
       items = [
         { hd:SEL.length + ' selected' },
-        { label:'Delete them', k:'✖', run:deleteSelection },
-        { sep:true }
-      ].concat(groundMenu());
+        { label:'Delete them', k:'✖', run:deleteSelection }
+      ];
+      if (selPts.length) items.push({ label:'Change elevation of ' + selPts.length + '…', k:'↕',
+        run:function(){ openElevDialog(selPts.slice()); } });
+      items.push({ sep:true });
+      items = items.concat(groundMenu());
     } else if (hit && hit.t === 'pt'){
+      var pc = classifyPoint(hit.x, hit.y);
+      var pname = pc.kind === 'add' ? 'New point' : pc.kind === 'move' ? 'Moved point' : 'Point';
+      var elevT = (hitInSel && selPts.length > 1) ? selPts.slice() : [{ x:hit.x, y:hit.y }];
       items = [
-        { hd:'Point' + (hit.z == null ? '' : '   ' + fmt(hit.z, 3) + ' m') },
+        { hd:pname + (hit.z == null ? '' : '   ' + fmt(hit.z, 3) + ' m') },
         { label:'Move', k:'✥', run:function(){ startFloatingMove(hit.x, hit.y, hit.z); } },
-        { label:'Delete point', k:'✖', run:function(){ push('del', [hit.x, hit.y]); } }
+        { label:elevT.length > 1 ? ('Change elevation of ' + elevT.length + '…') : 'Change elevation…',
+          k:'↕', run:function(){ openElevDialog(elevT); } },
+        { label:pc.kind === 'data' ? 'Delete point' : 'Remove', k:'✖',
+          run:function(){ deletePoint(hit.x, hit.y); } }
       ];
     } else if (hit && hit.t === 'delpt'){
       items = [
