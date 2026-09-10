@@ -544,7 +544,15 @@
         <div class="mi" onclick="cmenu(this)">Breaklines</div>
         <div class="menu">
           <button class="ed" data-m="brk" onclick="setMode('brk');closeMenus()"><span class="k">📐</span>New line</button>
-          <button disabled title="Coming soon"><span class="k">✖</span>Delete line</button>
+          <button class="ed" data-m="delbrk" onclick="setMode('delbrk');closeMenus()"><span class="k">✖</span>Delete line</button>
+          <div class="div"></div>
+          <button onclick="brkBulk('all');closeMenus()" title="Every breakline — from a layer and drawn"><span class="k">✖</span>Delete all breaklines</button>
+          <button onclick="brkBulk('layer');closeMenus()" title="Only breaklines that came from a layer"><span class="k">✖</span>Delete layer breaklines</button>
+          <button onclick="brkBulk('drawn');closeMenus()" title="Only lines drawn on the canvas"><span class="k">✖</span>Delete drawn breaklines</button>
+          <button onclick="brkBulk('2d');closeMenus()" title="Lines with a single elevation (flat)"><span class="k">✖</span>Delete 2D breaklines</button>
+          <button onclick="brkBulk('3d');closeMenus()" title="Lines whose elevation varies along them"><span class="k">✖</span>Delete 3D breaklines</button>
+          <div class="div"></div>
+          <button onclick="brkClearDeleted();closeMenus()" title="Hide every deleted (red-dashed) breakline — only Ctrl+Z brings them back"><span class="k">🗑</span>Clear deleted</button>
         </div>
       </div>
       <div class="mgroup">
@@ -574,6 +582,7 @@
           <button id="vpAdd"  onclick="togEP('add')"><span class="k">➕</span>Added points<span class="chk"></span></button>
           <button id="vpSetz" onclick="togEP('setz')"><span class="k">◎</span>Elevation changed<span class="chk"></span></button>
           <button id="vpHole" onclick="togEP('hole')"><span class="k">🕳</span>Deleted triangles<span class="chk"></span></button>
+          <button id="vpBrk"  onclick="togEP('brkcut')"><span class="k">📐</span>Deleted breaklines<span class="chk"></span></button>
         </div>
       </div>
       <div class="mgroup">
@@ -677,7 +686,7 @@ var SHOW = {mesh:true, iso:true, txt:false, z:false};
  *  it hides the marks, never the edit itself, and is not kept in the job.
  *  "add" is not here: the added points are a pseudo-layer with their own eye
  *  (DRAWVIS.add) in the LAYERS tab, and the View item just flips that. */
-var EPV = {del:true, move:true, newmove:true, setz:true, hole:true};
+var EPV = {del:true, move:true, newmove:true, setz:true, hole:true, brkcut:true};
 var T = {s:1, x:0, y:0};
 
 /*  ============================ SURFACES ============================
@@ -701,9 +710,12 @@ function newSurface(name){
      *  them back) · add: new points · move: a measured point carried to a new
      *  spot ({from,to,keep}) · setz: a measured point given a new elevation
      *  ({at,z}) · brk: drawn lines · swap: swapped edges · hole: deleted
-     *  triangles · brkcut: layer breaklines taken out of the surface · basecut:
-     *  background lines erased (all kept by coordinates, put back on demand). */
-    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], basecut:[] },
+     *  triangles · brkcut: deleted breaklines (shown red & dashed, the View menu
+     *  can hide them) · brkhide: deleted breaklines a second delete has tucked
+     *  away — exactly like delhide for points: out of the calc, not drawn at
+     *  all, only Ctrl+Z brings them back · basecut: background lines erased
+     *  (all kept by coordinates, put back on demand). */
+    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], brkhide:[], basecut:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -714,7 +726,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -844,7 +856,7 @@ var DRAWCOL = { add:'#ffd633', brk:'#00d5ff' };   // added points draw as a yell
  *  glance: deleted red, moved orange, a moved point that lost its original
  *  ("new from move") violet, an elevation change cyan, a deleted triangle grey.
  *  Added points follow DRAWCOL.add (yellow), which the user can recolour. */
-var CATCOL = { del:'#ff4d4d', move:'#ff9a3d', newmove:'#c58bff', setz:'#4dd0e1', hole:'#c3c9d4' };
+var CATCOL = { del:'#ff4d4d', move:'#ff9a3d', newmove:'#c58bff', setz:'#4dd0e1', hole:'#c3c9d4', brkcut:'#ff4d4d' };
 (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
@@ -1665,25 +1677,27 @@ function refreshZRange(){
 
 // -------------------------------------------------------- what is sent ---
 
-/*  Is this layer breakline one the user has taken out of the surface? Matched
- *  by its vertices (x, y) — the surface is re-read on every calculation and
- *  indices do not survive. Costs nothing while nothing is cut. */
+/*  The record in `list` standing for line L, matched by its vertices (x, y) —
+ *  the surface is re-read on every calculation and indices do not survive.
+ *  null when the line is not in that list. */
+function inLineList(list, L){
+  for (var i = 0; i < (list || []).length; i++){
+    var C = list[i];
+    if (C.length !== L.length) continue;
+    var same = true;
+    for (var k = 0; k < C.length; k++){
+      if (Math.abs(C[k][0] - L[k][0]) > 1e-6 || Math.abs(C[k][1] - L[k][1]) > 1e-6){ same = false; break; }
+    }
+    if (same) return C;
+  }
+  return null;
+}
+/*  Is this line out of the surface? — a deleted breakline (brkcut, shown red &
+ *  dashed), one a second delete has hidden (brkhide, not shown at all), or an
+ *  erased background line (basecut). Costs nothing while nothing is cut. */
 function isCutLine(L){
   if (typeof EDITS === 'undefined') return false;
-  var lists = [EDITS.brkcut, EDITS.basecut];
-  for (var j = 0; j < lists.length; j++){
-    var cuts = lists[j] || [];
-    for (var i = 0; i < cuts.length; i++){
-      var C = cuts[i];
-      if (C.length !== L.length) continue;
-      var same = true;
-      for (var k = 0; k < C.length; k++){
-        if (C[k][0] !== L[k][0] || C[k][1] !== L[k][1]){ same = false; break; }
-      }
-      if (same) return true;
-    }
-  }
-  return false;
+  return !!(inLineList(EDITS.brkcut, L) || inLineList(EDITS.brkhide, L) || inLineList(EDITS.basecut, L));
 }
 
 function payload(){
@@ -1747,7 +1761,7 @@ function payload(){
     if (run.length >= 2) brk.push(run);
   };
   selS('brk').forEach(function(n){ GEOM[n].lines.forEach(function(L){ if (L.length>=2 && !isCutLine(L)) addBrk(L); }); });
-  EDITS.brk.forEach(function(L){ if (L.length>=2) brk.push(L); });
+  EDITS.brk.forEach(function(L){ if (L.length>=2 && !isCutLine(L)) brk.push(L); });
 
   var bnd = null, best = -1;
   selS('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
@@ -1907,7 +1921,7 @@ function vChecks(){
     var b = document.getElementById(p[1]); if (!b) return;
     var c = b.querySelector('.chk'); if (c) c.textContent = SHOW[p[0]] ? '✓' : '';
   });
-  [['del','vpDel'],['move','vpMove'],['newmove','vpNew'],['setz','vpSetz'],['hole','vpHole']].forEach(function(p){
+  [['del','vpDel'],['move','vpMove'],['newmove','vpNew'],['setz','vpSetz'],['hole','vpHole'],['brkcut','vpBrk']].forEach(function(p){
     var b = document.getElementById(p[1]); if (!b) return;
     var c = b.querySelector('.chk'); if (c) c.textContent = EPV[p[0]] ? '✓' : '';
   });
@@ -2136,13 +2150,6 @@ function draw(){
   ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.beginPath();
   selS('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) addPoly(L); }); });
   ctx.stroke();
-  /*  Breaklines the user deleted — greyed and dashed, so they can be found again
-   *  and put back. */
-  if (EDITS.brkcut && EDITS.brkcut.length){
-    ctx.strokeStyle = '#8a94a6'; ctx.lineWidth = 1.4; ctx.setLineDash([5,4]); ctx.beginPath();
-    selS('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (isCutLine(L)) addPoly(L); }); });
-    ctx.stroke(); ctx.setLineDash([]);
-  }
   ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2; ctx.beginPath();
   selS('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
   ctx.stroke();
@@ -2237,6 +2244,19 @@ function draw(){
       ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
     });
   }
+  /*  Breaklines the user deleted — drawn STRAIGHT from EDITS.brkcut, exactly the
+   *  way a deleted point is drawn straight from EDITS.del above: red and dashed,
+   *  no lookup back into the layer (which might be unticked or off this surface).
+   *  Covers layer breaklines and deleted drawn lines alike. The View row
+   *  "Deleted breaklines" hides them; right-click one to restore it. */
+  if (EPV.brkcut && EDITS.brkcut && EDITS.brkcut.length){
+    ctx.save();
+    ctx.strokeStyle = CATCOL.brkcut; ctx.lineWidth = 1.6; ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    EDITS.brkcut.forEach(function(L){ addPoly(L); });
+    ctx.stroke();
+    ctx.restore();
+  }
   if (DRAWVIS.add){
     ctx.strokeStyle = DRAWCOL.add; ctx.fillStyle = DRAWCOL.add; ctx.lineWidth = 1.5;
     EDITS.add.forEach(function(p){
@@ -2282,7 +2302,7 @@ function draw(){
   }
   if (DRAWVIS.brk){
     ctx.strokeStyle = DRAWCOL.brk; ctx.lineWidth = 2; ctx.beginPath();
-    EDITS.brk.forEach(function(L){ addPoly(L); });
+    EDITS.brk.forEach(function(L){ if (!isCutLine(L)) addPoly(L); });
     ctx.stroke();
   }
   ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.5;
@@ -2306,6 +2326,19 @@ function draw(){
     poly(DRAWING); ctx.setLineDash([]);
     ctx.fillStyle = COLORS.brk;
     DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
+  }
+  /*  Breaklines Α — the snap node under the cursor, and a rubber band to it
+   *  from the last vertex. A green ring means "a click here lands a vertex". */
+  if (MODE === 'brk' && SNAPHOV){
+    var qx = SX(SNAPHOV[0]), qy = SY(SNAPHOV[1]);
+    if (DRAWING && DRAWING.length){
+      var lp = DRAWING[DRAWING.length - 1];
+      ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 1.5; ctx.setLineDash([2,3]);
+      ctx.beginPath(); ctx.moveTo(SX(lp[0]), SY(lp[1])); ctx.lineTo(qx, qy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(qx, qy, 7, 0, 6.284); ctx.stroke();
   }
   // 6. What the last click identified — over everything, so it is found again.
   if (PICK){
@@ -2424,11 +2457,12 @@ function draw(){
   var MOVING = null;         // the point being dragged right now
   var MZSRC = null;          // Match elevation: the point the elevation is copied FROM
   var HOVER = null;
+  var SNAPHOV = null, _snapRAF = 0;   // Breaklines Α — the node the cursor would snap onto
 
   var MODE_NAME = {
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
-    brk:'New line', swap:'Swap edge', hole:'Delete triangle'
+    brk:'New line', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
     // Picking a click-tool again drops back to Select, the resting state of a
@@ -2437,7 +2471,7 @@ function draw(){
     // re-arms rather than toggling off; Esc leaves.
     var sticky = m === 'elev' || m === 'matchz';
     MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
-    DRAWING = null; MOVING = null; MZSRC = null;
+    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
     // Select and Elevation change both work on a selection — keep it across the
@@ -2469,7 +2503,8 @@ function draw(){
       add:   'Click for a new point — you will be asked for its elevation.',
       elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
       matchz:'Click the point to copy the elevation FROM, then the point to copy it ONTO · Esc exits.',
-      brk:   'Click the vertices · Enter keeps drawing, Esc finishes · right-click for options.',
+      brk:   'Every vertex snaps to a point or a 3D-breakline node · Enter keeps drawing, Esc finishes · right-click for options.',
+      delbrk:'Click a breakline to delete it (turns red & dashed) · click a red one again to hide it · Ctrl+Z, or right-click Restore, brings it back.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
     }[MODE] || '';
@@ -2543,7 +2578,7 @@ function draw(){
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2584,7 +2619,7 @@ function draw(){
        [(d.move||[]).length,'moved points'], [(d.setz||[]).length,'elevations changed'],
        [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
        [d.hole.length,'deleted triangles'],
-       [(d.brkcut||[]).length + (d.basecut||[]).length,'lines removed']]
+       [(d.brkcut||[]).length + (d.brkhide||[]).length + (d.basecut||[]).length,'lines removed']]
       .filter(function(p){ return p[0]; })
       .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
   }
@@ -2610,6 +2645,34 @@ function draw(){
       var dx = SX(m.to[0]) - mx, dy = SY(m.to[1]) - my, d = dx*dx + dy*dy;
       if (d < bd){ bd = d; best = m.to; }
     });
+    return best;
+  }
+
+  /*  Breaklines Α — a drawn breakline is only allowed to rest on real
+   *  elevations. Every vertex must snap to an existing point or to a node of a
+   *  3D breakline (a line whose nodes carry varying, non-null z). This is what
+   *  stops a vertex from entering the surface at z = 0 and punching a hole in
+   *  the ground (§10 #12). The nearest valid target within `px` screen pixels
+   *  wins; null means there is nothing to snap to and the click is refused. */
+  function snapVertex(mx, my, px){
+    px = px || 14;
+    var best = null, bd = px * px;
+    var consider = function(p){
+      if (!p || p[2] == null) return;
+      var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
+      if (d < bd){ bd = d; best = [p[0], p[1], p[2]]; }
+    };
+    // A point — measured, added or moved — carries its own elevation.
+    consider(pickPoint(mx, my, px));
+    // Nodes of 3D breaklines: from the layers this surface reads, and from
+    // lines already drawn on the canvas.
+    var scan = function(L){ if (L.length >= 2 && lineMetrics(L).threeD) L.forEach(consider); };
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) scan(L); });
+    });
+    EDITS.brk.forEach(function(L){ if (!isCutLine(L)) scan(L); });
+    // Vertices of the line being drawn, so it can close on itself.
+    if (DRAWING) DRAWING.forEach(consider);
     return best;
   }
 
@@ -2789,16 +2852,31 @@ function draw(){
       push('add', [w[0], w[1], zz]);
     }
     else if (MODE === 'brk'){
-      var snap = pickPoint(mx, my, 12);
-      var v = snap ? [snap[0], snap[1], snap[2]] : [w[0], w[1], null];
+      var v = snapVertex(mx, my, 14);
+      if (!v){
+        setStatusEd('Every vertex must land on a point or a 3D-breakline node — none within reach here.');
+        return;
+      }
       if (!DRAWING){ DRAWING = [v]; }
       else {
-        // A second click on the same spot (a habitual double-click) is not a
+        // A second click on the same node (a habitual double-click) is not a
         // second vertex — the line now ends with Enter / Esc / right-click.
         var last = DRAWING[DRAWING.length - 1];
-        if (Math.hypot(SX(last[0]) - mx, SY(last[1]) - my) > 4) DRAWING.push(v);
+        if (Math.abs(v[0] - last[0]) > 1e-9 || Math.abs(v[1] - last[1]) > 1e-9) DRAWING.push(v);
       }
       draw();
+    }
+    else if (MODE === 'delbrk'){
+      var bh = pickBrkLine(mx, my, 12);
+      if (!bh){ setStatusEd('No breakline there.'); return; }
+      var C = inLineList(EDITS.brkcut, bh.line);
+      if (C){                                   // a second delete clears it, like a deleted point
+        brkHideLine(C);
+        setStatusEd('Breakline cleared — Ctrl+Z brings it back.');
+      } else {
+        push('brkcut', bh.line.map(function(p){ return p.slice(); }));
+        setStatusEd('Breakline deleted — click it again to clear it, Ctrl+Z to undo.');
+      }
     }
     else if (MODE === 'swap'){
       var e = pickEdge(mx, my);
@@ -2851,10 +2929,9 @@ function draw(){
   });
   function endLine(){
     if (DRAWING && DRAWING.length >= 2){
-      // A vertex without an elevation is not taken in: elevations are never invented.
-      var missing = DRAWING.filter(function(v){ return v[2] == null; }).length;
-      if (missing) setStatusEd(missing + ' vertices did not fall on a point — their elevation will be taken from the points.');
-      push('brk', DRAWING.map(function(v){ return [v[0], v[1], v[2] == null ? 0 : v[2]]; }));
+      // Every vertex was snapped onto a real elevation, so the line goes in as
+      // drawn — no invented zeros (§10 #12).
+      push('brk', DRAWING.map(function(v){ return [v[0], v[1], v[2]]; }));
     }
     DRAWING = null; draw();
   }
@@ -2875,6 +2952,19 @@ function draw(){
   window.addEventListener('mousemove', function(ev){
     if (!MOVING) return;
     MOVING.to = world(ev); draw();
+  });
+  /*  While a breakline is being drawn, show where the next click would land —
+   *  the cursor only ever produces a vertex on a valid snap node. One scan per
+   *  frame at most. */
+  window.addEventListener('mousemove', function(ev){
+    if (MODE !== 'brk'){ if (SNAPHOV){ SNAPHOV = null; draw(); } return; }
+    if (_snapRAF) return;
+    _snapRAF = requestAnimationFrame(function(){
+      _snapRAF = 0;
+      var r = cv.getBoundingClientRect();
+      SNAPHOV = snapVertex(ev.clientX - r.left, ev.clientY - r.top, 14);
+      draw();
+    });
   });
   window.addEventListener('mouseup', function(){
     if (!MOVING) return;
@@ -3176,7 +3266,7 @@ function draw(){
       selS('brk').forEach(function(n){
         if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:L, layer:n}); });
       });
-      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({t:'brk', line:L, layer:null}); });
+      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:L, layer:null}); });
     }
     if (eff('bnd')){
       selS('bnd').forEach(function(n){
@@ -3558,9 +3648,12 @@ function draw(){
     if (p) return { t:'pt', x:p[0], y:p[1], z:p[2] };
     var pool = [];
     selS('brk').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'brk', line:L, layer:n }); });
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) pool.push({ t:'brk', line:L, layer:n }); });
     });
-    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ pool.push({ t:'brk', line:L, layer:null }); });
+    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (!isCutLine(L)) pool.push({ t:'brk', line:L, layer:null }); });
+    // Deleted breaklines are reachable straight from the record, so a right-click
+    // finds them even when their layer is unticked or off this surface.
+    (EDITS.brkcut || []).forEach(function(L){ pool.push({ t:'brk', line:L, layer:'cut' }); });
     selS('bnd').forEach(function(n){
       if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'bnd', line:L, layer:n }); });
     });
@@ -3606,7 +3699,7 @@ function draw(){
       selS('brk').forEach(function(n){
         if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) out.push({ t:'brk', line:L, layer:n }); });
       });
-      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ out.push({ t:'brk', line:L, layer:null }); });
+      if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (!isCutLine(L)) out.push({ t:'brk', line:L, layer:null }); });
     } else if (t === 'bnd'){
       selS('bnd').forEach(function(n){
         if (VIS[n]) GEOM[n].lines.forEach(function(L){ out.push({ t:'bnd', line:L, layer:n }); });
@@ -3706,7 +3799,8 @@ function draw(){
       } else if (it.t === 'tri'){
         steps.push(edAdd('hole', triCentroid(it.p))); n++;
       } else if (it.t === 'brk'){
-        if (it.layer == null){ var e = edDel('brk', it.line); if (e){ steps.push(e); n++; } }
+        var Cb = inLineList(EDITS.brkcut, it.line);
+        if (Cb){ steps.push(edDel('brkcut', Cb)); steps.push(edAdd('brkhide', Cb)); n++; }   // 2nd delete → hidden
         else if (!isCutLine(it.line)){ steps.push(edAdd('brkcut', it.line.map(function(p){ return p.slice(); }))); n++; }
       } else if (it.t === 'base'){
         if (!isCutLine(it.line)){ steps.push(edAdd('basecut', it.line.map(function(p){ return p.slice(); }))); n++; }
@@ -3720,6 +3814,73 @@ function draw(){
     afterEdit(); showSel();
     setStatusEd(n ? (n + ' removed — Ctrl+Z to undo.') : 'Nothing here can be deleted.');
   }
+
+  /*  ------------------------- Breaklines Β: delete -------------------------
+   *  Deleting a breakline works exactly like deleting a point:
+   *    first delete  → marked (red & dashed here, a red cross there), out of the
+   *                    calculation, Ctrl+Z or right-click Restore brings it back
+   *    second delete → hidden (brkhide / delhide): still out, drawn nowhere, the
+   *                    View toggle does not bring it back — only Ctrl+Z does. */
+  function pickBrkLine(mx, my, px){
+    var pool = [];
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) pool.push({ t:'brk', line:L, layer:n }); });
+    });
+    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) pool.push({ t:'brk', line:L, layer:null }); });
+    (EDITS.brkcut || []).forEach(function(L){ pool.push({ t:'brk', line:L, layer:'cut' }); });
+    return nearestPoly(mx, my, pool, px || 12);
+  }
+  /*  A second delete on an already-deleted breakline: the brkcut record moves to
+   *  brkhide and it stops being drawn at all. One Ctrl+Z returns it to the plain
+   *  deleted (red-dashed) state, a second one restores the line. */
+  function brkHideLine(C){
+    var e = C ? edDel('brkcut', C) : null;
+    if (!e) return;
+    UNDO.push({ op:'group', items:[ e, edAdd('brkhide', C) ] });
+    REDO.length = 0;
+    afterEdit();
+  }
+  /*  which — the filter from the Breaklines menu: 'all' · 'layer' (only from a
+   *  layer) · 'drawn' (only drawn on the canvas) · '2d' / '3d' (by elevation —
+   *  a line with varying z reads as 3D; an exact LWPOLYLINE-vs-3DPOLY flag would
+   *  need the server). Every match is marked deleted; one Ctrl+Z. */
+  window.brkBulk = function(which){
+    var match = function(L){
+      if (which === 'all' || which === 'layer' || which === 'drawn') return true;
+      return which === '3d' ? lineMetrics(L).threeD : !lineMetrics(L).threeD;
+    };
+    var hits = [];
+    if (which !== 'drawn') selS('brk').forEach(function(n){
+      if (!VIS[n]) return;
+      GEOM[n].lines.forEach(function(L){ if (L.length >= 2 && !isCutLine(L) && match(L)) hits.push(L); });
+    });
+    if (which !== 'layer' && DRAWVIS.brk) EDITS.brk.forEach(function(L){
+      if (L.length >= 2 && !isCutLine(L) && match(L)) hits.push(L);
+    });
+    if (!hits.length){ setStatusEd('No breaklines match.'); return; }
+    if (!confirm('Delete ' + hits.length + (hits.length === 1 ? ' breakline' : ' breaklines') + '? Ctrl+Z undoes it.')) return;
+    var steps = hits.map(function(L){ return edAdd('brkcut', L.map(function(p){ return p.slice(); })); });
+    UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+    REDO.length = 0; afterEdit();
+    setStatusEd(hits.length + (hits.length === 1 ? ' breakline' : ' breaklines') + ' deleted — Ctrl+Z to undo.');
+  };
+  /*  "Clear deleted" from the menu — every deleted (red-dashed) breakline at once
+   *  goes to brkhide, the same as clicking each one a second time. One Ctrl+Z. */
+  window.brkClearDeleted = function(){
+    var recs = (EDITS.brkcut || []).slice();
+    if (!recs.length){ setStatusEd('No deleted breaklines to clear.'); return; }
+    if (!confirm('Clear ' + recs.length + (recs.length === 1 ? ' deleted breakline' : ' deleted breaklines') + '? Ctrl+Z undoes it.')) return;
+    var steps = [];
+    recs.forEach(function(C){
+      var e = edDel('brkcut', C);
+      if (e){ steps.push(e); steps.push(edAdd('brkhide', C)); }
+    });
+    if (!steps.length){ setStatusEd('Nothing to clear.'); return; }
+    UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+    REDO.length = 0; afterEdit();
+    setStatusEd(recs.length + (recs.length === 1 ? ' breakline' : ' breaklines') + ' cleared — Ctrl+Z to undo.');
+  };
+
   cv.addEventListener('contextmenu', function(ev){
     ev.preventDefault();
     if (typeof closeMenus === 'function') closeMenus();
@@ -3788,17 +3949,18 @@ function draw(){
         { label:'Delete triangle', k:'🕳', run:function(){ push('hole', triCentroid(hit.p)); } }
       ];
     } else if (hit && hit.t === 'brk'){
-      var cut = hit.layer != null && isCutLine(hit.line);
-      items = [
-        { hd:cut ? 'Deleted breakline' : 'Breakline' },
-        cut
-          ? { label:'Restore line', k:'↺', run:function(){ pullOut('brkcut', cutOf(hit.line)); } }
-          : { label:'Delete line', k:'✖', run:function(){
-              if (hit.layer == null) pullOut('brk', hit.line);
-              else push('brkcut', hit.line.map(function(p){ return p.slice(); }));
-            } },
-        { sep:true }
-      ].concat(groundMenu());
+      var cut = isCutLine(hit.line);
+      items = [ { hd:cut ? 'Deleted breakline' : (hit.layer == null ? 'Drawn breakline' : 'Breakline') } ];
+      if (cut){
+        items.push({ label:'Restore line', k:'↺', run:function(){ pullOut('brkcut', cutOf(hit.line)); } });
+        items.push({ label:'Clear breakline', k:'✖',
+          run:function(){ brkHideLine(inLineList(EDITS.brkcut, hit.line)); } });
+      } else {
+        items.push({ label:'Delete line', k:'✖',
+          run:function(){ push('brkcut', hit.line.map(function(p){ return p.slice(); })); } });
+      }
+      items.push({ sep:true });
+      items = items.concat(groundMenu());
     } else if (hit && hit.t === 'bnd'){
       items = [
         { hd:'Boundary' },
