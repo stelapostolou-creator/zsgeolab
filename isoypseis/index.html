@@ -566,6 +566,14 @@
           <button id="vIso"  onclick="tog('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
           <button id="vZ"    onclick="tog('z')"><span class="k">#</span>Elevations<span class="chk"></span></button>
           <button id="vTxt"  onclick="tog('txt')"><span class="k">T</span>Text labels<span class="chk"></span></button>
+          <div class="div"></div>
+          <div class="mnote">Edit marks on the canvas:</div>
+          <button id="vpDel"  onclick="togEP('del')"><span class="k">✖</span>Deleted points<span class="chk"></span></button>
+          <button id="vpMove" onclick="togEP('move')"><span class="k">✥</span>Moved points<span class="chk"></span></button>
+          <button id="vpNew"  onclick="togEP('newmove')"><span class="k">◇</span>New from a move<span class="chk"></span></button>
+          <button id="vpAdd"  onclick="togEP('add')"><span class="k">➕</span>Added points<span class="chk"></span></button>
+          <button id="vpSetz" onclick="togEP('setz')"><span class="k">◎</span>Elevation changed<span class="chk"></span></button>
+          <button id="vpHole" onclick="togEP('hole')"><span class="k">🕳</span>Deleted triangles<span class="chk"></span></button>
         </div>
       </div>
       <div class="mgroup">
@@ -665,6 +673,11 @@ var PICK = null;        // what the last click identified
 var MEANZ = null;       // mean elevation of the points last sent
 var ZCUT = {p:0, v:0};  // points / line vertices left out by the elevation limits
 var SHOW = {mesh:true, iso:true, txt:false, z:false};
+/*  Which kinds of edit marker are drawn on the canvas. A view filter only —
+ *  it hides the marks, never the edit itself, and is not kept in the job.
+ *  "add" is not here: the added points are a pseudo-layer with their own eye
+ *  (DRAWVIS.add) in the LAYERS tab, and the View item just flips that. */
+var EPV = {del:true, move:true, newmove:true, setz:true, hole:true};
 var T = {s:1, x:0, y:0};
 
 /*  ============================ SURFACES ============================
@@ -827,6 +840,11 @@ window.resetColors = function(){
  *  geometry itself stays in the surface's edit list (Undo/Redo, autosave). */
 var DRAWVIS = { add:true, brk:true };
 var DRAWCOL = { add:'#ffd633', brk:'#00d5ff' };   // added points draw as a yellow cross
+/*  One colour per edit-marker category, chosen so the five read apart at a
+ *  glance: deleted red, moved orange, a moved point that lost its original
+ *  ("new from move") violet, an elevation change cyan, a deleted triangle grey.
+ *  Added points follow DRAWCOL.add (yellow), which the user can recolour. */
+var CATCOL = { del:'#ff4d4d', move:'#ff9a3d', newmove:'#c58bff', setz:'#4dd0e1', hole:'#c3c9d4' };
 (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
@@ -1873,12 +1891,28 @@ function zoom(k, cx, cy){
   T.x = cx - (cx - T.x)*k; T.y = cy - (cy - T.y)*k; T.s *= k; draw();
 }
 function tog(k){ SHOW[k] = !SHOW[k]; vChecks(); draw(); }
-/*  The ticks next to Triangles / Contours / Elevations / Text in the View menu. */
+/*  The edit-mark rows in the View menu. "add" is the added-points pseudo-layer,
+ *  so the row just flips its eye (DRAWVIS.add) and the LAYERS tab follows. */
+function togEP(k){
+  if (k === 'add'){
+    DRAWVIS.add = !DRAWVIS.add;
+    if (typeof saveDrawLy === 'function') saveDrawLy();
+    if (typeof renderDrawLayers === 'function') renderDrawLayers();
+  } else EPV[k] = !EPV[k];
+  vChecks(); draw();
+}
+/*  The ticks next to the View menu rows. */
 function vChecks(){
   [['mesh','vMesh'],['iso','vIso'],['z','vZ'],['txt','vTxt']].forEach(function(p){
     var b = document.getElementById(p[1]); if (!b) return;
     var c = b.querySelector('.chk'); if (c) c.textContent = SHOW[p[0]] ? '✓' : '';
   });
+  [['del','vpDel'],['move','vpMove'],['newmove','vpNew'],['setz','vpSetz'],['hole','vpHole']].forEach(function(p){
+    var b = document.getElementById(p[1]); if (!b) return;
+    var c = b.querySelector('.chk'); if (c) c.textContent = EPV[p[0]] ? '✓' : '';
+  });
+  var ba = document.getElementById('vpAdd');
+  if (ba){ var ca = ba.querySelector('.chk'); if (ca) ca.textContent = DRAWVIS.add ? '✓' : ''; }
 }
 var SX = function(x){ return x*T.s + T.x; };
 var SY = function(y){ return -y*T.s + T.y; };
@@ -2194,33 +2228,38 @@ function draw(){
     });
   };
 
-  ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = 1.5;
-  EDITS.del.forEach(function(p){
-    var x = SX(p[0]), y = SY(p[1]);
-    ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
-    ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
-  });
-  ctx.strokeStyle = DRAWCOL.add; ctx.fillStyle = DRAWCOL.add; ctx.lineWidth = 1.5;
   ctx.font = '11px Consolas,monospace';
-  if (DRAWVIS.add) EDITS.add.forEach(function(p){
-    var x = SX(p[0]), y = SY(p[1]);
-    ctx.beginPath();
-    ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.moveTo(x,y-4); ctx.lineTo(x,y+4); ctx.stroke();
-    if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
-  });
+  if (EPV.del){
+    ctx.strokeStyle = CATCOL.del; ctx.lineWidth = 1.5;
+    EDITS.del.forEach(function(p){
+      var x = SX(p[0]), y = SY(p[1]);
+      ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4);
+      ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
+    });
+  }
+  if (DRAWVIS.add){
+    ctx.strokeStyle = DRAWCOL.add; ctx.fillStyle = DRAWCOL.add; ctx.lineWidth = 1.5;
+    EDITS.add.forEach(function(p){
+      var x = SX(p[0]), y = SY(p[1]);
+      ctx.beginPath();
+      ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.moveTo(x,y-4); ctx.lineTo(x,y+4); ctx.stroke();
+      if (SHOW.z && p[2] != null) ctx.fillText(fmt(p[2], 2), x + 6, y - 5);
+    });
+  }
   (EDITS.move || []).forEach(function(m){
+    if (!(m.keep ? EPV.move : EPV.newmove)) return;
     var fx = SX(m.from[0]), fy = SY(m.from[1]), tx = SX(m.to[0]), ty = SY(m.to[1]);
     if (m.keep){
       if (selHasPt(m.from) || selHasPt(m.to)){
-        ctx.strokeStyle = 'rgba(255,154,61,.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
+        ctx.strokeStyle = hexA(CATCOL.move, .55); ctx.lineWidth = 1.4; ctx.setLineDash([4,3]);
         ctx.beginPath(); ctx.moveTo(fx,fy); ctx.lineTo(tx,ty); ctx.stroke(); ctx.setLineDash([]);
       }
-      ctx.strokeStyle = '#ff9a3d'; ctx.lineWidth = 1.6;
+      ctx.strokeStyle = CATCOL.move; ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(fx-4,fy-4); ctx.lineTo(fx+4,fy+4); ctx.moveTo(fx+4,fy-4); ctx.lineTo(fx-4,fy+4); ctx.stroke();
       ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
     } else {
-      ctx.strokeStyle = '#ff7a3d'; ctx.lineWidth = 1.6;
+      ctx.strokeStyle = CATCOL.newmove; ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(tx-4,ty); ctx.lineTo(tx+4,ty); ctx.moveTo(tx,ty-4); ctx.lineTo(tx,ty+4); ctx.stroke();
       ctx.beginPath(); ctx.arc(tx, ty, 4.5, 0, 6.284); ctx.stroke();
@@ -2228,12 +2267,14 @@ function draw(){
   });
   /*  Measured points whose elevation was changed — a ring in a colour of their
    *  own, and the new value beside it when elevations are shown. */
-  ctx.strokeStyle = '#4dd0e1'; ctx.fillStyle = '#4dd0e1'; ctx.lineWidth = 1.5;
-  (EDITS.setz || []).forEach(function(s){
-    var x = SX(s.at[0]), y = SY(s.at[1]);
-    ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 6.284); ctx.stroke();
-    if (SHOW.z) ctx.fillText(fmt(s.z, 2), x + 6, y - 5);
-  });
+  if (EPV.setz){
+    ctx.strokeStyle = CATCOL.setz; ctx.fillStyle = CATCOL.setz; ctx.lineWidth = 1.5;
+    (EDITS.setz || []).forEach(function(s){
+      var x = SX(s.at[0]), y = SY(s.at[1]);
+      ctx.beginPath(); ctx.arc(x, y, 4.5, 0, 6.284); ctx.stroke();
+      if (SHOW.z) ctx.fillText(fmt(s.z, 2), x + 6, y - 5);
+    });
+  }
   /*  Match elevation: the point the elevation is being copied from. */
   if (MODE === 'matchz' && MZSRC){
     ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
@@ -2251,11 +2292,13 @@ function draw(){
   /*  Deleted triangles: a light-grey ring over a faint dark centre — visible
    *  against the mesh without shouting, and still the target of a right-click
    *  "Restore triangle" (rcHit looks for a marker within 9 px). */
-  ctx.strokeStyle = '#c3c9d4'; ctx.lineWidth = 1.4; ctx.fillStyle = 'rgba(8,13,24,.55)';
-  EDITS.hole.forEach(function(p){
-    var x = SX(p[0]), y = SY(p[1]);
-    ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.284); ctx.fill(); ctx.stroke();
-  });
+  if (EPV.hole){
+    ctx.strokeStyle = CATCOL.hole; ctx.lineWidth = 1.4; ctx.fillStyle = 'rgba(8,13,24,.55)';
+    EDITS.hole.forEach(function(p){
+      var x = SX(p[0]), y = SY(p[1]);
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.284); ctx.fill(); ctx.stroke();
+    });
+  }
 
   // The line being drawn right now, and the point being dragged.
   if (DRAWING && DRAWING.length){
