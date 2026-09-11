@@ -545,6 +545,9 @@
         <div class="menu">
           <button class="ed" data-m="brk" onclick="setMode('brk');closeMenus()"><span class="k">📐</span>New line</button>
           <button class="ed" data-m="brkmv" onclick="setMode('brkmv');closeMenus()"><span class="k">✥</span>Move a vertex</button>
+          <button class="ed" data-m="brkvz" onclick="setMode('brkvz');closeMenus()"><span class="k">↕</span>Vertex elevation…</button>
+          <button class="ed" data-m="brkraise" onclick="setMode('brkraise');closeMenus()"><span class="k">⭥</span>Line elevation…</button>
+          <button class="ed" data-m="brkoffset" onclick="setMode('brkoffset');closeMenus()"><span class="k">∥</span>Offset a line…</button>
           <button class="ed" data-m="delbrk" onclick="setMode('delbrk');closeMenus()"><span class="k">✖</span>Delete line</button>
           <div class="div"></div>
           <button onclick="brkBulk('all');closeMenus()" title="Every breakline — from a layer and drawn"><span class="k">✖</span>Delete all breaklines</button>
@@ -1302,7 +1305,8 @@ function modalOpen(html) {
 }
 function modalClose() {
   document.getElementById('modalBack').hidden = true;
-  document.getElementById('modal').innerHTML = '';
+  var m = document.getElementById('modal');
+  m.innerHTML = ''; m.onkeydown = null;
 }
 document.getElementById('modalBack').addEventListener('click', function (e) {
   if (e.target.id === 'modalBack') modalClose();     // the backdrop = cancel
@@ -2476,6 +2480,16 @@ function draw(){
     ctx.strokeStyle = BMOV.snapped ? '#7cffb2' : COLORS.brk; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(btx, bty, BMOV.snapped ? 7 : 4.5, 0, 6.284); ctx.stroke();
   }
+
+  /*  Breaklines Ε — the parallel copy previewed while the side is chosen, and
+   *  the source line lit so it is clear which one is being offset. */
+  if (BOFF){
+    ctx.strokeStyle = hexA(COLORS.brk, .5); ctx.lineWidth = 3; poly(BOFF.geom);
+    if (BOFFHOV){
+      ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+      poly(BOFFHOV); ctx.setLineDash([]);
+    }
+  }
 }
 
 
@@ -2501,11 +2515,13 @@ function draw(){
   var HOVER = null;
   var SNAPHOV = null, _snapRAF = 0;   // Breaklines Α — the node the cursor would snap onto
   var BMOV = null;           // Breaklines Γ — the breakline vertex being dragged
+  var BOFF = null, BOFFHOV = null;   // Breaklines Ε — an offset waiting for its side
 
   var MODE_NAME = {
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
-    brk:'New line', brkmv:'Move a vertex', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
+    brk:'New line', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
+    brkoffset:'Offset a line', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
     // Picking a click-tool again drops back to Select, the resting state of a
@@ -2514,7 +2530,7 @@ function draw(){
     // re-arms rather than toggling off; Esc leaves.
     var sticky = m === 'elev' || m === 'matchz';
     MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
-    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null;
+    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
     // Select and Elevation change both work on a selection — keep it across the
@@ -2547,7 +2563,10 @@ function draw(){
       elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
       matchz:'Click the point to copy the elevation FROM, then the point to copy it ONTO · Esc exits.',
       brk:   'Every vertex snaps to a point or a 3D-breakline node · Enter keeps drawing, Esc finishes · right-click for options.',
-      brkmv: 'Drag a breakline vertex. Its elevation stays; it snaps to a nearby point or node.',
+      brkmv: 'Drag a breakline vertex — its elevation stays. Land it on a survey point and it asks which level wins.',
+      brkvz: 'Click a breakline vertex to set its elevation. A survey point on it can follow.',
+      brkraise: 'Click a breakline to change the elevation of the whole line. Survey points on it can follow.',
+      brkoffset:'Click a breakline, set the distance, then click the side for a parallel copy.',
       delbrk:'Click a breakline to delete it (turns red & dashed) · click a red one again to hide it · Ctrl+Z, or right-click Restore, brings it back.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
@@ -2915,6 +2934,22 @@ function draw(){
       }
       draw();
     }
+    else if (MODE === 'brkvz'){
+      var hv = pickBrkVertex(mx, my, 12);
+      if (hv) openVertexZDialog(hv);
+      else setStatusEd('No breakline vertex there.');
+    }
+    else if (MODE === 'brkraise'){
+      var wr = pickBrkWhole(mx, my, 12);
+      if (wr) openRaiseDialog(wr);
+      else setStatusEd('No breakline there.');
+    }
+    else if (MODE === 'brkoffset'){
+      if (BOFF){ finishOffset(w); return; }        // the second click picks the side
+      var wf = pickBrkWhole(mx, my, 12);
+      if (wf) openOffsetDialog(wf);
+      else setStatusEd('No breakline there.');
+    }
     else if (MODE === 'delbrk'){
       var bh = pickBrkLine(mx, my, 12);
       if (!bh){ setStatusEd('No breakline there.'); return; }
@@ -3008,24 +3043,253 @@ function draw(){
     if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) scan(L, null); });
     return best;
   }
-  /*  Land the dragged vertex. m.to is already the snapped (or free) spot; the
-   *  elevation carried in m.z is written back untouched. */
+  /*  Put a whole new set of vertices in place of a breakline. `line` is the
+   *  line as it was READ (its identity): a layer line becomes / updates an
+   *  EDITS.brkmv record, a drawn line is rewritten where it sits in EDITS.brk.
+   *  One Ctrl+Z either way. Shared by Move a vertex, Shift and Offset. */
+  /*  The edit records that put `next` in place of a breakline — already applied
+   *  to the lists, ready to be bundled with anything else into one Ctrl+Z. */
+  function brkReplaceSteps(line, layer, next){
+    if (layer == null) return [ edDel('brk', line), edAdd('brk', next) ];
+    var rec = brkMoveRec(line);
+    if (rec) return [ edDel('brkmv', rec), edAdd('brkmv', { line: rec.line, verts: next }) ];
+    return [ edAdd('brkmv', { line: line.map(function(p){ return p.slice(); }), verts: next }) ];
+  }
+  function commitSteps(steps){
+    if (!steps.length) return;
+    UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+    REDO.length = 0; afterEdit();
+  }
+  function replaceBrkLine(line, layer, next){ commitSteps(brkReplaceSteps(line, layer, next)); }
+  /*  Land the dragged vertex. m.to is the snapped (or free) spot; the elevation
+   *  in m.z is kept. When it lands ON a survey point at a different level the
+   *  point would win at calculation time, so ask which one gives — move the
+   *  vertex to the point, or set the point to the vertex (§ user 10/9). */
   function commitBrkVertex(m){
     var cur = brkGeom(m.line);
-    var next = cur.map(function(p){ return p.slice(); });
-    next[m.vi] = [m.to[0], m.to[1], m.z];
-    if (m.layer == null){
-      // A drawn line — rewrite it where it sits in EDITS.brk.
-      UNDO.push({ op:'group', items:[ edDel('brk', m.line), edAdd('brk', next) ] });
+    var landed = [m.to[0], m.to[1]];
+    var hit = pointsOnVerts([landed])[0];
+    var apply = function(vz, alsoPoint){
+      var next = cur.map(function(p){ return p.slice(); });
+      next[m.vi] = [m.to[0], m.to[1], vz];
+      var steps = brkReplaceSteps(m.line, m.layer, next);
+      if (alsoPoint && hit) steps = steps.concat(zSteps(hit.x, hit.y, vz));
+      commitSteps(steps);
+    };
+    if (hit && m.z != null && Math.abs(hit.z - m.z) > 1e-3){
+      modalOpen(
+        '<h3>The vertex landed on a survey point</h3>' +
+        '<p>The vertex was at <b>' + fmt(m.z, 3) + ' m</b>, the point is at <b>' + fmt(hit.z, 3) + ' m</b>. ' +
+        'They share a spot now, so one elevation has to give.</p>' +
+        '<div class="mbtns">' +
+          '<button class="ghost" id="mVtoP">Vertex → ' + fmt(hit.z, 3) + ' m</button>' +
+          '<button class="prim"  id="mPtoV">Point → ' + fmt(m.z, 3) + ' m</button>' +
+        '</div>'
+      );
+      document.getElementById('mVtoP').addEventListener('click', function(){
+        modalClose(); apply(hit.z, false);
+        setStatusEd('Vertex moved onto the point, now at ' + fmt(hit.z, 3) + ' m — Ctrl+Z to undo.');
+      });
+      document.getElementById('mPtoV').addEventListener('click', function(){
+        modalClose(); apply(m.z, true);
+        setStatusEd('Point set to ' + fmt(m.z, 3) + ' m to match the vertex — Ctrl+Z to undo.');
+      });
     } else {
-      var rec = brkMoveRec(m.line);
-      if (rec) UNDO.push({ op:'group', items:[
-                 edDel('brkmv', rec),
-                 edAdd('brkmv', { line: rec.line, verts: next }) ] });
-      else     UNDO.push(edAdd('brkmv', { line: m.line.map(function(p){ return p.slice(); }), verts: next }));
+      apply(m.z, false);
+      setStatusEd('Vertex moved — its elevation is unchanged. Ctrl+Z to undo.');
     }
-    REDO.length = 0; afterEdit();
-    setStatusEd('Vertex moved — its elevation is unchanged. Ctrl+Z to undo.');
+  }
+
+  /*  ------------- Breaklines Δ / Ε: elevation, raise, offset ------------
+   *  A layer breakline's vertices almost always sit on survey points, and a
+   *  point keeps its own elevation — so changing only the line does nothing
+   *  where they meet. These tools offer to carry the coincident points along.
+   *
+   *  Δ  Vertex elevation — one node set to a new height.
+   *  Ε-V  Raise / lower — every vertex by the same amount.
+   *  Ε-H  Offset — a parallel copy at a set distance, as a new drawn line. */
+  function pickBrkWhole(mx, my, px){
+    var pool = [];
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) pool.push({ t:'brk', line:brkGeom(L), orig:L, layer:n }); });
+    });
+    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) pool.push({ t:'brk', line:L, orig:L, layer:null }); });
+    return nearestPoly(mx, my, pool, px || 12);
+  }
+  function lineHasZ(L){ return L.some(function(p){ return p[2] != null; }); }
+  function enterEsc(okB){
+    return function(e){
+      if (e.key === 'Enter'){ e.stopPropagation(); e.preventDefault(); okB.click(); }
+      if (e.key === 'Escape'){ e.stopPropagation(); modalClose(); }
+    };
+  }
+  /*  The survey points sitting on any of these vertices (to the centimetre),
+   *  with the elevation each has now. A deleted or moved-away point is not one. */
+  function pointsOnVerts(verts){
+    var out = [], seen = {};
+    verts.forEach(function(v){
+      var k = Math.round(v[0]*100) + ',' + Math.round(v[1]*100);
+      if (seen[k]) return;
+      var found = null;
+      selS('pts').forEach(function(n){
+        GEOM[n].points.forEach(function(p){
+          if (Math.abs(p[0]-v[0]) < 0.01 && Math.abs(p[1]-v[1]) < 0.01 &&
+              !isDeleted(p[0], p[1]) && !isMovedFrom(p[0], p[1])) found = p;
+        });
+      });
+      EDITS.add.forEach(function(p){ if (Math.abs(p[0]-v[0]) < 0.01 && Math.abs(p[1]-v[1]) < 0.01) found = p; });
+      (EDITS.move || []).forEach(function(m){ if (Math.abs(m.to[0]-v[0]) < 0.01 && Math.abs(m.to[1]-v[1]) < 0.01) found = m.to; });
+      if (found){ seen[k] = 1; out.push({ x:found[0], y:found[1], z:effZ(found[0], found[1]) }); }
+    });
+    return out;
+  }
+  /*  One dialog, asked once per change: carry the coincident points or not. */
+  function askSyncPoints(n, onYes, onNo){
+    modalOpen(
+      '<h3>Survey points on the line</h3>' +
+      '<p>This meets <b>' + n + '</b> survey point' + (n === 1 ? '' : 's') + '. A point holds its own ' +
+      'elevation, so unless it moves too the change has no effect where they touch.</p>' +
+      '<div class="mbtns">' +
+        '<button class="ghost" id="mLineOnly">Line only</button>' +
+        '<button class="prim"  id="mWithPts">Change the points too</button>' +
+      '</div>'
+    );
+    document.getElementById('mWithPts').addEventListener('click', function(){ modalClose(); onYes(); });
+    document.getElementById('mLineOnly').addEventListener('click', function(){ modalClose(); onNo(); });
+  }
+  /*  Δ — the elevation of one vertex. */
+  function openVertexZDialog(h){
+    var cz = brkGeom(h.line)[h.vi][2];
+    modalOpen(
+      '<h3>Vertex elevation</h3>' +
+      '<div class="mrow"><label style="flex:1">Elevation (m)</label>' +
+        '<input type="text" id="mVZ" inputmode="decimal" value="' + (cz == null ? '' : fmt(cz, 3)) + '"></div>' +
+      '<div class="mbtns"><button class="ghost" onclick="modalClose()">Cancel</button>' +
+        '<button class="prim" id="mOk">Set</button></div>'
+    );
+    var f = document.getElementById('mVZ'); f.focus(); f.select();
+    var okB = document.getElementById('mOk');
+    document.getElementById('modal').onkeydown = enterEsc(okB);
+    okB.addEventListener('click', function(){
+      var nz = numIn('mVZ'); modalClose();
+      if (isNaN(nz)){ setStatusEd('The elevation could not be read.'); return; }
+      var cur = brkGeom(h.line);
+      var next = cur.map(function(p){ return p.slice(); });
+      next[h.vi] = [cur[h.vi][0], cur[h.vi][1], nz];
+      var pts = pointsOnVerts([ cur[h.vi] ]);
+      var go = function(withPts){
+        var steps = brkReplaceSteps(h.line, h.layer, next);
+        if (withPts && pts.length) steps = steps.concat(zSteps(pts[0].x, pts[0].y, nz));
+        commitSteps(steps);
+        setStatusEd('Vertex set to ' + fmt(nz, 3) + ' m' +
+          (withPts && pts.length ? ' with its survey point' : '') + ' — Ctrl+Z to undo.');
+      };
+      if (pts.length) askSyncPoints(pts.length, function(){ go(true); }, function(){ go(false); });
+      else go(false);
+    });
+  }
+  /*  Ε-V — raise or lower the whole line. */
+  function openRaiseDialog(wh){
+    var g = wh.line;
+    modalOpen(
+      '<h3>Line elevation</h3>' +
+      '<div class="mrow"><label style="flex:1">Height change (m)</label>' +
+        '<input type="text" id="mRH" inputmode="decimal" value="0"></div>' +
+      '<div class="mbtns"><button class="ghost" onclick="modalClose()">Cancel</button>' +
+        '<button class="prim" id="mOk">Apply</button></div>'
+    );
+    var f = document.getElementById('mRH'); f.focus(); f.select();
+    var okB = document.getElementById('mOk');
+    document.getElementById('modal').onkeydown = enterEsc(okB);
+    okB.addEventListener('click', function(){
+      var dh = numIn('mRH'); modalClose();
+      if (isNaN(dh) || !dh){ setStatusEd('Nothing to change.'); return; }
+      var next = g.map(function(p){ return [p[0], p[1], p[2] == null ? null : p[2] + dh]; });
+      var pts = pointsOnVerts(g);
+      var go = function(withPts){
+        var steps = brkReplaceSteps(wh.orig, wh.layer, next);
+        if (withPts) pts.forEach(function(pt){ steps = steps.concat(zSteps(pt.x, pt.y, pt.z + dh)); });
+        commitSteps(steps);
+        setStatusEd('Line ' + (dh > 0 ? 'raised ' : 'lowered ') + fmt(Math.abs(dh), 2) + ' m' +
+          (withPts ? ' with ' + pts.length + ' point' + (pts.length === 1 ? '' : 's') : '') + ' — Ctrl+Z to undo.');
+      };
+      if (pts.length) askSyncPoints(pts.length, function(){ go(true); }, function(){ go(false); });
+      else go(false);
+    });
+  }
+  /*  A parallel line at distance d (signed — positive is the left of travel).
+   *  Each vertex is moved along the average of its two segment normals, the
+   *  step lengthened at a corner so the offset stays parallel (a mitre, capped
+   *  so a hairpin does not shoot off). */
+  function offsetPoly(L, d){
+    var n = L.length, seg = [];
+    for (var i = 0; i < n - 1; i++){
+      var dx = L[i+1][0] - L[i][0], dy = L[i+1][1] - L[i][1], len = Math.hypot(dx, dy) || 1;
+      seg.push([-dy/len, dx/len]);
+    }
+    var out = [];
+    for (var i = 0; i < n; i++){
+      var a = seg[i > 0 ? i-1 : 0], b = seg[i < n-1 ? i : n-2];
+      var nx = a[0] + b[0], ny = a[1] + b[1], nl = Math.hypot(nx, ny) || 1;
+      nx /= nl; ny /= nl;
+      var cos = nx*b[0] + ny*b[1];
+      if (cos < 0.25) cos = 0.25;                 // cap the mitre at a sharp corner
+      out.push([ L[i][0] + nx*d/cos, L[i][1] + ny*d/cos, L[i][2] ]);
+    }
+    return out;
+  }
+  function openOffsetDialog(wo){
+    var z3 = lineHasZ(wo.line);
+    modalOpen(
+      '<h3>Offset the line</h3>' +
+      '<div class="mrow"><label style="flex:1">Distance (m)</label><input type="text" id="mOD" inputmode="decimal" value="1"></div>' +
+      '<div class="mrow"><label style="flex:1">Height change (m)</label><input type="text" id="mOH" inputmode="decimal" value="0"' +
+        (z3 ? '' : ' disabled title="this line has no elevations"') + '></div>' +
+      '<div class="mbtns"><button class="ghost" onclick="modalClose()">Cancel</button>' +
+        '<button class="prim" id="mOk">Pick the side</button></div>'
+    );
+    var f = document.getElementById('mOD'); f.focus(); f.select();
+    var okB = document.getElementById('mOk');
+    document.getElementById('modal').onkeydown = enterEsc(okB);
+    okB.addEventListener('click', function(){
+      var dd = numIn('mOD'), dh = z3 ? numIn('mOH') : 0;
+      modalClose();
+      if (isNaN(dd) || dd <= 0){ setStatusEd('The distance could not be read.'); return; }
+      BOFF = { geom: wo.line, d: dd, dz: isNaN(dh) ? 0 : dh };
+      setStatusEd('Click the side the copy should go.');
+      draw();
+    });
+  }
+  /*  The side of the click decides the sign; the copy goes in as a drawn line. */
+  function finishOffset(w){
+    var b = BOFF; BOFF = null; BOFFHOV = null;
+    var L = b.geom, bd = Infinity, side = 1;
+    for (var i = 0; i < L.length - 1; i++){
+      var ax = L[i][0], ay = L[i][1], bx = L[i+1][0], by = L[i+1][1];
+      var l2 = (bx-ax)*(bx-ax) + (by-ay)*(by-ay) || 1;
+      var t = Math.max(0, Math.min(1, ((w[0]-ax)*(bx-ax) + (w[1]-ay)*(by-ay)) / l2));
+      var px = ax + t*(bx-ax), py = ay + t*(by-ay), dist = Math.hypot(w[0]-px, w[1]-py);
+      if (dist < bd){ bd = dist; side = ((bx-ax)*(w[1]-ay) - (by-ay)*(w[0]-ax)) >= 0 ? 1 : -1; }
+    }
+    var copy = offsetPoly(L, side * b.d).map(function(p){
+      return [p[0], p[1], p[2] == null ? null : p[2] + b.dz];
+    });
+    push('brk', copy);
+    setStatusEd('Offset line added as a drawn breakline — Ctrl+Z to undo.');
+  }
+  /*  The parallel copy previewed under the cursor while the side is chosen. */
+  function offsetPreview(w){
+    if (!BOFF) return;
+    var L = BOFF.geom, bd = Infinity, side = 1;
+    for (var i = 0; i < L.length - 1; i++){
+      var ax = L[i][0], ay = L[i][1], bx = L[i+1][0], by = L[i+1][1];
+      var l2 = (bx-ax)*(bx-ax) + (by-ay)*(by-ay) || 1;
+      var t = Math.max(0, Math.min(1, ((w[0]-ax)*(bx-ax) + (w[1]-ay)*(by-ay)) / l2));
+      var px = ax + t*(bx-ax), py = ay + t*(by-ay), dist = Math.hypot(w[0]-px, w[1]-py);
+      if (dist < bd){ bd = dist; side = ((bx-ax)*(w[1]-ay) - (by-ay)*(w[0]-ax)) >= 0 ? 1 : -1; }
+    }
+    BOFFHOV = offsetPoly(L, side * BOFF.d);
+    draw();
   }
   function setStatusEd(t){ document.getElementById('edHint').textContent = t; }
 
@@ -3062,6 +3326,9 @@ function draw(){
     BMOV.snapped = !!s;
     BMOV.to = s ? [s[0], s[1]] : world(ev);
     draw();
+  });
+  window.addEventListener('mousemove', function(ev){
+    if (BOFF) offsetPreview(world(ev));
   });
   /*  While a breakline is being drawn, show where the next click would land —
    *  the cursor only ever produces a vertex on a valid snap node. One scan per
