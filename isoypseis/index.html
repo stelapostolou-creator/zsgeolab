@@ -518,14 +518,34 @@
   <div class="stage">
     <div class="menubar">
       <div class="mgroup">
-        <div class="mi" onclick="cmenu(this)" title="Edit the measured points">Points</div>
+        <div class="mi" onclick="cmenu(this)">Edits</div>
         <div class="menu">
-          <button class="ed" data-m="add"  onclick="setMode('add');closeMenus()"><span class="k">➕</span>Add point</button>
-          <button class="ed" data-m="move" onclick="setMode('move');closeMenus()"><span class="k">✥</span>Move point</button>
-          <button class="ed" data-m="del"  onclick="setMode('del');closeMenus()"><span class="k">✖</span>Delete point</button>
+          <button id="mUndo" onclick="undoEdit()"><span class="k">↶</span>Undo<span class="chk mono" id="mUndoN"></span></button>
+          <button id="mRedo" onclick="redoEdit()"><span class="k">↷</span>Redo</button>
           <div class="div"></div>
-          <button class="ed" data-m="elev"   onclick="setMode('elev');closeMenus()"><span class="k">↕</span>Elevation change</button>
-          <button class="ed" data-m="matchz" onclick="setMode('matchz');closeMenus()"><span class="k">=</span>Match elevation</button>
+          <button onclick="clearEdits()"><span class="k">🗑</span>Clear all edits</button>
+        </div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">View</div>
+        <div class="menu">
+          <button class="ed" data-m="pan" onclick="setMode('pan');closeMenus()"><span class="k">👆</span>Pan mode<span class="chk"></span></button>
+          <button onclick="fit();closeMenus()"><span class="k">⤢</span>Fit to screen</button>
+          <button onclick="zoom(1.4)"><span class="k">＋</span>Zoom in</button>
+          <button onclick="zoom(1/1.4)"><span class="k">−</span>Zoom out</button>
+          <div class="div"></div>
+          <button id="vMesh" onclick="tog('mesh')"><span class="k">△</span>Triangles<span class="chk"></span></button>
+          <button id="vIso"  onclick="tog('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
+          <button id="vZ"    onclick="tog('z')"><span class="k">#</span>Elevations<span class="chk"></span></button>
+          <div class="div"></div>
+          <div class="mnote">Edit marks on the canvas:</div>
+          <button id="vpDel"  onclick="togEP('del')"><span class="k">✖</span>Deleted points<span class="chk"></span></button>
+          <button id="vpMove" onclick="togEP('move')"><span class="k">✥</span>Moved points<span class="chk"></span></button>
+          <button id="vpNew"  onclick="togEP('newmove')"><span class="k">◇</span>New from a move<span class="chk"></span></button>
+          <button id="vpAdd"  onclick="togEP('add')"><span class="k">➕</span>Added points<span class="chk"></span></button>
+          <button id="vpSetz" onclick="togEP('setz')"><span class="k">◎</span>Elevation changed<span class="chk"></span></button>
+          <button id="vpHole" onclick="togEP('hole')"><span class="k">🕳</span>Deleted triangles<span class="chk"></span></button>
+          <button id="vpBrk"  onclick="togEP('brkcut')"><span class="k">📐</span>Deleted breaklines<span class="chk"></span></button>
         </div>
       </div>
       <div class="mgroup">
@@ -538,6 +558,17 @@
           <button id="fBrk"  onclick="togSel('brk')"><span class="k">📐</span>Breaklines<span class="chk"></span></button>
           <button id="fBnd"  onclick="togSel('bnd')"><span class="k">▣</span>Boundary<span class="chk"></span></button>
           <button id="fBase" onclick="togSel('base')"><span class="k">▦</span>Background<span class="chk"></span></button>
+        </div>
+      </div>
+      <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)" title="Edit the measured points">Points</div>
+        <div class="menu">
+          <button class="ed" data-m="add"  onclick="setMode('add');closeMenus()"><span class="k">➕</span>Add point</button>
+          <button class="ed" data-m="move" onclick="setMode('move');closeMenus()"><span class="k">✥</span>Move point</button>
+          <button class="ed" data-m="del"  onclick="setMode('del');closeMenus()"><span class="k">✖</span>Delete point</button>
+          <div class="div"></div>
+          <button class="ed" data-m="elev"   onclick="setMode('elev');closeMenus()"><span class="k">↕</span>Elevation change</button>
+          <button class="ed" data-m="matchz" onclick="setMode('matchz');closeMenus()"><span class="k">=</span>Match elevation</button>
         </div>
       </div>
       <div class="mgroup">
@@ -576,38 +607,6 @@
           <button class="ed" data-m="bnddraw" onclick="setMode('bnddraw');closeMenus()"><span class="k">▣</span>Draw boundary</button>
           <button class="ed" data-m="bndmv" onclick="setMode('bndmv');closeMenus()"><span class="k">✥</span>Move any vertex</button>
           <button class="ed" data-m="bnddel" onclick="setMode('bnddel');closeMenus()"><span class="k">✖</span>Delete</button>
-        </div>
-      </div>
-      <div class="mgroup">
-        <div class="mi" onclick="cmenu(this)">View</div>
-        <div class="menu">
-          <button class="ed" data-m="pan" onclick="setMode('pan');closeMenus()"><span class="k">👆</span>Pan mode<span class="chk"></span></button>
-          <button onclick="fit();closeMenus()"><span class="k">⤢</span>Fit to screen</button>
-          <button onclick="zoom(1.4)"><span class="k">＋</span>Zoom in</button>
-          <button onclick="zoom(1/1.4)"><span class="k">−</span>Zoom out</button>
-          <div class="div"></div>
-          <button id="vMesh" onclick="tog('mesh')"><span class="k">△</span>Triangles<span class="chk"></span></button>
-          <button id="vIso"  onclick="tog('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
-          <button id="vZ"    onclick="tog('z')"><span class="k">#</span>Elevations<span class="chk"></span></button>
-          <button id="vTxt"  onclick="tog('txt')"><span class="k">T</span>Text labels<span class="chk"></span></button>
-          <div class="div"></div>
-          <div class="mnote">Edit marks on the canvas:</div>
-          <button id="vpDel"  onclick="togEP('del')"><span class="k">✖</span>Deleted points<span class="chk"></span></button>
-          <button id="vpMove" onclick="togEP('move')"><span class="k">✥</span>Moved points<span class="chk"></span></button>
-          <button id="vpNew"  onclick="togEP('newmove')"><span class="k">◇</span>New from a move<span class="chk"></span></button>
-          <button id="vpAdd"  onclick="togEP('add')"><span class="k">➕</span>Added points<span class="chk"></span></button>
-          <button id="vpSetz" onclick="togEP('setz')"><span class="k">◎</span>Elevation changed<span class="chk"></span></button>
-          <button id="vpHole" onclick="togEP('hole')"><span class="k">🕳</span>Deleted triangles<span class="chk"></span></button>
-          <button id="vpBrk"  onclick="togEP('brkcut')"><span class="k">📐</span>Deleted breaklines<span class="chk"></span></button>
-        </div>
-      </div>
-      <div class="mgroup">
-        <div class="mi" onclick="cmenu(this)">Edits</div>
-        <div class="menu">
-          <button id="mUndo" onclick="undoEdit()"><span class="k">↶</span>Undo<span class="chk mono" id="mUndoN"></span></button>
-          <button id="mRedo" onclick="redoEdit()"><span class="k">↷</span>Redo</button>
-          <div class="div"></div>
-          <button onclick="clearEdits()"><span class="k">🗑</span>Clear all edits</button>
         </div>
       </div>
       <div class="mode" id="modeLbl">Mode: Select</div>
@@ -687,7 +686,7 @@ document.addEventListener('click', function(e){ if (!e.target.closest('.menubar'
  *  per layer.
  */
 'use strict';
-var GEOM = {};          // layer -> {points, lines, texts}
+var GEOM = {};          // layer -> {points, lines}
 var META = {};          // layer -> its row of the report
 var ROLE = {};          // layer -> '' | 'pts' | 'brk' | 'bnd'
 var VIS = {};           // layer -> boolean
@@ -697,7 +696,7 @@ var RES = null;         // the server's result — for the ACTIVE surface
 var PICK = null;        // what the last click identified
 var MEANZ = null;       // mean elevation of the points last sent
 var ZCUT = {p:0, v:0};  // points / line vertices left out by the elevation limits
-var SHOW = {mesh:true, iso:true, txt:false, z:false};
+var SHOW = {mesh:true, iso:true, z:false};
 /*  Which kinds of edit marker are drawn on the canvas. A view filter only —
  *  it hides the marks, never the edit itself, and is not kept in the job.
  *  "add" is not here: the added points are a pseudo-layer with their own eye
@@ -949,7 +948,7 @@ window.setLyColor = function(name, val){ LYCOLOR[name] = val; saveLyColors(); dr
 
 /*  A layer with nothing we can use — only splines, hatches, dimensions, or
  *  truly empty — is hidden from the table. Nothing to do with it. */
-function lyUsable(m){ return m.points > 0 || m.lines > 0 || m.inserts > 0 || m.texts > 0; }
+function lyUsable(m){ return m.points > 0 || m.lines > 0 || m.inserts > 0; }
 var SHOWALL_LY = false;
 window.toggleAllLayers = function(){ SHOWALL_LY = !SHOWALL_LY; renderLayers(); };
 
@@ -1451,7 +1450,7 @@ document.getElementById('file').addEventListener('change', function(ev){
       j.layers.forEach(function(r){
         var n = r.name;
         if (GEOM[n]){ n = r.name + ' — ' + fname; }
-        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[],point_attrs:[],line_flat:[]};
+        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],point_attrs:[],line_flat:[]};
         if (!GEOM[n].point_attrs) GEOM[n].point_attrs = [];
         if (!GEOM[n].line_flat) GEOM[n].line_flat = [];
         META[n] = r; ROLE[n] = ROLE[n] || (isText ? 'pts' : ''); VIS[n] = true;
@@ -1978,7 +1977,7 @@ function togEP(k){
 }
 /*  The ticks next to the View menu rows. */
 function vChecks(){
-  [['mesh','vMesh'],['iso','vIso'],['z','vZ'],['txt','vTxt']].forEach(function(p){
+  [['mesh','vMesh'],['iso','vIso'],['z','vZ']].forEach(function(p){
     var b = document.getElementById(p[1]); if (!b) return;
     var c = b.querySelector('.chk'); if (c) c.textContent = SHOW[p[0]] ? '✓' : '';
   });
@@ -2124,16 +2123,6 @@ function draw(){
    *  ghost. They are only for orientation and play no part in the surface, so
    *  "erase" means erase. A right-click where the line ran still offers
    *  Restore (rcHit keeps the geometry), and Ctrl+Z brings it straight back. */
-  if (SHOW.txt && T.s > 3){
-    ctx.font = '10px Consolas,monospace';
-    Object.keys(GEOM).forEach(function(n){
-      if (!VIS[n]) return;
-      if (ROLE[n]) { if (!surfHas(ROLE[n], n)) return; }
-      else if (!fileOn(n)) return;
-      ctx.fillStyle = LYCOLOR[n] || COLORS.base;
-      GEOM[n].texts.forEach(function(t){ ctx.fillText(t.s, SX(t.x)+3, SY(t.y)-3); });
-    });
-  }
 
   /*  2. Triangles of the model.
    *
