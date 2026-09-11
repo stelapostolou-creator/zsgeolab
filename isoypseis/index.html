@@ -1151,6 +1151,9 @@ function applyJob(job) {
   /*  v2 keeps the drawing in job.shared; v1 kept it inside surfaces[0]. */
   var sh = job.shared || (job.surfaces && job.surfaces[job.active || 0]) || {};
   GEOM = sh.geom || {}; META = sh.meta || {}; ROLE = sh.roles || {}; VIS = sh.vis || {};
+  // A job saved before the server's 2D/3D flag existed has no line_flat —
+  // an absent array (not merely empty) would throw where it is indexed.
+  for (var gn in GEOM) if (!GEOM[gn].line_flat) GEOM[gn].line_flat = [];
   FILEOF = sh.fileof || {}; FILELIST = sh.files || [];
   LYCOLOR = sh.lycolor || {}; LYTEXT = sh.lytext || {};
   if (job.appearance && job.appearance.colors)
@@ -1432,8 +1435,9 @@ document.getElementById('file').addEventListener('change', function(ev){
       j.layers.forEach(function(r){
         var n = r.name;
         if (GEOM[n]){ n = r.name + ' — ' + fname; }
-        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[],point_attrs:[]};
+        GEOM[n] = j.geometry[r.name] || {points:[],lines:[],texts:[],point_attrs:[],line_flat:[]};
         if (!GEOM[n].point_attrs) GEOM[n].point_attrs = [];
+        if (!GEOM[n].line_flat) GEOM[n].line_flat = [];
         META[n] = r; ROLE[n] = ROLE[n] || (isText ? 'pts' : ''); VIS[n] = true;
         FILEOF[n] = fname;
       });
@@ -2738,13 +2742,13 @@ function draw(){
     // Nodes of 3D breaklines: from the layers this surface reads, and from
     // lines already drawn on the canvas. The line being edited is left out, so a
     // dragged vertex never snaps onto its own neighbours.
-    var scan = function(L){
+    var scan = function(L, flat){
       if (L === exceptLine) return;
       var G = brkGeom(L);
-      if (G.length >= 2 && lineMetrics(G).threeD) G.forEach(consider);
+      if (G.length >= 2 && lineMetrics(G, flat).threeD) G.forEach(consider);
     };
     selS('brk').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) scan(L); });
+      if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) scan(L, GEOM[n].line_flat[i]); });
     });
     EDITS.brk.forEach(function(L){ if (!isCutLine(L)) scan(L); });
     // Vertices of the line being drawn, so it can close on itself.
@@ -3678,13 +3682,13 @@ function draw(){
     var pool = [];
     if (eff('brk')){
       selS('brk').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:brkGeom(L), layer:n}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) pool.push({t:'brk', line:brkGeom(L), layer:n, flat:GEOM[n].line_flat[i]}); });
       });
       if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:L, layer:null}); });
     }
     if (eff('bnd')){
       selS('bnd').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({t:'bnd', line:L, layer:n}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ pool.push({t:'bnd', line:L, layer:n, flat:GEOM[n].line_flat[i]}); });
       });
     }
     if (eff('base')){
@@ -3713,8 +3717,16 @@ function draw(){
     });
     return best;
   }
-  /*  Length, nodes and whether a polyline carries real relief. */
-  function lineMetrics(L){
+  /*  Length, nodes and whether a polyline carries real relief.
+   *
+   *  `flat` is the ground truth from the DXF entity type (GEOM[n].line_flat),
+   *  when known: true for an entity the DXF format itself forces to one
+   *  elevation (LWPOLYLINE …), false for one that carries real per-vertex z
+   *  (LINE, 3D POLYLINE …) — even where that z happens to be constant. Pass it
+   *  whenever the line came straight from a layer. Left out (drawn lines,
+   *  or a job saved before this field existed) it falls back to guessing from
+   *  the z spread, which cannot tell a genuinely flat 3D line from a flat one. */
+  function lineMetrics(L, flat){
     var h = 0, s = 0, zmin = Infinity, zmax = -Infinity;
     for (var i = 0; i < L.length; i++){
       var z = L[i][2];
@@ -3725,7 +3737,7 @@ function draw(){
         h += dh; s += Math.hypot(dh, dz);
       }
     }
-    var threeD = isFinite(zmin) && (zmax - zmin) > 1e-6;
+    var threeD = (flat != null) ? !flat : (isFinite(zmin) && (zmax - zmin) > 1e-6);
     return {nodes: L.length, hlen: h, slen: s, threeD: threeD, zmin: zmin, zmax: zmax};
   }
 
@@ -3905,7 +3917,7 @@ function draw(){
         (mb.threeD ? '<br>Elevation ' + fmt(mb.zmin,3) + ' – ' + fmt(mb.zmax,3) + ' m' : '') + '</div>';
     }
     if (s.t === 'brk' || s.t === 'bnd'){
-      var m = lineMetrics(s.line);
+      var m = lineMetrics(s.line, s.flat);
       return '<div class="k" style="color:'+(s.t==='bnd'?COLORS.bnd:COLORS.brk)+'">' +
         (s.t === 'bnd' ? 'Boundary' : 'Breakline') + '</div>' +
         '<div class="v">' + (m.threeD ? '3D' : '2D') + ' · ' + m.nodes + ' nodes</div>' +
@@ -4255,18 +4267,20 @@ function draw(){
     afterEdit();
   }
   /*  which — the filter from the Breaklines menu: 'all' · 'layer' (only from a
-   *  layer) · 'drawn' (only drawn on the canvas) · '2d' / '3d' (by elevation —
-   *  a line with varying z reads as 3D; an exact LWPOLYLINE-vs-3DPOLY flag would
-   *  need the server). Every match is marked deleted; one Ctrl+Z. */
+   *  layer) · 'drawn' (only drawn on the canvas) · '2d' / '3d' (by the server's
+   *  DXF-entity flag when the line came from a layer; drawn lines fall back to
+   *  guessing from the z spread — they are always genuinely 3D by construction).
+   *  Every match is marked deleted; one Ctrl+Z. */
   window.brkBulk = function(which){
-    var match = function(L){
+    var match = function(L, flat){
       if (which === 'all' || which === 'layer' || which === 'drawn') return true;
-      return which === '3d' ? lineMetrics(L).threeD : !lineMetrics(L).threeD;
+      var td = lineMetrics(L, flat).threeD;
+      return which === '3d' ? td : !td;
     };
     var hits = [];
     if (which !== 'drawn') selS('brk').forEach(function(n){
       if (!VIS[n]) return;
-      GEOM[n].lines.forEach(function(L){ if (L.length >= 2 && !isCutLine(L) && match(L)) hits.push(L); });
+      GEOM[n].lines.forEach(function(L, i){ if (L.length >= 2 && !isCutLine(L) && match(L, GEOM[n].line_flat[i])) hits.push(L); });
     });
     if (which !== 'layer' && DRAWVIS.brk) EDITS.brk.forEach(function(L){
       if (L.length >= 2 && !isCutLine(L) && match(L)) hits.push(L);
