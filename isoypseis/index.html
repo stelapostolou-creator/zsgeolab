@@ -427,9 +427,12 @@
                           <option value="points">From the points — the lines are two-dimensional</option>
                         </select></div>
                       <div class="hint">A DXF <b>LWPOLYLINE</b> carries a single elevation for all of its vertices — it is flat. A line with real elevations has to be a <b>3D polyline</b> or a series of LINE entities. If you drew it snapped onto the points, pick the second option.</div>
-                      <div class="pr"><label>Snap radius — <span class="mono">1 mm</span><span class="soonbadge">soon</span></label>
-                        <input type="range" min="0" max="50" value="1" disabled></div>
-                      <div class="pr"><label><input type="checkbox" checked disabled> Lift a 2D breakline onto the points<span class="soonbadge">soon</span></label></div>
+                      <div class="pr"><label>Snap radius — <span class="mono" id="snapTolV">1 mm</span></label>
+                        <input id="snapTol" type="range" min="0" max="50" value="1"
+                          oninput="document.getElementById('snapTolV').textContent = this.value + ' mm'"></div>
+                      <div class="hint">How close two points (or a point and a breakline vertex) have to be to
+                        count as the same node. Too small and a hand-drawn line just misses its point; too large
+                        and separate points merge into one.</div>
 
                       <h4>Contour labels<span class="soonbadge">soon</span></h4>
                       <div class="pr"><label>Paper text height — <span class="mono">2.5 mm</span></label>
@@ -715,7 +718,7 @@ var T = {s:1, x:0, y:0};
 function newSurface(name){
   return {
     name: name,
-    settings: { interval:'0.50', zlo:'', zhi:'', blz:'file', clip:true, wmesh:true },
+    settings: { interval:'0.50', zlo:'', zhi:'', blz:'file', clip:true, wmesh:true, tol:'1' },
     /*  Which role layers feed THIS surface. Only exclusions are stored
      *  ({layer:false}); a layer not listed is included. So a new layer is on
      *  for every surface by default. */
@@ -1092,7 +1095,8 @@ function readSettings() {
     zhi: document.getElementById('zhi').value,
     blz: document.getElementById('blz').value,
     clip: document.getElementById('clip').checked,
-    wmesh: document.getElementById('wmesh').checked
+    wmesh: document.getElementById('wmesh').checked,
+    tol: document.getElementById('snapTol').value
   };
 }
 function writeSettings(st) {
@@ -1103,6 +1107,9 @@ function writeSettings(st) {
   document.getElementById('blz').value = st.blz || 'file';
   document.getElementById('clip').checked = st.clip !== false;
   document.getElementById('wmesh').checked = st.wmesh !== false;
+  var st_tol = st.tol != null ? st.tol : '1';
+  document.getElementById('snapTol').value = st_tol;
+  document.getElementById('snapTolV').textContent = st_tol + ' mm';
 }
 function collectJob() {
   return {
@@ -1832,9 +1839,11 @@ function payload(){
   selS('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){ considerBnd(bndGeom(L)); }); });
   EDITS.bnd.forEach(considerBnd);
 
+  var tolMm = numIn('snapTol');
   return {points:pts, breaklines:brk, boundary:bnd,
           interval:numIn('iv'), clip:document.getElementById('clip').checked,
           breakline_z:document.getElementById('blz').value,
+          tol: (isNaN(tolMm) ? 1 : tolMm) / 1000,
           swap_edges:EDITS.swap, remove_tris:EDITS.hole,
           mesh:document.getElementById('wmesh').checked};
 }
@@ -4662,7 +4671,7 @@ setMode('select');
 renderSurfaceChips();
 
 // The calculation settings are part of the job too.
-['iv','zlo','zhi'].forEach(function(id){
+['iv','zlo','zhi','snapTol'].forEach(function(id){
   document.getElementById(id).addEventListener('input', touch);
 });
 ['blz','clip','wmesh'].forEach(function(id){
