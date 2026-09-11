@@ -544,6 +544,7 @@
         <div class="mi" onclick="cmenu(this)">Breaklines</div>
         <div class="menu">
           <button class="ed" data-m="brk" onclick="setMode('brk');closeMenus()"><span class="k">📐</span>New line</button>
+          <button class="ed" data-m="brkid" onclick="setMode('brkid');closeMenus()"><span class="k">ℹ</span>Vertex info</button>
           <button class="ed" data-m="brkmv" onclick="setMode('brkmv');closeMenus()"><span class="k">✥</span>Move a vertex</button>
           <button class="ed" data-m="brkvz" onclick="setMode('brkvz');closeMenus()"><span class="k">↕</span>Vertex elevation…</button>
           <button class="ed" data-m="brkraise" onclick="setMode('brkraise');closeMenus()"><span class="k">⭥</span>Line elevation…</button>
@@ -2369,10 +2370,15 @@ function draw(){
     ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(qx, qy, 7, 0, 6.284); ctx.stroke();
   }
+  // Vertex info — the node a click would read from, before the click.
+  if (MODE === 'brkid' && IDHOV){
+    ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(SX(IDHOV[0]), SY(IDHOV[1]), 7, 0, 6.284); ctx.stroke();
+  }
   // 6. What the last click identified — over everything, so it is found again.
   if (PICK){
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
-    if (PICK.kind === 'pt'){
+    if (PICK.kind === 'pt' || PICK.kind === 'brkv'){
       var hx = SX(PICK.x), hy = SY(PICK.y);
       ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 6.284); ctx.stroke();
       ctx.beginPath();
@@ -2516,11 +2522,12 @@ function draw(){
   var SNAPHOV = null, _snapRAF = 0;   // Breaklines Α — the node the cursor would snap onto
   var BMOV = null;           // Breaklines Γ — the breakline vertex being dragged
   var BOFF = null, BOFFHOV = null;   // Breaklines Ε — an offset waiting for its side
+  var IDHOV = null, _idRAF = 0;   // Vertex info — the node under the cursor, before the click
 
   var MODE_NAME = {
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
-    brk:'New line', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
+    brk:'New line', brkid:'Vertex info', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
     brkoffset:'Offset a line', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
@@ -2530,7 +2537,7 @@ function draw(){
     // re-arms rather than toggling off; Esc leaves.
     var sticky = m === 'elev' || m === 'matchz';
     MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
-    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null;
+    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null; IDHOV = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
     // Select and Elevation change both work on a selection — keep it across the
@@ -2563,6 +2570,7 @@ function draw(){
       elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
       matchz:'Click the point to copy the elevation FROM, then the point to copy it ONTO · Esc exits.',
       brk:   'Every vertex snaps to a point or a 3D-breakline node · Enter keeps drawing, Esc finishes · right-click for options.',
+      brkid: 'Click a breakline vertex to see its X, Y, Z.',
       brkmv: 'Drag a breakline vertex — its elevation stays. Land it on a survey point and it asks which level wins.',
       brkvz: 'Click a breakline vertex to set its elevation. A survey point on it can follow.',
       brkraise: 'Click a breakline to change the elevation of the whole line. Survey points on it can follow.',
@@ -2821,6 +2829,10 @@ function draw(){
       h += '<div class="k" style="color:' + COLORS.pts + '">Point</div>' +
            '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
            '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
+    } else if (PICK.kind === 'brkv'){
+      h += '<div class="k" style="color:' + COLORS.brk + '">Breakline vertex</div>' +
+           '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
+           '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
     } else {
       h += '<div class="k" style="color:' + (PICK.main ? COLORS.index : COLORS.minor) + '">' +
              (PICK.main ? 'Index contour' : 'Contour') + '</div>' +
@@ -2933,6 +2945,11 @@ function draw(){
         if (Math.abs(v[0] - last[0]) > 1e-9 || Math.abs(v[1] - last[1]) > 1e-9) DRAWING.push(v);
       }
       draw();
+    }
+    else if (MODE === 'brkid'){
+      var hi = pickBrkVertex(mx, my, 12);
+      if (hi){ PICK = {kind:'brkv', x:hi.v[0], y:hi.v[1], z:hi.v[2]}; showPick(); draw(); }
+      else setStatusEd('No breakline vertex there.');
     }
     else if (MODE === 'brkvz'){
       var hv = pickBrkVertex(mx, my, 12);
@@ -3340,6 +3357,19 @@ function draw(){
       _snapRAF = 0;
       var r = cv.getBoundingClientRect();
       SNAPHOV = snapVertex(ev.clientX - r.left, ev.clientY - r.top, 14);
+      draw();
+    });
+  });
+  /*  Vertex info — the same green ring, so you see where a click will read
+   *  from before you commit to it. */
+  window.addEventListener('mousemove', function(ev){
+    if (MODE !== 'brkid'){ if (IDHOV){ IDHOV = null; draw(); } return; }
+    if (_idRAF) return;
+    _idRAF = requestAnimationFrame(function(){
+      _idRAF = 0;
+      var r = cv.getBoundingClientRect();
+      var hv = pickBrkVertex(ev.clientX - r.left, ev.clientY - r.top, 12);
+      IDHOV = hv ? hv.v : null;
       draw();
     });
   });
