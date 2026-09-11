@@ -549,6 +549,7 @@
           <button class="ed" data-m="brkvz" onclick="setMode('brkvz');closeMenus()"><span class="k">↕</span>Vertex elevation…</button>
           <button class="ed" data-m="brkraise" onclick="setMode('brkraise');closeMenus()"><span class="k">⭥</span>Line elevation…</button>
           <button class="ed" data-m="brkoffset" onclick="setMode('brkoffset');closeMenus()"><span class="k">∥</span>Offset a line…</button>
+          <button class="ed" data-m="brk23d" onclick="setMode('brk23d');closeMenus()"><span class="k">⛰</span>Make 3D</button>
           <button class="ed" data-m="delbrk" onclick="setMode('delbrk');closeMenus()"><span class="k">✖</span>Delete line</button>
           <div class="div"></div>
           <button onclick="brkBulk('all');closeMenus()" title="Every breakline — from a layer and drawn"><span class="k">✖</span>Delete all breaklines</button>
@@ -556,6 +557,8 @@
           <button onclick="brkBulk('drawn');closeMenus()" title="Only lines drawn on the canvas"><span class="k">✖</span>Delete drawn breaklines</button>
           <button onclick="brkBulk('2d');closeMenus()" title="Lines with a single elevation (flat)"><span class="k">✖</span>Delete 2D breaklines</button>
           <button onclick="brkBulk('3d');closeMenus()" title="Lines whose elevation varies along them"><span class="k">✖</span>Delete 3D breaklines</button>
+          <div class="div"></div>
+          <button onclick="make3DAll();closeMenus()" title="Every flat breakline that touches a survey point"><span class="k">⛰</span>Make all flat breaklines 3D</button>
           <div class="div"></div>
           <button onclick="brkClearDeleted();closeMenus()" title="Hide every deleted (red-dashed) breakline — only Ctrl+Z brings them back"><span class="k">🗑</span>Clear deleted</button>
         </div>
@@ -2532,7 +2535,7 @@ function draw(){
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
     brk:'New line', brkid:'Vertex info', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
-    brkoffset:'Offset a line', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
+    brkoffset:'Offset a line', brk23d:'Make 3D', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
   };
   function setMode(m){
     // Picking a click-tool again drops back to Select, the resting state of a
@@ -2579,6 +2582,7 @@ function draw(){
       brkvz: 'Click a breakline vertex to set its elevation. A survey point on it can follow.',
       brkraise: 'Click a breakline to change the elevation of the whole line. Survey points on it can follow.',
       brkoffset:'Click a breakline, set the distance, then click the side for a parallel copy.',
+      brk23d: 'Click a flat breakline to fill it in with real elevations, from the survey points it touches.',
       delbrk:'Click a breakline to delete it (turns red & dashed) · click a red one again to hide it · Ctrl+Z, or right-click Restore, brings it back.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
@@ -2748,7 +2752,7 @@ function draw(){
       if (G.length >= 2 && lineMetrics(G, flat).threeD) G.forEach(consider);
     };
     selS('brk').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) scan(L, GEOM[n].line_flat[i]); });
+      if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) scan(L, flatNow(n, L, i)); });
     });
     EDITS.brk.forEach(function(L){ if (!isCutLine(L)) scan(L); });
     // Vertices of the line being drawn, so it can close on itself.
@@ -2969,6 +2973,11 @@ function draw(){
       if (BOFF){ finishOffset(w); return; }        // the second click picks the side
       var wf = pickBrkWhole(mx, my, 12);
       if (wf) openOffsetDialog(wf);
+      else setStatusEd('No breakline there.');
+    }
+    else if (MODE === 'brk23d'){
+      var w3d = pickBrkWhole(mx, my, 12);
+      if (w3d) make3DLine(w3d);
       else setStatusEd('No breakline there.');
     }
     else if (MODE === 'delbrk'){
@@ -3312,6 +3321,87 @@ function draw(){
     BOFFHOV = offsetPoly(L, side * BOFF.d);
     draw();
   }
+  /*  ΣΤ — the elevations for a flat line. Any vertex sitting on a survey point
+   *  takes that point's z; the rest are interpolated, along the line's own
+   *  length, between the nearest known vertex on each side — one before the
+   *  first or after the last known vertex simply copies it, no extrapolation.
+   *  Only the coincident points count as known: a flat line's own z is the
+   *  same fake value everywhere, never a source of truth here. Returns null
+   *  when the line touches no point at all — nothing to build from. */
+  function make3DVerts(cur){
+    var anchors = cur.map(function(v){ var hit = pointsOnVerts([v])[0]; return hit ? hit.z : null; });
+    if (anchors.every(function(z){ return z == null; })) return null;
+    var dist = [0];
+    for (var k = 1; k < cur.length; k++)
+      dist.push(dist[k-1] + Math.hypot(cur[k][0]-cur[k-1][0], cur[k][1]-cur[k-1][1]));
+    var next = cur.map(function(p){ return p.slice(); });
+    var matched = 0;
+    for (var k = 0; k < cur.length; k++){
+      if (anchors[k] != null){ next[k][2] = anchors[k]; matched++; continue; }
+      var bi = -1, ai = -1;
+      for (var b = k-1; b >= 0; b--) if (anchors[b] != null){ bi = b; break; }
+      for (var a = k+1; a < cur.length; a++) if (anchors[a] != null){ ai = a; break; }
+      if (bi >= 0 && ai >= 0){
+        var t = dist[ai] > dist[bi] ? (dist[k]-dist[bi]) / (dist[ai]-dist[bi]) : 0;
+        next[k][2] = anchors[bi] + t * (anchors[ai]-anchors[bi]);
+      } else {
+        next[k][2] = bi >= 0 ? anchors[bi] : anchors[ai];
+      }
+    }
+    return { verts: next, matched: matched };
+  }
+  /*  Whether a flat line came straight from the layer, per the server's
+   *  entity-type flag — undefined when the file predates that field. */
+  function isFlatLayerLine(n, L){
+    var i = GEOM[n].lines.indexOf(L);
+    return i >= 0 ? GEOM[n].line_flat[i] : undefined;
+  }
+  /*  The server's flat flag describes the line AS READ — it says nothing once
+   *  the line has been edited (Δ/Ε/Make 3D all go through EDITS.brkmv). Once
+   *  that has happened the edited z is the truth, so every 3D/2D read (snap
+   *  targets, bulk 2D/3D delete, the Properties label) has to stop trusting
+   *  the stale as-read flag and fall back to reading the actual z instead —
+   *  lineMetrics(L) with no flat argument does exactly that. */
+  function flatNow(n, L, i){
+    return brkMoveRec(L) ? null : GEOM[n].line_flat[i];
+  }
+  /*  ΣΤ — Make 3D changes the line IN PLACE (same identity, EDITS.brkmv) —
+   *  never a second, separate line: the two would share the same X/Y path,
+   *  and every "is this the same line" check in the app (cut, restore, snap)
+   *  matches on X/Y only, so a second line on the same path would be
+   *  indistinguishable from the first everywhere that matters. */
+  function make3DLine(wh){
+    if (wh.layer == null){ setStatusEd('A drawn line already carries real elevation.'); return; }
+    var flat = isFlatLayerLine(wh.layer, wh.orig);
+    if (flat == null){ setStatusEd('Whether this line is flat is not known — re-upload the file to use Make 3D here.'); return; }
+    if (!flat){ setStatusEd('This line already carries real elevation — nothing to convert.'); return; }
+    var r = make3DVerts(wh.line);
+    if (!r){ setStatusEd('No survey point lies on this line — nothing to make it 3D from.'); return; }
+    commitSteps(brkReplaceSteps(wh.orig, wh.layer, r.verts));
+    setStatusEd('Made 3D — ' + r.matched + ' of ' + r.verts.length + ' node' + (r.verts.length === 1 ? '' : 's') +
+      ' matched a survey point, the rest interpolated along the line — Ctrl+Z to undo.');
+  }
+  /*  Every flat breakline that touches at least one survey point, in one go.
+   *  Skips a line already carrying an edit — a bulk pass should not silently
+   *  overwrite something done by hand. */
+  window.make3DAll = function(){
+    var steps = [], count = 0, matched = 0, nodes = 0;
+    selS('brk').forEach(function(n){
+      if (!VIS[n]) return;
+      GEOM[n].lines.forEach(function(L, i){
+        if (L.length < 2 || isCutLine(L) || GEOM[n].line_flat[i] !== true || brkMoveRec(L)) return;
+        var r = make3DVerts(L);
+        if (!r) return;
+        steps = steps.concat(brkReplaceSteps(L, n, r.verts));
+        count++; matched += r.matched; nodes += r.verts.length;
+      });
+    });
+    if (!count){ setStatusEd('No flat breakline with a survey point on it was found.'); return; }
+    commitSteps(steps);
+    setStatusEd('Made 3D — ' + count + ' line' + (count === 1 ? '' : 's') + ', ' +
+      matched + ' of ' + nodes + ' node' + (nodes === 1 ? '' : 's') +
+      ' matched a survey point — Ctrl+Z to undo.');
+  };
   function setStatusEd(t){ document.getElementById('edHint').textContent = t; }
 
   // Moving a point: press, drag, release.
@@ -3682,13 +3772,13 @@ function draw(){
     var pool = [];
     if (eff('brk')){
       selS('brk').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) pool.push({t:'brk', line:brkGeom(L), layer:n, flat:GEOM[n].line_flat[i]}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ if (!isCutLine(L)) pool.push({t:'brk', line:brkGeom(L), layer:n, flat:flatNow(n, L, i)}); });
       });
       if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (!isCutLine(L)) pool.push({t:'brk', line:L, layer:null}); });
     }
     if (eff('bnd')){
       selS('bnd').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ pool.push({t:'bnd', line:L, layer:n, flat:GEOM[n].line_flat[i]}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ pool.push({t:'bnd', line:L, layer:n, flat:flatNow(n, L, i)}); });
       });
     }
     if (eff('base')){
@@ -4280,7 +4370,7 @@ function draw(){
     var hits = [];
     if (which !== 'drawn') selS('brk').forEach(function(n){
       if (!VIS[n]) return;
-      GEOM[n].lines.forEach(function(L, i){ if (L.length >= 2 && !isCutLine(L) && match(L, GEOM[n].line_flat[i])) hits.push(L); });
+      GEOM[n].lines.forEach(function(L, i){ if (L.length >= 2 && !isCutLine(L) && match(L, flatNow(n, L, i))) hits.push(L); });
     });
     if (which !== 'layer' && DRAWVIS.brk) EDITS.brk.forEach(function(L){
       if (L.length >= 2 && !isCutLine(L) && match(L)) hits.push(L);
