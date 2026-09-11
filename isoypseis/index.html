@@ -571,6 +571,14 @@
         </div>
       </div>
       <div class="mgroup">
+        <div class="mi" onclick="cmenu(this)">Boundary</div>
+        <div class="menu">
+          <button class="ed" data-m="bnddraw" onclick="setMode('bnddraw');closeMenus()"><span class="k">▣</span>Draw boundary</button>
+          <button class="ed" data-m="bndmv" onclick="setMode('bndmv');closeMenus()"><span class="k">✥</span>Move any vertex</button>
+          <button class="ed" data-m="bnddel" onclick="setMode('bnddel');closeMenus()"><span class="k">✖</span>Delete</button>
+        </div>
+      </div>
+      <div class="mgroup">
         <div class="mi" onclick="cmenu(this)">View</div>
         <div class="menu">
           <button class="ed" data-m="pan" onclick="setMode('pan');closeMenus()"><span class="k">👆</span>Pan mode<span class="chk"></span></button>
@@ -724,8 +732,10 @@ function newSurface(name){
      *  all, only Ctrl+Z brings them back · basecut: background lines erased
      *  (all kept by coordinates, put back on demand) · brkmv: a layer breakline
      *  whose vertices the user moved ({line: the original vertices — its
-     *  identity, verts: where they are now}). */
-    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], brkhide:[], basecut:[], brkmv:[] },
+     *  identity, verts: where they are now}) · bnd: drawn boundaries (2D, no
+     *  elevation) · bndmv: a layer boundary whose vertices the user moved,
+     *  same shape as brkmv. */
+    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], brkhide:[], basecut:[], brkmv:[], bnd:[], bndmv:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -736,7 +746,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -860,8 +870,8 @@ window.resetColors = function(){
  *  LAYERS tab as a pair of pseudo-layers with a locked role. This holds only
  *  their VIEW state: the eye and the canvas colour, kept on this computer. The
  *  geometry itself stays in the surface's edit list (Undo/Redo, autosave). */
-var DRAWVIS = { add:true, brk:true };
-var DRAWCOL = { add:'#ffd633', brk:'#00d5ff' };   // added points draw as a yellow cross
+var DRAWVIS = { add:true, brk:true, bnd:true };
+var DRAWCOL = { add:'#ffd633', brk:'#00d5ff', bnd:'#ff3df0' };   // added points draw as a yellow cross
 /*  One colour per edit-marker category, chosen so the five read apart at a
  *  glance: deleted red, moved orange, a moved point that lost its original
  *  ("new from move") violet, an elevation change cyan, a deleted triangle grey.
@@ -870,7 +880,7 @@ var CATCOL = { del:'#ff4d4d', move:'#ff9a3d', newmove:'#c58bff', setz:'#4dd0e1',
 (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
-    ['add','brk'].forEach(function(k){
+    ['add','brk','bnd'].forEach(function(k){
       if (!s[k]) return;
       if (s[k].on === false) DRAWVIS[k] = false;
       if (/^#[0-9a-f]{6}$/i.test(s[k].col)) DRAWCOL[k] = s[k].col;
@@ -881,7 +891,8 @@ function saveDrawLy(){
   try {
     localStorage.setItem('isoypseis.drawly', JSON.stringify({
       add: { on: DRAWVIS.add, col: DRAWCOL.add },
-      brk: { on: DRAWVIS.brk, col: DRAWCOL.brk }
+      brk: { on: DRAWVIS.brk, col: DRAWCOL.brk },
+      bnd: { on: DRAWVIS.bnd, col: DRAWCOL.bnd }
     }));
   } catch (e) {}
 }
@@ -897,7 +908,8 @@ function renderDrawLayers(){
   var na = (typeof EDITS !== 'undefined' && EDITS.add) ? EDITS.add.length : 0;
   if (typeof EDITS !== 'undefined' && EDITS.move) na += EDITS.move.length;   // moved points live here too
   var nb = (typeof EDITS !== 'undefined' && EDITS.brk) ? EDITS.brk.length : 0;
-  if (!na && !nb){ box.innerHTML = ''; return; }
+  var nd = (typeof EDITS !== 'undefined' && EDITS.bnd) ? EDITS.bnd.length : 0;
+  if (!na && !nb && !nd){ box.innerHTML = ''; return; }
   var mk = function(k, name, role, n, unit){
     return '<div class="lyrow' + (DRAWVIS[k] ? '' : ' off') + '">' +
       '<span class="eye" onclick="drawLyEye(\'' + k + '\')">' + (DRAWVIS[k] ? '👁' : '🚫') + '</span>' +
@@ -911,6 +923,7 @@ function renderDrawLayers(){
   var rows = '';
   if (na) rows += mk('add', 'DrawPoints', 'points', na, 'pt');
   if (nb) rows += mk('brk', 'DrawLines', 'breakline', nb, nb === 1 ? 'line' : 'lines');
+  if (nd) rows += mk('bnd', 'DrawBoundary', 'boundary', nd, nd === 1 ? 'line' : 'lines');
   box.innerHTML =
     '<div class="lyfile">' +
       '<div class="row" style="cursor:default">' +
@@ -1725,6 +1738,15 @@ function brkMoveRec(L){
   return null;
 }
 function brkGeom(L){ var r = brkMoveRec(L); return r ? r.verts : L; }
+/*  Boundary ▾ — the same identity trick as brkMoveRec/brkGeom, for a layer
+ *  boundary whose vertices the user dragged. The boundary has no elevation,
+ *  so unlike a breakline there is nothing else this needs to carry. */
+function bndMoveRec(L){
+  var mv = (typeof EDITS !== 'undefined' && EDITS.bndmv) || [];
+  for (var i = 0; i < mv.length; i++) if (sameLine(mv[i].line, L)) return mv[i];
+  return null;
+}
+function bndGeom(L){ var r = bndMoveRec(L); return r ? r.verts : L; }
 
 /*  Is this line out of the surface? — a deleted breakline (brkcut, shown red &
  *  dashed), one a second delete has hidden (brkhide, not shown at all), or an
@@ -1801,13 +1823,15 @@ function payload(){
   EDITS.brk.forEach(function(L){ if (L.length>=2 && !isCutLine(L)) brk.push(brkGeom(L)); });
 
   var bnd = null, best = -1;
-  selS('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){
+  var considerBnd = function(L){
     if (L.length < 4) return;
     // The largest closed shape is the area of interest.
     var a = 0; for (var i=0,j=L.length-1;i<L.length;j=i++) a += (L[j][0]+L[i][0])*(L[j][1]-L[i][1]);
     a = Math.abs(a/2);
     if (a > best){ best = a; bnd = L.map(function(p){ return [p[0],p[1]]; }); }
-  }); });
+  };
+  selS('bnd').forEach(function(n){ GEOM[n].lines.forEach(function(L){ considerBnd(bndGeom(L)); }); });
+  EDITS.bnd.forEach(considerBnd);
 
   return {points:pts, breaklines:brk, boundary:bnd,
           interval:numIn('iv'), clip:document.getElementById('clip').checked,
@@ -2188,7 +2212,8 @@ function draw(){
   selS('brk').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (!isCutLine(L)) addPoly(brkGeom(L)); }); });
   ctx.stroke();
   ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2; ctx.beginPath();
-  selS('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(L); }); });
+  selS('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ addPoly(bndGeom(L)); }); });
+  if (DRAWVIS.bnd) EDITS.bnd.forEach(function(L){ addPoly(L); });
   ctx.stroke();
   /*  The points, one per pixel. In a 50 km project 32,000 points fall on a few
    *  thousand pixels — the rest were drawn one on top of the other. */
@@ -2357,11 +2382,13 @@ function draw(){
     });
   }
 
-  // The line being drawn right now, and the point being dragged.
+  // The line (or boundary shape) being drawn right now.
   if (DRAWING && DRAWING.length){
-    ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
-    poly(DRAWING); ctx.setLineDash([]);
-    ctx.fillStyle = COLORS.brk;
+    var drawCol = MODE === 'bnddraw' ? COLORS.bnd : COLORS.brk;
+    ctx.strokeStyle = drawCol; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    poly(DRAWING, MODE === 'bnddraw' && DRAWING.length > 1);   // preview the closing edge
+    ctx.setLineDash([]);
+    ctx.fillStyle = drawCol;
     DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
   }
   /*  Breaklines Α — the snap node under the cursor, and a rubber band to it
@@ -2494,6 +2521,26 @@ function draw(){
     ctx.beginPath(); ctx.arc(btx, bty, BMOV.snapped ? 7 : 4.5, 0, 6.284); ctx.stroke();
   }
 
+  /*  Boundary ▾ — same idea, free (no snap ring). A closed ring's shared
+   *  start/end corner follows together, so the preview never shows a gap. */
+  if (BNDMOV){
+    var dg = bndGeom(BNDMOV.line);
+    var dclosed = dg.length > 2 &&
+      Math.abs(dg[0][0]-dg[dg.length-1][0]) < 1e-6 && Math.abs(dg[0][1]-dg[dg.length-1][1]) < 1e-6;
+    var sharedEnd = dclosed && (BNDMOV.vi === 0 || BNDMOV.vi === dg.length - 1);
+    ctx.strokeStyle = hexA(COLORS.bnd, .85); ctx.lineWidth = 1.6; ctx.setLineDash([5,4]);
+    ctx.beginPath();
+    for (var di = 0; di < dg.length; di++){
+      var moved = di === BNDMOV.vi || (sharedEnd && (di === 0 || di === dg.length - 1));
+      var dvx = moved ? SX(BNDMOV.to[0]) : SX(dg[di][0]);
+      var dvy = moved ? SY(BNDMOV.to[1]) : SY(dg[di][1]);
+      if (di) ctx.lineTo(dvx, dvy); else ctx.moveTo(dvx, dvy);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(SX(BNDMOV.to[0]), SY(BNDMOV.to[1]), 4.5, 0, 6.284); ctx.stroke();
+  }
+
   /*  Breaklines Ε — the parallel copy previewed while the side is chosen, and
    *  the source line lit so it is clear which one is being offset. */
   if (BOFF){
@@ -2528,6 +2575,7 @@ function draw(){
   var HOVER = null;
   var SNAPHOV = null, _snapRAF = 0;   // Breaklines Α — the node the cursor would snap onto
   var BMOV = null;           // Breaklines Γ — the breakline vertex being dragged
+  var BNDMOV = null;         // Boundary ▾ — the boundary vertex being dragged
   var BOFF = null, BOFFHOV = null;   // Breaklines Ε — an offset waiting for its side
   var IDHOV = null, _idRAF = 0;   // Vertex info — the node under the cursor, before the click
 
@@ -2535,7 +2583,8 @@ function draw(){
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
     brk:'New line', brkid:'Vertex info', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
-    brkoffset:'Offset a line', brk23d:'Make 3D', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle'
+    brkoffset:'Offset a line', brk23d:'Make 3D', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle',
+    bnddraw:'Draw boundary', bndmv:'Move a boundary vertex', bnddel:'Delete boundary'
   };
   function setMode(m){
     // Picking a click-tool again drops back to Select, the resting state of a
@@ -2544,7 +2593,7 @@ function draw(){
     // re-arms rather than toggling off; Esc leaves.
     var sticky = m === 'elev' || m === 'matchz';
     MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
-    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null; IDHOV = null;
+    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null; IDHOV = null; BNDMOV = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
     // Select and Elevation change both work on a selection — keep it across the
@@ -2583,6 +2632,9 @@ function draw(){
       brkraise: 'Click a breakline to change the elevation of the whole line. Survey points on it can follow.',
       brkoffset:'Click a breakline, set the distance, then click the side for a parallel copy.',
       brk23d: 'Click a flat breakline to fill it in with real elevations, from the survey points it touches.',
+      bnddraw:'Click to place each corner, Enter or right-click to close the shape · Esc finishes.',
+      bndmv: 'Drag any boundary vertex — free, no snapping.',
+      bnddel:'Click a boundary to remove it from this surface — a drawn one goes for good.',
       delbrk:'Click a breakline to delete it (turns red & dashed) · click a red one again to hide it · Ctrl+Z, or right-click Restore, brings it back.',
       swap:  'Click a triangle edge to swap its diagonal.',
       hole:  'Click a triangle to delete it — a hole in the surface.'
@@ -2657,7 +2709,7 @@ function draw(){
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2698,7 +2750,8 @@ function draw(){
        [(d.move||[]).length,'moved points'], [(d.setz||[]).length,'elevations changed'],
        [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
        [d.hole.length,'deleted triangles'], [(d.brkmv||[]).length,'moved lines'],
-       [(d.brkcut||[]).length + (d.brkhide||[]).length + (d.basecut||[]).length,'lines removed']]
+       [(d.brkcut||[]).length + (d.brkhide||[]).length + (d.basecut||[]).length,'lines removed'],
+       [(d.bnd||[]).length,'new boundaries'], [(d.bndmv||[]).length,'moved boundaries']]
       .filter(function(p){ return p[0]; })
       .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
   }
@@ -2954,6 +3007,13 @@ function draw(){
       }
       draw();
     }
+    else if (MODE === 'bnddraw'){
+      // Free placement — no snap, no elevation: the boundary only sets the
+      // area of interest, it never enters the triangulation.
+      if (!DRAWING) DRAWING = [];
+      DRAWING.push([w[0], w[1]]);
+      draw();
+    }
     else if (MODE === 'brkid'){
       var hi = pickBrkVertex(mx, my, 12);
       if (hi){ PICK = {kind:'brkv', x:hi.v[0], y:hi.v[1], z:hi.v[2]}; showPick(); draw(); }
@@ -2992,6 +3052,17 @@ function draw(){
         setStatusEd('Breakline deleted — click it again to clear it, Ctrl+Z to undo.');
       }
     }
+    else if (MODE === 'bnddel'){
+      var bdl = pickBndLine(mx, my, 12);
+      if (!bdl){ setStatusEd('No boundary there.'); return; }
+      if (bdl.layer == null){
+        pullOut('bnd', bdl.orig);
+        setStatusEd('Drawn boundary removed — Ctrl+Z to undo.');
+      } else {
+        surfSel('bnd', bdl.layer, false);
+        setStatusEd('Boundary dropped from this surface — re-tick it in Surface ▸ Boundary to bring it back.');
+      }
+    }
     else if (MODE === 'swap'){
       var e = pickEdge(mx, my);
       if (e) push('swap', e);
@@ -3009,7 +3080,7 @@ function draw(){
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
     var tn = ((ev.target && ev.target.tagName) || '').toLowerCase();
     var typing = tn === 'input' || tn === 'textarea' || tn === 'select';
-    if (ev.key === 'Enter' && MODE === 'brk' && !typing) endLine();   // finish, stay in the tool
+    if (ev.key === 'Enter' && (MODE === 'brk' || MODE === 'bnddraw') && !typing) endLine();   // finish, stay in the tool
     if (ev.key === 'Enter' && MODE === 'elev' && !typing){            // set the elevation of the selection
       ev.preventDefault();
       var ep = (typeof SEL !== 'undefined') ? SEL.filter(function(s){ return s.t === 'pt'; }) : [];
@@ -3018,7 +3089,7 @@ function draw(){
       return;
     }
     if (ev.key === 'Escape'){
-      if (MODE === 'brk' && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line
+      if ((MODE === 'brk' || MODE === 'bnddraw') && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line/shape
       DRAWING = null; clearPick();
       if (typeof selClear === 'function') selClear();
       setMode('select');                    // Esc always lands back in Select
@@ -3042,6 +3113,15 @@ function draw(){
     }
   });
   function endLine(){
+    if (MODE === 'bnddraw'){
+      if (DRAWING && DRAWING.length >= 3){
+        var ring = DRAWING.map(function(v){ return [v[0], v[1]]; });
+        ring.push(ring[0].slice());              // close the shape
+        push('bnd', ring);
+      }
+      DRAWING = null; draw();
+      return;
+    }
     if (DRAWING && DRAWING.length >= 2){
       // Every vertex was snapped onto a real elevation, so the line goes in as
       // drawn — no invented zeros (§10 #12).
@@ -3128,6 +3208,22 @@ function draw(){
       apply(m.z, false);
       setStatusEd('Vertex moved — its elevation is unchanged. Ctrl+Z to undo.');
     }
+  }
+  /*  Boundary ▾ — free move, no elevation to carry. A closed ring shares one
+   *  vertex between its start and its end (endLine() closes it on drawing) —
+   *  dragging that corner has to move both, or the ring would tear open. */
+  function commitBndVertex(m){
+    var cur = bndGeom(m.line);
+    var next = cur.map(function(p){ return p.slice(); });
+    next[m.vi] = [m.to[0], m.to[1]];
+    var closed = cur.length > 2 &&
+      Math.abs(cur[0][0]-cur[cur.length-1][0]) < 1e-6 && Math.abs(cur[0][1]-cur[cur.length-1][1]) < 1e-6;
+    if (closed && (m.vi === 0 || m.vi === cur.length - 1)){
+      next[0] = [m.to[0], m.to[1]];
+      next[cur.length - 1] = [m.to[0], m.to[1]];
+    }
+    commitSteps(bndReplaceSteps(m.line, m.layer, next));
+    setStatusEd('Boundary vertex moved — Ctrl+Z to undo.');
   }
 
   /*  ------------- Breaklines Δ / Ε: elevation, raise, offset ------------
@@ -3406,7 +3502,7 @@ function draw(){
 
   // Moving a point: press, drag, release.
   cv.addEventListener('mousedown', function(ev){
-    if (MODE !== 'move' && MODE !== 'brkmv') return;
+    if (MODE !== 'move' && MODE !== 'brkmv' && MODE !== 'bndmv') return;
     var r = cv.getBoundingClientRect();
     if (MODE === 'brkmv'){
       var h = pickBrkVertex(ev.clientX - r.left, ev.clientY - r.top, 10);
@@ -3415,6 +3511,14 @@ function draw(){
                  z:(h.v[2] == null ? null : h.v[2]), to:[h.v[0], h.v[1]], snapped:false };
         ev.stopPropagation();
       } else setStatusEd('No breakline vertex there.');
+      return;
+    }
+    if (MODE === 'bndmv'){
+      var hb = pickBndVertex(ev.clientX - r.left, ev.clientY - r.top, 10);
+      if (hb){
+        BNDMOV = { line:hb.line, layer:hb.layer, vi:hb.vi, to:[hb.v[0], hb.v[1]] };
+        ev.stopPropagation();
+      } else setStatusEd('No boundary vertex there.');
       return;
     }
     var p = pickPoint(ev.clientX - r.left, ev.clientY - r.top);
@@ -3440,6 +3544,10 @@ function draw(){
   });
   window.addEventListener('mousemove', function(ev){
     if (BOFF) offsetPreview(world(ev));
+  });
+  window.addEventListener('mousemove', function(ev){
+    if (!BNDMOV) return;
+    BNDMOV.to = world(ev); draw();          // free — no snap
   });
   /*  While a breakline is being drawn, show where the next click would land —
    *  the cursor only ever produces a vertex on a valid snap node. One scan per
@@ -3473,6 +3581,13 @@ function draw(){
       var g = brkGeom(b.line)[b.vi];
       if (Math.hypot(b.to[0] - g[0], b.to[1] - g[1]) < 1e-6){ draw(); return; }
       commitBrkVertex(b);
+      return;
+    }
+    if (BNDMOV){
+      var bm = BNDMOV; BNDMOV = null;
+      var gb = bndGeom(bm.line)[bm.vi];
+      if (Math.hypot(bm.to[0] - gb[0], bm.to[1] - gb[1]) < 1e-6){ draw(); return; }
+      commitBndVertex(bm);
       return;
     }
     if (!MOVING) return;
@@ -3778,8 +3893,9 @@ function draw(){
     }
     if (eff('bnd')){
       selS('bnd').forEach(function(n){
-        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ pool.push({t:'bnd', line:L, layer:n, flat:flatNow(n, L, i)}); });
+        if (VIS[n]) GEOM[n].lines.forEach(function(L, i){ pool.push({t:'bnd', line:bndGeom(L), layer:n, flat:flatNow(n, L, i)}); });
       });
+      if (DRAWVIS.bnd) EDITS.bnd.forEach(function(L){ pool.push({t:'bnd', line:L, layer:null}); });
     }
     if (eff('base')){
       Object.keys(GEOM).forEach(function(n){
@@ -4008,10 +4124,17 @@ function draw(){
     }
     if (s.t === 'brk' || s.t === 'bnd'){
       var m = lineMetrics(s.line, s.flat);
+      var areaLine = '';
+      if (s.t === 'bnd'){
+        var ar = 0, L = s.line;
+        for (var ai = 0, aj = L.length - 1; ai < L.length; aj = ai++) ar += (L[aj][0]+L[ai][0])*(L[ai][1]-L[aj][1]);
+        ar = Math.abs(ar / 2);
+        areaLine = '<br>Area ' + fmt(ar,1) + ' m² · ' + fmt(ar/10000,4) + ' ha';
+      }
       return '<div class="k" style="color:'+(s.t==='bnd'?COLORS.bnd:COLORS.brk)+'">' +
         (s.t === 'bnd' ? 'Boundary' : 'Breakline') + '</div>' +
         '<div class="v">' + (m.threeD ? '3D' : '2D') + ' · ' + m.nodes + ' nodes</div>' +
-        '<div class="d">Horizontal ' + fmt(m.hlen,2) + ' m' +
+        '<div class="d">Horizontal ' + fmt(m.hlen,2) + ' m' + areaLine +
         (m.threeD ? '<br>Along slope ' + fmt(m.slen,2) + ' m<br>Elevation ' +
           fmt(m.zmin,3) + ' – ' + fmt(m.zmax,3) + ' m' : '') + '</div>';
     }
@@ -4171,8 +4294,9 @@ function draw(){
     // finds them even when their layer is unticked or off this surface.
     (EDITS.brkcut || []).forEach(function(L){ pool.push({ t:'brk', line:L, layer:'cut' }); });
     selS('bnd').forEach(function(n){
-      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'bnd', line:L, layer:n }); });
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'bnd', line:bndGeom(L), orig:L, layer:n }); });
     });
+    if (DRAWVIS.bnd) EDITS.bnd.forEach(function(L){ pool.push({ t:'bnd', line:L, orig:L, layer:null }); });
     Object.keys(GEOM).forEach(function(n){
       if (!VIS[n] || ROLE[n] || !fileOn(n)) return;
       GEOM[n].lines.forEach(function(L){ pool.push({ t:'base', line:L, layer:n }); });
@@ -4321,7 +4445,8 @@ function draw(){
       } else if (it.t === 'base'){
         if (!isCutLine(it.line)){ steps.push(edAdd('basecut', it.line.map(function(p){ return p.slice(); }))); n++; }
       } else if (it.t === 'bnd'){
-        surfSel('bnd', it.layer, false); n++;      // a surface toggle — re-tick brings it back
+        if (it.layer == null){ var eb = edDel('bnd', it.line); if (eb){ steps.push(eb); n++; } }
+        else { surfSel('bnd', it.layer, false); n++; }   // a surface toggle — re-tick brings it back
       }
     });
     if (steps.length) UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
@@ -4345,6 +4470,38 @@ function draw(){
     if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) pool.push({ t:'brk', line:L, layer:null }); });
     (EDITS.brkcut || []).forEach(function(L){ pool.push({ t:'brk', line:L, layer:'cut' }); });
     return nearestPoly(mx, my, pool, px || 12);
+  }
+  /*  Boundary ▾ — one whole polygon, layer or drawn; `orig` is its identity
+   *  (for bndReplaceSteps / pullOut), `line` its current (possibly moved)
+   *  vertices. */
+  function pickBndLine(mx, my, px){
+    var pool = [];
+    selS('bnd').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ pool.push({ t:'bnd', line:bndGeom(L), orig:L, layer:n }); });
+    });
+    if (DRAWVIS.bnd) EDITS.bnd.forEach(function(L){ pool.push({ t:'bnd', line:L, orig:L, layer:null }); });
+    return nearestPoly(mx, my, pool, px || 12);
+  }
+  function pickBndVertex(mx, my, px){
+    px = px || 10;
+    var best = null, bd = px * px;
+    var scan = function(L, layer){
+      var G = bndGeom(L);
+      for (var i = 0; i < G.length; i++){
+        var dx = SX(G[i][0]) - mx, dy = SY(G[i][1]) - my, d = dx*dx + dy*dy;
+        if (d < bd){ bd = d; best = { line:L, layer:layer, vi:i, v:G[i] }; }
+      }
+    };
+    selS('bnd').forEach(function(n){ if (VIS[n]) GEOM[n].lines.forEach(function(L){ scan(L, n); }); });
+    if (DRAWVIS.bnd) EDITS.bnd.forEach(function(L){ scan(L, null); });
+    return best;
+  }
+  /*  Same replace-in-place trick as brkReplaceSteps, no elevation to carry. */
+  function bndReplaceSteps(line, layer, next){
+    if (layer == null) return [ edDel('bnd', line), edAdd('bnd', next) ];
+    var rec = bndMoveRec(line);
+    if (rec) return [ edDel('bndmv', rec), edAdd('bndmv', { line: rec.line, verts: next }) ];
+    return [ edAdd('bndmv', { line: line.map(function(p){ return p.slice(); }), verts: next }) ];
   }
   /*  A second delete on an already-deleted breakline: the brkcut record moves to
    *  brkhide and it stops being drawn at all. One Ctrl+Z returns it to the plain
@@ -4402,10 +4559,11 @@ function draw(){
   cv.addEventListener('contextmenu', function(ev){
     ev.preventDefault();
     if (typeof closeMenus === 'function') closeMenus();
-    if (MODE === 'brk' && DRAWING){            // a line is being drawn — its own menu
+    if ((MODE === 'brk' || MODE === 'bnddraw') && DRAWING){    // a line/shape is being drawn — its own menu
+      var drawWord = MODE === 'bnddraw' ? 'shape' : 'line';
       cvmOpen(ev.clientX, ev.clientY, [
-        { hd:'Drawing a line · ' + DRAWING.length + (DRAWING.length === 1 ? ' point' : ' points') },
-        { label:'Finish the line', k:'✔', disabled:DRAWING.length < 2,
+        { hd:'Drawing a ' + drawWord + ' · ' + DRAWING.length + (DRAWING.length === 1 ? ' point' : ' points') },
+        { label:'Finish the ' + drawWord, k:'✔', disabled:DRAWING.length < (MODE === 'bnddraw' ? 3 : 2),
           run:function(){ endLine(); setMode('select'); } },
         { label:'Undo last point', k:'↶',
           run:function(){ DRAWING.pop(); if (!DRAWING.length) DRAWING = null; draw(); } },
@@ -4481,11 +4639,15 @@ function draw(){
       items = items.concat(groundMenu());
     } else if (hit && hit.t === 'bnd'){
       items = [
-        { hd:'Boundary' },
-        { label:'Remove from this surface', k:'✖', run:function(){
-            surfSel('bnd', hit.layer, false);
-            setStatusEd('Boundary dropped from this surface — re-tick it in Surface ▸ Boundary to bring it back.');
-          } },
+        { hd: hit.layer == null ? 'Drawn boundary' : 'Boundary' },
+        hit.layer == null
+          ? { label:'Delete', k:'✖', run:function(){
+                pullOut('bnd', hit.orig); setStatusEd('Drawn boundary removed — Ctrl+Z to undo.');
+              } }
+          : { label:'Remove from this surface', k:'✖', run:function(){
+                surfSel('bnd', hit.layer, false);
+                setStatusEd('Boundary dropped from this surface — re-tick it in Surface ▸ Boundary to bring it back.');
+              } },
         { sep:true }
       ].concat(groundMenu());
     } else if (hit && hit.t === 'base'){
