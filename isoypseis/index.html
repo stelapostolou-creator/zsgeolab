@@ -321,7 +321,8 @@
   <span class="pro">PRO</span>
 </header>
 
-<input type="file" id="file" accept=".dxf,.txt,.csv" style="display:none">
+<input type="file" id="file" accept=".dxf,.txt,.csv,.xml" style="display:none">
+<input type="file" id="fileZsg" accept=".zsg" style="display:none">
 
 <main>
   <div class="space">
@@ -335,9 +336,10 @@
         <div class="jobbtns">
           <button onclick="newJob()" title="New Job — start an empty one">✚</button>
           <button disabled title="Open From Account — coming soon">📂</button>
-          <button disabled title="Import .zsg — coming soon">⬇</button>
+          <button onclick="exportZsg()" title="Export .zsg — save this job to a file, to open on another browser or computer">⬆</button>
+          <button onclick="document.getElementById('fileZsg').click()" title="Import .zsg — load a job from a file, replacing the one open now">⬇</button>
           <button disabled title="Send To Account — coming soon">☁</button>
-          <button class="prim" disabled title="Save — coming soon">💾</button>
+          <button class="prim" onclick="saveNow(true)" title="Save — write this job to the browser now (autosave already does this every 3 minutes)">💾</button>
         </div>
         <div class="asnote">Autosaves to this browser every 3 minutes and when you close the tab.
           Calculations are <b>not</b> saved — press Calculate after opening. Export a <b>.zsg</b> to keep a job elsewhere.</div>
@@ -359,12 +361,27 @@
               <div id="info"></div>
               <div id="fileList"></div>
               <div id="fileBtns" class="miniBtns">
-                <button onclick="document.getElementById('file').click()" title="Open File — add a DXF, TXT or CSV">＋</button>
+                <button onclick="document.getElementById('file').click()" title="Open File — add a DXF, TXT, CSV or LandXML">＋</button>
                 <button id="fRmUntick" onclick="clearFilesUnticked()" title="Remove Unticked — drop the files you unticked" disabled>⊘</button>
                 <button id="fRmAll" onclick="clearFilesAll()" title="Remove All — clear every loaded file" disabled>🗑</button>
               </div>
-              <div class="sub">DXF (any version — points, lines, blocks) · TXT / CSV columns
-                <span class="mono">pt, x, y, z, description</span>. Three columns read as <span class="mono">x y z</span>.</div>
+              <div class="sub">DXF (any version — points, lines, blocks) · LandXML (.xml — CgPoints and/or a
+                Surface's points, breaklines, boundary; its own triangles are ignored, this tool triangulates
+                fresh) · TXT / CSV columns <span class="mono">pt, x, y, z, description</span>. Three columns
+                read as <span class="mono">x y z</span>.</div>
+            </div></div>
+          </div>
+
+          <div class="node collapsed" id="nGeo">
+            <div class="row" onclick="tw(this)"><span class="tw">▸</span><span class="ic">🛰</span><span class="lbl">Basemap</span></div>
+            <div class="kids"><div class="cnt">
+              <div class="pr"><label>Projection of this drawing — EPSG code</label>
+                <input id="geoEpsg" type="text" inputmode="numeric" placeholder="e.g. 2100 for ΕΓΣΑ87" onchange="geoEpsgChanged(this.value)"></div>
+              <div class="hint">Only to line up the satellite view — turn it on in <b>View → Satellite basemap</b>.
+                ΕΓΣΑ87 (2100) uses the official HEPOS method (centimetre accuracy); any other EPSG uses a
+                standard transform (metre-level — plenty for a background image). Never touches the
+                calculation, the DXF/LandXML/DEM exports, or any coordinate you see elsewhere in the tool.</div>
+              <div id="geoOut"></div>
             </div></div>
           </div>
 
@@ -404,12 +421,21 @@
                       <h4>Surface</h4>
                       <div class="pr"><label>Contour interval (m)</label>
                         <input id="iv" type="text" inputmode="decimal" value="0.50"></div>
-                      <div class="pr"><label><input type="checkbox" id="wmesh" checked> Digital terrain model (triangles)</label></div>
-                      <div class="pr"><label><input type="checkbox" id="clip" checked> Clip to the area of interest</label></div>
-                      <div class="pr"><label>Max triangle edge — <span class="mono">off</span><span class="soonbadge">soon</span></label>
-                        <input type="range" min="0" max="100" value="0" disabled></div>
-                      <div class="pr"><label><input type="checkbox" disabled> Contours only from 3D polylines<span class="soonbadge">soon</span></label></div>
-                      <div class="pr"><label><input type="checkbox" disabled> Contour smoothing<span class="soonbadge">soon</span></label></div>
+                      <div class="pr"><label>Max triangle edge (m)</label>
+                        <input id="maxEdge" type="text" inputmode="decimal" placeholder="off"></div>
+                      <div class="pr"><label><input type="checkbox" id="linesOnly"> Contours only from 3D polylines</label></div>
+                      <div class="hint">Ignores any points layer and builds the surface only from the breaklines' own vertices. Needs "Elevation of the lines" set to "From the drawing" — a file with only 3D lines and no separate points layer works too, with or without this ticked.</div>
+                      <div class="pr"><label>Contour smoothing — <span class="mono" id="smoothV">off</span></label>
+                        <input id="smooth" type="range" min="0" max="100" value="0"
+                          oninput="document.getElementById('smoothV').textContent = smoothLabel(this.value)"></div>
+                      <div class="hint">Drawing style only — the curve still passes through every point where the
+                        contour crosses a triangle, and the elevations do not change. The exported DXF gets the same
+                        curve. If neighbouring contours start to cross, turn it down.</div>
+                      <div class="pr"><label>Elevation shift (m)</label>
+                        <input id="zShift" type="text" inputmode="decimal" placeholder="none — e.g. 2 or -1.5"></div>
+                      <div class="hint">Added to every point and breakline elevation of this surface only. The
+                        contours, the report and everything in the exported DXF (points, breaklines, contours) come out
+                        shifted. The drawing, the labels on screen and the edit tools keep the original values.</div>
 
                       <h4>Points</h4>
                       <div class="pr"><label>Elevation limits (m) — points outside are left out</label>
@@ -417,6 +443,8 @@
                           <input id="zlo" type="text" inputmode="decimal" placeholder="min">
                           <input id="zhi" type="text" inputmode="decimal" placeholder="max">
                         </div>
+                        <label id="zlimShL" style="display:block;margin-top:4px"><input type="checkbox" id="zlimSh" disabled>
+                          The limits are on the shifted surface</label>
                         <div class="hint" id="zRange">Pick the points layer to see its range.</div>
                       </div>
 
@@ -434,16 +462,14 @@
                         count as the same node. Too small and a hand-drawn line just misses its point; too large
                         and separate points merge into one.</div>
 
-                      <h4>Contour labels<span class="soonbadge">soon</span></h4>
-                      <div class="pr"><label>Paper text height — <span class="mono">2.5 mm</span></label>
-                        <input type="range" min="10" max="50" value="25" disabled></div>
-                      <div class="pr"><label>Rotation</label>
-                        <select disabled><option>Horizontal (0)</option><option>Along the contour</option></select></div>
-                      <div class="pr"><label><input type="checkbox" checked disabled> Mask behind the text</label></div>
-
                       <h4>Appearance</h4>
                       <div class="hint">Colours are kept on this computer. They do not change the exported DXF.</div>
                       <div class="cset-grid" id="csetGrid" style="margin-top:4px"></div>
+                      <label class="cset-row" style="margin-top:2px">
+                        <span>Contour label size (px)</span>
+                        <input id="lblSize" type="text" inputmode="decimal" style="width:3.5em"
+                          value="11" onchange="setLblSize(this.value)">
+                      </label>
                       <label class="cset-row" style="margin-top:2px">
                         <span>Tint points by layer</span>
                         <input type="checkbox" id="tintPts" onchange="setTintPts(this.checked)">
@@ -458,19 +484,6 @@
                     <div class="kids"><div class="cnt">
                       <button class="go" id="go" onclick="build()">📈 Calculate</button>
                       <div id="out"></div>
-                    </div></div>
-                  </div>
-
-                  <div class="node" id="cEdit" hidden>
-                    <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">✎</span><span class="lbl">Edits</span><span class="tag mono" id="edN">0</span></div>
-                    <div class="kids"><div class="cnt">
-                      <div class="hint">Your file is <b>never changed</b>. The edits are kept separately and can all be undone.</div>
-                      <div id="edList"></div>
-                      <div class="miniBtns">
-                        <button id="edUndo" onclick="undoEdit()">↶ Undo</button>
-                        <button id="edRedo" onclick="redoEdit()">↷ Redo</button>
-                        <button onclick="clearEdits()" title="Undo them all">🗑</button>
-                      </div>
                       <div id="edStale" hidden>
                         <div class="warnbox">The result is out of date — large drawing, the calculation does not run on its own.</div>
                         <button class="go" style="width:100%;margin-top:8px" onclick="build()">🔄 Recalculate</button>
@@ -481,10 +494,27 @@
                   <div class="node" id="cOut" hidden>
                     <div class="row" onclick="tw(this)"><span class="tw">▾</span><span class="ic">⇩</span><span class="lbl">Export</span></div>
                     <div class="kids"><div class="cnt">
-                      <div class="pr"><label><input type="checkbox" id="dBrk"> Include the breaklines</label></div>
-                      <div class="pr"><label><input type="checkbox" id="dPts"> Include the points</label></div>
+                      <div class="pr"><label><input type="checkbox" id="dBrk"> Include breaklines</label></div>
+                      <div class="pr"><label><input type="checkbox" id="dPts"> Include points</label></div>
+                      <div class="pr"><label>Print scale — 1 :</label>
+                        <input id="pscale" type="text" inputmode="decimal" placeholder="e.g. 500"></div>
+                      <div class="pr"><label>Contour label height on paper (mm)</label>
+                        <input id="pmm" type="text" inputmode="decimal" value="2.5"></div>
+                      <div class="hint">Sets the size of the contour elevation labels in the exported DXF, so they read the same on paper at any scale. Leave the scale empty to keep the old fixed size.</div>
                       <button class="go" onclick="dxf()">📐 Download DXF</button>
                       <div id="dxfOut"></div>
+                      <button class="go" onclick="landxml()">🏗 Download LandXML</button>
+                      <div class="hint">The triangulated surface as a real TIN — Civil3D (Insert Data From Surface) opens it as a
+                        surface object, not a drawing. No contours or labels — Civil3D builds its own from the surface.
+                        "Include breaklines / points" above adds them here too, as reference data.</div>
+                      <div id="landxmlOut"></div>
+                      <div class="pr"><label>DEM cell size (m)</label>
+                        <input id="demStep" type="text" inputmode="decimal" value="1.00"></div>
+                      <button class="go" onclick="dem()">🗺 Download DEM</button>
+                      <div class="hint">A regular elevation grid, Esri ASCII Grid format (.asc) — opens in QGIS,
+                        ArcGIS, Global Mapper, and Civil3D as a surface. Only where the surface's own
+                        triangulation reaches; everywhere else is NODATA.</div>
+                      <div id="demOut"></div>
                     </div></div>
                   </div>
 
@@ -509,12 +539,42 @@
           </div>
         </div><!-- /pane-layers -->
 
+        <div class="pane" id="pane-volume">
+          <div class="cnt" style="padding:10px 12px 10px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <b style="color:var(--ink)">⛰ Volume</b><span class="tag" id="nVolTag"></span>
+            </div>
+            <div class="sub">Cut and fill between two surfaces of this job. Each surface is
+              built exactly the way its own Calculate builds it — breaklines, boundary, edits, shift.</div>
+            <div id="volNeed2" class="hint" hidden>Add a second surface (＋ in the Surface node, JOB tab) to compare two.</div>
+            <div class="pr"><label>Surface A — existing / before</label>
+              <select id="volA" onchange="volSet('a', +this.value)"></select></div>
+            <div class="pr"><label>Surface B — design / after</label>
+              <select id="volB" onchange="volSet('b', +this.value)"></select></div>
+            <div class="hint">Cut where A is above B, fill where A is below B.</div>
+            <div class="pr"><label>Volume boundary</label>
+              <select id="volRing" onchange="volSet('src', this.value)"></select></div>
+            <button class="btn ghost ed" data-m="voldraw" style="width:100%;margin-top:4px"
+              onclick="setMode('voldraw')">▣ Draw volume boundary</button>
+            <div class="hint">Separate from the boundary of either surface. "Whole surface" drops the
+              surfaces' own boundaries too and measures everywhere both triangulations exist. A boundary layer can be picked too. While drawing, a click
+              near a point or a line vertex snaps onto it.</div>
+            <div class="pr"><label>Grid spacing (m)</label>
+              <input id="volStep" type="text" inputmode="decimal" value="1.00" onchange="volSet('step', this.value)"></div>
+            <div class="pr"><label><input type="checkbox" id="volShow" checked onchange="volSet('show', this.checked)"> Show cut / fill on the canvas</label></div>
+            <button class="go" id="volGo" onclick="volCompute()">⛰ Compute volume</button>
+            <div id="volOut"></div>
+            <button class="btn ghost" id="volPdf" style="width:100%;margin-top:8px" onclick="volReport()" hidden>🖨 Report (PDF)</button>
+          </div>
+        </div><!-- /pane-volume -->
+
       </div><!-- /space-scroll -->
     </div><!-- /space-body -->
 
     <div class="space-tabs">
       <button class="on" data-p="job" onclick="ztab(this)">JOB</button>
       <button data-p="layers" onclick="ztab(this)">LAYERS</button>
+      <button data-p="volume" id="tabVolume" onclick="ztab(this)" hidden>VOLUME</button>
     </div>
   </div><!-- /space -->
 
@@ -539,7 +599,11 @@
           <div class="div"></div>
           <button id="vMesh" onclick="tog('mesh')"><span class="k">△</span>Triangles<span class="chk"></span></button>
           <button id="vIso"  onclick="tog('iso')"><span class="k">〰</span>Contours<span class="chk"></span></button>
+          <button id="vLbl"  onclick="tog('labels')"><span class="k">🏷</span>Contour labels<span class="chk"></span></button>
+          <button id="mLblLn" class="ed" data-m="lblln" onclick="setMode('lblln');closeMenus()"><span class="k">📏</span>New label line</button>
           <button id="vZ"    onclick="tog('z')"><span class="k">#</span>Elevations<span class="chk"></span></button>
+          <button id="vVol"  onclick="volSet('show', !VOL.show)"><span class="k">⛰</span>Cut / fill (volume)<span class="chk"></span></button>
+          <button id="vSat"  onclick="tog('basemap')"><span class="k">🛰</span>Satellite basemap<span class="chk"></span></button>
           <div class="div"></div>
           <div class="mnote">Edit marks on the canvas:</div>
           <button id="vpDel"  onclick="togEP('del')"><span class="k">✖</span>Deleted points<span class="chk"></span></button>
@@ -580,6 +644,8 @@
           <button class="ed" data-m="brk" onclick="setMode('brk');closeMenus()"><span class="k">📐</span>New line</button>
           <button class="ed" data-m="brkid" onclick="setMode('brkid');closeMenus()"><span class="k">ℹ</span>Vertex info</button>
           <button class="ed" data-m="brkmv" onclick="setMode('brkmv');closeMenus()"><span class="k">✥</span>Move a vertex</button>
+          <button class="ed" data-m="addbrkv" onclick="setMode('addbrkv');closeMenus()"><span class="k">➕</span>Add vertex</button>
+          <button class="ed" data-m="delbrkv" onclick="setMode('delbrkv');closeMenus()"><span class="k">✖</span>Delete vertex</button>
           <button class="ed" data-m="brkvz" onclick="setMode('brkvz');closeMenus()"><span class="k">↕</span>Vertex elevation…</button>
           <button class="ed" data-m="brkraise" onclick="setMode('brkraise');closeMenus()"><span class="k">⭥</span>Line elevation…</button>
           <button class="ed" data-m="brkoffset" onclick="setMode('brkoffset');closeMenus()"><span class="k">∥</span>Offset a line…</button>
@@ -630,7 +696,7 @@
 
 <script>
 /*  Toolspace shell: the vertical tabs on the panel's right edge switch the
- *  scrolling area between the JOB pane and the LAYERS pane. Layout only — it
+ *  scrolling area between the JOB, LAYERS and VOLUME panes. Layout only — it
  *  touches nothing the calculation script owns. */
 function ztab(btn){
   var strip = btn.parentElement;
@@ -699,7 +765,7 @@ var RES = null;         // the server's result — for the ACTIVE surface
 var PICK = null;        // what the last click identified
 var MEANZ = null;       // mean elevation of the points last sent
 var ZCUT = {p:0, v:0};  // points / line vertices left out by the elevation limits
-var SHOW = {mesh:true, iso:true, z:false};
+var SHOW = {mesh:true, iso:true, z:false, labels:false, basemap:false};
 /*  Which kinds of edit marker are drawn on the canvas. A view filter only —
  *  it hides the marks, never the edit itself, and is not kept in the job.
  *  "add" is not here: the added points are a pseudo-layer with their own eye
@@ -718,7 +784,7 @@ var T = {s:1, x:0, y:0};
 function newSurface(name){
   return {
     name: name,
-    settings: { interval:'0.50', zlo:'', zhi:'', blz:'file', clip:true, wmesh:true, tol:'1' },
+    settings: { interval:'0.50', zlo:'', zhi:'', zShift:'', zlimSh:false, blz:'file', tol:'1', maxEdge:'', linesOnly:false, smooth:'0' },
     /*  Which role layers feed THIS surface. Only exclusions are stored
      *  ({layer:false}); a layer not listed is included. So a new layer is on
      *  for every surface by default. */
@@ -736,8 +802,10 @@ function newSurface(name){
      *  whose vertices the user moved ({line: the original vertices — its
      *  identity, verts: where they are now}) · bnd: drawn boundaries (2D, no
      *  elevation) · bndmv: a layer boundary whose vertices the user moved,
-     *  same shape as brkmv. */
-    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], brkhide:[], basecut:[], brkmv:[], bnd:[], bndmv:[] },
+     *  same shape as brkmv · extralbl: a label the user placed with "New
+     *  label line" ({z,i,x,y}) — no role in the calculation, but still an
+     *  edit: Ctrl+Z undoes it, and it survives a reload with the job. */
+    edits: { del:[], delhide:[], add:[], move:[], setz:[], brk:[], swap:[], hole:[], brkcut:[], brkhide:[], basecut:[], brkmv:[], bnd:[], bndmv:[], extralbl:[] },
     undo: [], redo: [], res: null
   };
 }
@@ -748,7 +816,7 @@ function normSel(x){
 /*  An older job's surface may miss the newer edit lists — fill them in. */
 function normEdits(e){
   if (!e) return null;
-  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv'].forEach(function(k){ if (!e[k]) e[k] = []; });
+  ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv','extralbl'].forEach(function(k){ if (!e[k]) e[k] = []; });
   return e;
 }
 /*  Does the ACTIVE surface pull from this layer? (default yes) */
@@ -771,6 +839,368 @@ window.surfSel = function(role, layer, on){
 var SURFACES = [ newSurface('Surface 1') ];
 var ACTIVE = 0;
 
+/*  ============================== VOLUME ==============================
+ *
+ *  Cut / fill between two surfaces of the job. The math is on the server
+ *  (/api/dtm/volume): each surface is rebuilt there with the constrained
+ *  triangulation from the SAME payload its Calculate sends, so breaklines,
+ *  its own boundary, its edits and its shift all count. This side only
+ *  gathers the two payloads, sends the polygon, and paints the answer.
+ *
+ *  a / b: surface indices · src: 'whole', 'drawn' or 'ly:<layer>' · ring:
+ *  the drawn volume boundary · step: grid spacing as typed · show: paint the
+ *  grid · res: the last answer (transient, like RES) · img: that answer as an
+ *  image. The drawn boundary's own eye is DRAWVIS.vol (LAYERS tab). */
+var VOL = { a:0, b:1, src:'', ring:null, step:'1.00', show:true, res:null, img:null };
+/*  The drawn volume boundary is picked on its own — a click in Select mode —
+ *  not through SEL: it is no surface's data and has no undo. */
+var VOLSEL = false;
+
+/*  Drawing and deleting the volume boundary go on the ACTIVE surface's undo
+ *  stack as one plain record {op:'vol', before, after} — so Ctrl+Z / the Undo
+ *  button take them back like any edit. Undoing one never recalculates the
+ *  surface: nothing of the surface changed. A result computed on the drawn
+ *  boundary is dropped whenever that boundary changes. */
+function volState(){ return { ring: VOL.ring ? VOL.ring.map(function(p){ return p.slice(); }) : null, src: VOL.src }; }
+function volSetState(s){
+  VOL.ring = s.ring ? s.ring.map(function(p){ return p.slice(); }) : null;
+  VOL.src = s.src; VOLSEL = false;
+  volDropResult(); renderVolume(); renderDrawLayers(); draw(); touch();
+}
+function volRecord(before){
+  UNDO.push({ op:'vol', before: before, after: volState() });
+  REDO.length = 0;
+  if (typeof edBadge === 'function') edBadge();
+}
+
+/*  Delete key or right-click on the picked volume boundary. */
+window.volDeleteRing = function(){
+  if (!VOL.ring) return;
+  var before = volState();
+  VOL.ring = null; VOLSEL = false;
+  if (VOL.src === 'drawn') VOL.src = '';
+  volSetState(volState());
+  volRecord(before);
+};
+
+/*  The polygon as [[x,y],…], or null. A layer gives its largest closed shape,
+ *  the same rule a surface uses — read from the drawing as it is, without the
+ *  vertex moves any one surface made to it: the volume polygon belongs to no
+ *  surface. */
+function volRing(){
+  if (VOL.src === 'drawn') return VOL.ring;
+  if (VOL.src.indexOf('ly:') !== 0) return null;
+  var g = GEOM[VOL.src.slice(3)]; if (!g) return null;
+  var best = -1, out = null;
+  g.lines.forEach(function(L){
+    if (L.length < 4) return;
+    var a = 0; for (var i=0,j=L.length-1;i<L.length;j=i++) a += (L[j][0]+L[i][0])*(L[j][1]-L[i][1]);
+    a = Math.abs(a/2);
+    if (a > best){ best = a; out = L.map(function(p){ return [p[0],p[1]]; }); }
+  });
+  return out;
+}
+
+/*  payload() reads the ACTIVE surface from the globals and the DOM. For
+ *  another surface, those are swapped in for the length of the call and put
+ *  straight back — no redraw, no UI in between, and the live settings of the
+ *  active surface are read back from the DOM first so nothing typed is lost. */
+function payloadOf(i){
+  if (i === ACTIVE) return payload();
+  var keepA = ACTIVE, keepE = EDITS, keepZ = ZCUT, st = readSettings();
+  try {
+    ACTIVE = i; EDITS = SURFACES[i].edits;
+    writeSettings(SURFACES[i].settings);
+    return payload();
+  } finally {
+    ACTIVE = keepA; EDITS = keepE;
+    writeSettings(st);
+    ZCUT = keepZ;
+  }
+}
+
+function volDropResult(){
+  VOL.res = null; VOL.img = null;
+  var o = document.getElementById('volOut'); if (o) o.innerHTML = '';
+  var p = document.getElementById('volPdf'); if (p) p.hidden = true;
+}
+
+function renderVolume(){
+  var tab = document.getElementById('tabVolume'); if (!tab) return;
+  var show = !!Object.keys(GEOM).length;
+  tab.hidden = !show;
+  // The tab was open and just lost its content (e.g. "New Job") — don't
+  // strand the user on a blank pane.
+  if (!show && tab.classList.contains('on')) {
+    var jobBtn = document.querySelector('.space-tabs button[data-p="job"]');
+    if (jobBtn) ztab(jobBtn);
+  }
+  var n = SURFACES.length;
+  // Indices that no longer point at a surface fall back to the first two.
+  if (!(VOL.a >= 0 && VOL.a < n)) VOL.a = 0;
+  if (!(VOL.b >= 0 && VOL.b < n)) VOL.b = n > 1 ? (VOL.a === 0 ? 1 : 0) : 0;
+  var opts = function(sel){
+    return SURFACES.map(function(s, i){
+      return '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+    }).join('');
+  };
+  document.getElementById('volA').innerHTML = opts(VOL.a);
+  document.getElementById('volB').innerHTML = opts(VOL.b);
+  document.getElementById('volNeed2').hidden = n > 1;
+
+  var ro = '<option value="">— pick a volume boundary —</option>' +
+           '<option value="whole">Whole surface — ignores every boundary</option>';
+  if (VOL.ring) ro += '<option value="drawn">Drawn volume boundary</option>';
+  sel('bnd').forEach(function(ly){ ro += '<option value="ly:' + esc(ly) + '">Layer: ' + esc(ly) + '</option>'; });
+  var rs = document.getElementById('volRing');
+  rs.innerHTML = ro;
+  rs.value = VOL.src;
+  if (rs.value !== VOL.src) { VOL.src = ''; rs.value = ''; }    // its layer is gone
+  document.getElementById('volStep').value = VOL.step;
+  document.getElementById('volShow').checked = VOL.show;
+  var vv = document.querySelector('#vVol .chk'); if (vv) vv.textContent = VOL.show ? '✓' : '';   // View menu twin
+  document.getElementById('nVolTag').textContent = VOL.res ? 'net ' + fmt(VOL.res.net, 1) + ' m³' : '';
+}
+
+window.volSet = function(k, v){
+  VOL[k] = v;
+  if (k !== 'show') volDropResult();
+  renderVolume(); draw(); touch();
+};
+
+/*  A surface was removed: indices past it slide down one. */
+function volSurfaceRemoved(i){
+  ['a','b'].forEach(function(k){ if (VOL[k] > i) VOL[k]--; else if (VOL[k] === i) VOL[k] = -1; });
+  volDropResult();
+}
+
+window.volCompute = function(){
+  var out = 'volOut';
+  if (SURFACES.length < 2){ warn(out, 'The job has only one surface — add a second one to compare.'); return; }
+  if (VOL.a === VOL.b){ warn(out, 'Pick two different surfaces.'); return; }
+  var whole = VOL.src === 'whole';
+  var ring = whole ? null : volRing();
+  if (!whole && (!ring || ring.length < 3)){ warn(out, 'Pick a volume boundary — whole surface, a boundary layer, or draw one.'); return; }
+  var step = numIn('volStep');
+  if (!(step > 0)){ warn(out, 'Give the grid spacing in metres.'); return; }
+  var pa = payloadOf(VOL.a), pb = payloadOf(VOL.b);
+  /*  "Whole surface" means the whole triangulated surface: each surface's own
+   *  boundary is dropped too (asked for by the user — with it, the result
+   *  still stopped at that boundary). Everything else of the surface stays. */
+  if (whole){ pa.boundary = null; pb.boundary = null; }
+  var names = [SURFACES[VOL.a].name, SURFACES[VOL.b].name];
+  var empty = [pa, pb].map(function(p){ return p.points.length < 3 && !p.breaklines.length; });
+  if (empty[0] || empty[1]){
+    warn(out, esc(names[empty[0] ? 0 : 1]) + ' has nothing to build from — fewer than 3 points and no breakline.');
+    return;
+  }
+  var body = { surface_a: pa, surface_b: pb, surface_a_name: names[0], surface_b_name: names[1],
+               ring: ring, spacing: step };
+  var btn = document.getElementById('volGo'); btn.disabled = true;
+  document.getElementById(out).innerHTML = '<div class="hint">Computing…</div>';
+  var asked = JSON.stringify([VOL.a, VOL.b, VOL.src, step]);
+  fetch(ZSServer.api('/api/dtm/volume'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      btn.disabled = false;
+      if (!j.ok){ warn(out, esc(j.error)); return; }
+      // The choices changed while it ran — this answer is for something else.
+      if (asked !== JSON.stringify([VOL.a, VOL.b, VOL.src, numIn('volStep')])) return;
+      j.names = names;
+      VOL.res = j; VOL.img = volImage(j.grid);
+      j.ring = ring;
+      volShowResult(j); renderVolume(); draw();
+      document.getElementById('volPdf').hidden = false;
+    })
+    .catch(function(e){ btn.disabled = false; warn(out, 'The server did not answer: ' + esc(e.message)); });
+};
+
+/*  The result as table rows [label, value-html] — shared by the panel and the
+ *  printed report, so the two can never disagree. With "whole surface" the
+ *  grid is only the rectangle around both surfaces: its empty corners say
+ *  nothing, so the "no surface" rows are left out. */
+function volRows(j){
+  var m3 = function(v){ return fmt(v, 2) + ' m³'; };
+  var m2 = function(v){ return fmt(v, 1) + ' m²'; };
+  var rows = [
+    ['Cut', m3(j.cut) + ' · on ' + m2(j.area_cut)],
+    ['Fill', m3(j.fill) + ' · on ' + m2(j.area_fill)],
+    ['Net (cut − fill)', (j.net > 0 ? '+' : '') + m3(j.net)],
+    ['Volume boundary', j.whole ? 'whole surface' : m2(j.area_polygon) + ' · ' + fmt(j.area_polygon / 10000, 4) + ' ha'],
+    ['Grid', fmt(j.spacing, 2) + ' m · ' + j.cells + ' cells'],
+    ['Measured on', m2(j.area_covered)]
+  ];
+  if (!j.whole){
+    rows.push(['Cells area', m2(j.area_cells)]);
+    if (j.area_no_a) rows.push(['No ' + esc(j.names[0]), m2(j.area_no_a)]);
+    if (j.area_no_b) rows.push(['No ' + esc(j.names[1]), m2(j.area_no_b)]);
+  }
+  if (j.drift_pct != null){
+    rows.push(['Half spacing', 'cut ' + fmt(j.half.cut, 2) + '<br>fill ' + fmt(j.half.fill, 2)]);
+    rows.push(['Drift', fmt(j.drift_pct, 2) + ' %']);
+  }
+  return rows;
+}
+
+function volShowResult(j){
+  var h = '<div class="tblwrap" style="max-height:none"><table><tbody>' +
+    volRows(j).map(function(r){ return '<tr><td>' + r[0] + '</td><td class="mono">' + r[1] + '</td></tr>'; }).join('') +
+    '</tbody></table></div>';
+  if (j.area_uncovered && !j.whole)
+    h += '<div class="hint">' + fmt(j.area_uncovered, 1) + ' m² inside the volume boundary has no surface on one ' +
+         'side or both — not counted in the volumes.</div>';
+  h += '<div class="hint">' + esc(j.names[0]) + ' against ' + esc(j.names[1]) +
+       '. Compute again after changing either surface.</div>';
+  document.getElementById('volOut').innerHTML = h;
+}
+
+/*  The server's grid (Float32, rows from the bottom up, NaN = no value) as a
+ *  one-pixel-per-cell image: red = cut, blue = fill, stronger the deeper. */
+function volImage(g){
+  if (!g || !g.nx || !g.ny) return null;
+  var bin = atob(g.d), buf = new ArrayBuffer(bin.length), u8 = new Uint8Array(buf);
+  for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  var D = new Float32Array(buf), nx = g.nx, ny = g.ny, dmax = 0;
+  for (i = 0; i < D.length; i++) { var a = Math.abs(D[i]); if (a > dmax) dmax = a; }   // NaN never wins
+  var c = document.createElement('canvas'); c.width = nx; c.height = ny;
+  var cx = c.getContext('2d'), im = cx.createImageData(nx, ny), px = im.data;
+  for (var r = 0; r < ny; r++) {
+    var src = (ny - 1 - r) * nx;             // image row 0 is the TOP of the grid
+    for (var k = 0; k < nx; k++) {
+      var d = D[src + k], o = (r * nx + k) * 4;
+      if (!(d === d) || d === 0) continue;   // NaN or exactly level — clear
+      var t = dmax > 0 ? Math.abs(d) / dmax : 0;
+      if (d > 0) { px[o] = 255; px[o+1] = 70;  px[o+2] = 70; }
+      else       { px[o] = 60;  px[o+1] = 140; px[o+2] = 255; }
+      px[o+3] = Math.round(70 + 150 * t);
+    }
+  }
+  cx.putImageData(im, 0, 0);
+  return { canvas: c, x0: g.x0, y0: g.y0, nx: nx, ny: ny, h: g.spacing };
+}
+
+/*  Painted under the triangles and contours, so the lines stay readable. Two
+ *  separate switches: the cut / fill colours (VOL.show — View menu and the
+ *  node's tick) and the drawn volume boundary, a layer of its own with its eye
+ *  in the LAYERS tab (DRAWVIS.vol). A boundary picked from a layer is already
+ *  drawn by that layer. */
+function drawVolume(){
+  if (!Object.keys(GEOM).length) return;
+  var im = VOL.img;
+  if (VOL.show && im){
+    var left = SX(im.x0 - im.h / 2), top = SY(im.y0 + (im.ny - 0.5) * im.h);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(im.canvas, left, top, im.nx * im.h * T.s, im.ny * im.h * T.s);
+    ctx.restore();
+  }
+  if (VOL.ring && DRAWVIS.vol){
+    ctx.strokeStyle = DRAWCOL.vol; ctx.lineWidth = VOLSEL ? 3.5 : 2;
+    if (!VOLSEL) ctx.setLineDash([8, 5]);
+    poly(VOL.ring, true);
+    ctx.setLineDash([]);
+    if (VOLSEL){                       // picked: a square on every corner, like a selected line
+      ctx.fillStyle = COLORS.bg;
+      VOL.ring.forEach(function(p){ var x = SX(p[0]), y = SY(p[1]); ctx.fillRect(x-4, y-4, 8, 8); ctx.strokeRect(x-4, y-4, 8, 8); });
+    }
+  }
+}
+
+/*  The printed report: the numbers and a picture of the area — the cut / fill
+ *  colours, both surfaces' contours (where they were calculated) and the
+ *  volume boundary — in a new window that opens the browser's print dialog,
+ *  where "Save as PDF" is one of the printers. No PDF library to load, and
+ *  every character prints as the browser shows it. */
+function volSnapshot(j, W, H){
+  var im = VOL.img;
+  var b = [Infinity, Infinity, -Infinity, -Infinity];
+  var ext = function(p){ if (p[0]<b[0]) b[0]=p[0]; if (p[1]<b[1]) b[1]=p[1]; if (p[0]>b[2]) b[2]=p[0]; if (p[1]>b[3]) b[3]=p[1]; };
+  if (j.ring) j.ring.forEach(ext);
+  else if (im){ ext([im.x0 - im.h/2, im.y0 - im.h/2]); ext([im.x0 + (im.nx-0.5)*im.h, im.y0 + (im.ny-0.5)*im.h]); }
+  if (!(b[2] > b[0]) || !(b[3] > b[1])) return null;
+  var pad = 0.06 * Math.max(b[2]-b[0], b[3]-b[1]);
+  b = [b[0]-pad, b[1]-pad, b[2]+pad, b[3]+pad];
+  var s = Math.min(W / (b[2]-b[0]), H / (b[3]-b[1]));
+  var ox = (W - (b[2]-b[0])*s) / 2, oy = (H - (b[3]-b[1])*s) / 2;
+  var X = function(x){ return ox + (x - b[0]) * s; };
+  var Y = function(y){ return H - oy - (y - b[1]) * s; };
+  var c = document.createElement('canvas'); c.width = W; c.height = H;
+  var g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  var ringPath = function(){
+    g.beginPath();
+    j.ring.forEach(function(p, i){ i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1])); });
+    g.closePath();
+  };
+  g.save();
+  if (j.ring){ ringPath(); g.clip(); }          // the picture shows only what was measured
+  if (im){
+    g.imageSmoothingEnabled = false;
+    g.drawImage(im.canvas, X(im.x0 - im.h/2), Y(im.y0 + (im.ny-0.5)*im.h), im.nx*im.h*s, im.ny*im.h*s);
+  }
+  // Contours of each surface from its last Calculate — A dark grey, B brown.
+  var resOf = function(i){ return i === ACTIVE ? RES : (SURFACES[i] && SURFACES[i].res); };
+  [[VOL.a, '#333333'], [VOL.b, '#9a5b13']].forEach(function(q){
+    var R = resOf(q[0]); if (!R || !R.contours) return;
+    g.strokeStyle = q[1];
+    R.contours.levels.forEach(function(lv){
+      g.lineWidth = isMainLevel(lv.z) ? 1.6 : 0.7;
+      g.beginPath();
+      lv.lines.forEach(function(L){ L.forEach(function(p, i){ i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1])); }); });
+      g.stroke();
+    });
+  });
+  g.restore();
+  if (j.ring){ g.strokeStyle = '#7b2fd0'; g.lineWidth = 2.5; g.setLineDash([12, 7]); ringPath(); g.stroke(); g.setLineDash([]); }
+  // Scale bar: a round length close to a fifth of the width.
+  var target = (W / 5) / s, step = Math.pow(10, Math.floor(Math.log10(target)));
+  var len = [5, 2, 1].map(function(k){ return k * step; }).filter(function(v){ return v <= target; })[0] || step;
+  var bx = 24, by = H - 24;
+  g.strokeStyle = '#000'; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + len*s, by); g.stroke();
+  g.fillStyle = '#000'; g.font = '16px Arial, sans-serif';
+  g.fillText(len + ' m', bx, by - 8);
+  return c.toDataURL('image/png');
+}
+
+window.volReport = function(){
+  var j = VOL.res; if (!j) return;
+  var img = volSnapshot(j, 1600, 1100);
+  var has = function(i){ var R = i === ACTIVE ? RES : (SURFACES[i] && SURFACES[i].res); return !!(R && R.contours); };
+  var sw = function(col){ return '<span style="display:inline-block;width:22px;height:0;border-top:3px solid ' + col + ';vertical-align:middle;margin-right:6px"></span>'; };
+  var box = function(col){ return '<span style="display:inline-block;width:14px;height:14px;background:' + col + ';vertical-align:middle;margin-right:6px"></span>'; };
+  var html = '<!doctype html><html><head><meta charset="utf-8"><title>Volume report — ' + esc(JOBNAME) + '</title>' +
+    '<style>body{font:13px Arial,sans-serif;color:#111;margin:18mm}h1{font-size:20px;margin:0 0 4px}' +
+    '.sub{color:#555;margin-bottom:14px}table{border-collapse:collapse;width:100%;margin:10px 0}' +
+    'td{border:1px solid #bbb;padding:5px 8px}td:first-child{width:34%;background:#f3f3f3}' +
+    'img{width:100%;border:1px solid #bbb;margin-top:10px}.leg{margin-top:6px;color:#333}.leg span.i{margin-right:18px;white-space:nowrap}' +
+    '.note{color:#555;font-size:11px;margin-top:10px}@page{size:A4;margin:0}</style></head><body>' +
+    '<h1>Volume report</h1>' +
+    '<div class="sub">' + esc(JOBNAME) + ' · ' + new Date().toLocaleString() + ' · ZSGround</div>' +
+    '<table><tbody>' +
+    '<tr><td>Surface A — existing / before</td><td>' + esc(j.names[0]) + '</td></tr>' +
+    '<tr><td>Surface B — design / after</td><td>' + esc(j.names[1]) + '</td></tr>' +
+    volRows(j).map(function(r){ return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>'; }).join('') +
+    '</tbody></table>' +
+    (img ? '<img src="' + img + '">' : '') +
+    '<div class="leg">' +
+      '<span class="i">' + box('rgba(255,70,70,.8)') + 'Cut — A above B</span>' +
+      '<span class="i">' + box('rgba(60,140,255,.8)') + 'Fill — A below B</span>' +
+      (j.ring ? '<span class="i">' + sw('#7b2fd0') + 'Volume boundary</span>' : '') +
+      (has(VOL.a) ? '<span class="i">' + sw('#333333') + 'Contours ' + esc(j.names[0]) + '</span>' : '') +
+      (has(VOL.b) ? '<span class="i">' + sw('#9a5b13') + 'Contours ' + esc(j.names[1]) + '</span>' : '') +
+    '</div>' +
+    '<div class="note">Grid method: the elevation of each surface is read at the centre of every grid cell from ' +
+      'its constrained triangulation (breaklines enforced); volume = difference × cell area. "Half spacing" repeats ' +
+      'the calculation on a grid twice as dense — a small drift means the grid is dense enough. Areas without both ' +
+      'surfaces are not counted. Coordinates EGSA87.</div>' +
+    '<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  if (!w){ warn('volOut', 'The browser blocked the report window — allow pop-ups for this page.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+};
+
 /*  Canvas colours. The choices are kept on this computer (localStorage) and
  *  never touch the exported DXF — only the screen. Keys added later still get
  *  their own default. */
@@ -782,11 +1212,13 @@ var COLOR_DEF = {
   index: '#ff8f3a',   // index contours — brighter orange, to stand out from the minor ones
   mesh:  '#9aa3b2',   // model triangles (drawn faint) — light grey
   brk:   '#00d5ff',   // breaklines
-  bnd:   '#ff3df0'    // area boundary
+  bnd:   '#ff3df0',   // area boundary
+  labels:'#ff8f3a'    // contour elevation labels
 };
 var COLOR_LABELS = {
   bg:'Background', base:'Base drawing', pts:'Points', minor:'Contours',
-  index:'Index contours', mesh:'Triangles', brk:'Breaklines', bnd:'Boundary'
+  index:'Index contours', mesh:'Triangles', brk:'Breaklines', bnd:'Boundary',
+  labels:'Contour labels'
 };
 var COLORS = (function(){
   var c = {};
@@ -839,6 +1271,18 @@ function tintOf(hex, i, n){
   return hslToHex(hh, ss, l);
 }
 var TINT = (function(){ try { return localStorage.getItem('isoypseis.tintpts') === '1'; } catch (e) { return false; } })();
+/*  On-screen size of the contour elevation labels, in px — display only,
+ *  unrelated to the paper-scale height used for the DXF export. */
+var LBLSIZE = (function(){
+  try { return parseInt(localStorage.getItem('isoypseis.lblsize'), 10) || 11; }
+  catch (e) { return 11; }
+})();
+window.setLblSize = function(v){
+  v = parseInt(v, 10);
+  LBLSIZE = (v > 0) ? v : 11;
+  try { localStorage.setItem('isoypseis.lblsize', LBLSIZE); } catch (e) {}
+  draw(); touch();
+};
 window.setTintPts = function(on){
   TINT = !!on;
   try { localStorage.setItem('isoypseis.tintpts', TINT ? '1' : '0'); } catch (e) {}
@@ -861,6 +1305,7 @@ function buildColorUI(){
     });
   });
   var t = document.getElementById('tintPts'); if (t) t.checked = TINT;
+  var ls = document.getElementById('lblSize'); if (ls) ls.value = LBLSIZE;
 }
 window.resetColors = function(){
   for (var k in COLOR_DEF) COLORS[k] = COLOR_DEF[k];
@@ -872,8 +1317,8 @@ window.resetColors = function(){
  *  LAYERS tab as a pair of pseudo-layers with a locked role. This holds only
  *  their VIEW state: the eye and the canvas colour, kept on this computer. The
  *  geometry itself stays in the surface's edit list (Undo/Redo, autosave). */
-var DRAWVIS = { add:true, brk:true, bnd:true };
-var DRAWCOL = { add:'#ffd633', brk:'#00d5ff', bnd:'#ff3df0' };   // added points draw as a yellow cross
+var DRAWVIS = { add:true, brk:true, bnd:true, vol:true };
+var DRAWCOL = { add:'#ffd633', brk:'#00d5ff', bnd:'#ff3df0', vol:'#c38bff' };   // added points draw as a yellow cross
 /*  One colour per edit-marker category, chosen so the five read apart at a
  *  glance: deleted red, moved orange, a moved point that lost its original
  *  ("new from move") violet, an elevation change cyan, a deleted triangle grey.
@@ -882,7 +1327,7 @@ var CATCOL = { del:'#ff4d4d', move:'#ff9a3d', newmove:'#c58bff', setz:'#4dd0e1',
 (function(){
   try {
     var s = JSON.parse(localStorage.getItem('isoypseis.drawly') || '{}');
-    ['add','brk','bnd'].forEach(function(k){
+    ['add','brk','bnd','vol'].forEach(function(k){
       if (!s[k]) return;
       if (s[k].on === false) DRAWVIS[k] = false;
       if (/^#[0-9a-f]{6}$/i.test(s[k].col)) DRAWCOL[k] = s[k].col;
@@ -894,7 +1339,8 @@ function saveDrawLy(){
     localStorage.setItem('isoypseis.drawly', JSON.stringify({
       add: { on: DRAWVIS.add, col: DRAWCOL.add },
       brk: { on: DRAWVIS.brk, col: DRAWCOL.brk },
-      bnd: { on: DRAWVIS.bnd, col: DRAWCOL.bnd }
+      bnd: { on: DRAWVIS.bnd, col: DRAWCOL.bnd },
+      vol: { on: DRAWVIS.vol, col: DRAWCOL.vol }
     }));
   } catch (e) {}
 }
@@ -911,11 +1357,13 @@ function renderDrawLayers(){
   if (typeof EDITS !== 'undefined' && EDITS.move) na += EDITS.move.length;   // moved points live here too
   var nb = (typeof EDITS !== 'undefined' && EDITS.brk) ? EDITS.brk.length : 0;
   var nd = (typeof EDITS !== 'undefined' && EDITS.bnd) ? EDITS.bnd.length : 0;
-  if (!na && !nb && !nd){ box.innerHTML = ''; return; }
+  var nv = (typeof VOL !== 'undefined' && VOL.ring) ? 1 : 0;   // the drawn volume boundary — job-wide, not a surface edit
+  if (!na && !nb && !nd && !nv){ box.innerHTML = ''; return; }
   var mk = function(k, name, role, n, unit){
     return '<div class="lyrow' + (DRAWVIS[k] ? '' : ' off') + '">' +
       '<span class="eye" onclick="drawLyEye(\'' + k + '\')">' + (DRAWVIS[k] ? '👁' : '🚫') + '</span>' +
-      '<span class="nm" title="Drawn on the canvas — held in the edit list, can be undone">' +
+      '<span class="nm" title="' + (k === 'vol' ? 'Drawn from the Volume node — a new one replaces it'
+                                                 : 'Drawn on the canvas — held in the edit list, can be undone') + '">' +
         esc(name) + ' <span class="lblmark">' + role + '</span></span>' +
       '<input type="color" value="' + DRAWCOL[k] + '" title="Colour on the canvas" ' +
         'onchange="drawLyCol(\'' + k + '\',this.value)">' +
@@ -926,6 +1374,7 @@ function renderDrawLayers(){
   if (na) rows += mk('add', 'DrawPoints', 'points', na, 'pt');
   if (nb) rows += mk('brk', 'DrawLines', 'breakline', nb, nb === 1 ? 'line' : 'lines');
   if (nd) rows += mk('bnd', 'DrawBoundary', 'boundary', nd, nd === 1 ? 'line' : 'lines');
+  if (nv) rows += mk('vol', 'Volume boundary', 'volume', 1, 'shape');
   box.innerHTML =
     '<div class="lyfile">' +
       '<div class="row" style="cursor:default">' +
@@ -1093,30 +1542,41 @@ function readSettings() {
     interval: document.getElementById('iv').value,
     zlo: document.getElementById('zlo').value,
     zhi: document.getElementById('zhi').value,
+    zShift: document.getElementById('zShift').value,
+    zlimSh: document.getElementById('zlimSh').checked,
     blz: document.getElementById('blz').value,
-    clip: document.getElementById('clip').checked,
-    wmesh: document.getElementById('wmesh').checked,
-    tol: document.getElementById('snapTol').value
+    tol: document.getElementById('snapTol').value,
+    maxEdge: document.getElementById('maxEdge').value,
+    linesOnly: document.getElementById('linesOnly').checked,
+    smooth: document.getElementById('smooth').value
   };
 }
+function smoothLabel(v){ v = +v || 0; return v ? v + ' %' : 'off'; }
 function writeSettings(st) {
   st = st || {};
   document.getElementById('iv').value = st.interval != null ? st.interval : '0.50';
   document.getElementById('zlo').value = st.zlo || '';
   document.getElementById('zhi').value = st.zhi || '';
+  document.getElementById('zShift').value = st.zShift || '';        // older jobs have none — no shift
+  document.getElementById('zlimSh').checked = !!st.zlimSh;
+  zShiftUI();
   document.getElementById('blz').value = st.blz || 'file';
-  document.getElementById('clip').checked = st.clip !== false;
-  document.getElementById('wmesh').checked = st.wmesh !== false;
   var st_tol = st.tol != null ? st.tol : '1';
   document.getElementById('snapTol').value = st_tol;
   document.getElementById('snapTolV').textContent = st_tol + ' mm';
+  document.getElementById('maxEdge').value = st.maxEdge != null ? st.maxEdge : '';
+  document.getElementById('linesOnly').checked = !!st.linesOnly;
+  var st_sm = st.smooth != null ? st.smooth : '0';     // older jobs have none — off
+  document.getElementById('smooth').value = st_sm;
+  document.getElementById('smoothV').textContent = smoothLabel(st_sm);
 }
 function collectJob() {
   return {
     name: JOBNAME,
     modified: Date.now(),
     version: 2,
-    appearance: { colors: COLORS, tintPts: TINT },
+    appearance: { colors: COLORS, tintPts: TINT, lblSize: LBLSIZE },
+    geo: { epsg: GEO.epsg },
     active: ACTIVE,
     /*  The drawing and its roles are shared across every surface. */
     shared: {
@@ -1133,9 +1593,67 @@ function collectJob() {
         undo:     i === ACTIVE ? UNDO : s.undo,
         redo:     i === ACTIVE ? REDO : s.redo
       };
-    })
+    }),
+    /*  The volume choices — not the answer, which Compute rebuilds. */
+    volume: { a: VOL.a, b: VOL.b, src: VOL.src, ring: VOL.ring, step: VOL.step, show: VOL.show }
   };
 }
+/*  The .zsg file is just collectJob()'s JSON, given a name and pushed to
+ *  disk — the same shape applyJob() already reads back for the autosave
+ *  restore, so Import below is a thin wrapper around applyJob(). */
+function exportZsg() {
+  // Only strip characters a filesystem rejects — Greek job names (the
+  // common case here) should reach the downloaded filename intact.
+  var safe = (JOBNAME || 'job').trim().replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_') || 'job';
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(collectJob())], {type: 'application/octet-stream'}));
+  a.download = safe + '.zsg'; a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+function importZsgError(msg) {
+  modalOpen(
+    '<h3>Could not import</h3><p>' + esc(msg) + '</p>' +
+    '<div class="mbtns"><button class="prim" onclick="modalClose()">OK</button></div>'
+  );
+}
+/*  Loading a .zsg fully replaces the open job (same as applyJob() already
+ *  does for the autosave restore) — warn first if there is work open, same
+ *  wording/pattern as "New Job". */
+function importZsg(job) {
+  function doImport() {
+    applyJob(job);
+    SAVED_JOB = null;
+    var jr = document.getElementById('jobRestore'); if (jr) jr.hidden = true;
+    touch(); saveNow();          // persist the import right away, not on the next autosave beat
+  }
+  if (Object.keys(GEOM).length === 0) { doImport(); return; }
+  modalOpen(
+    '<h3>Import this job?</h3>' +
+    '<p>"<b>' + esc(JOBNAME) + '</b>" is open. Importing "<b>' + esc(job.name || 'Untitled job') +
+    '</b>" replaces it — anything since the last autosave is lost.</p>' +
+    '<div class="mbtns">' +
+      '<button class="ghost" onclick="modalClose()">Cancel</button>' +
+      '<button class="danger" id="mImportGo">Discard &amp; import</button>' +
+    '</div>'
+  );
+  document.getElementById('mImportGo').addEventListener('click', function () { modalClose(); doImport(); });
+}
+document.getElementById('fileZsg').addEventListener('change', function (ev) {
+  var f = ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var job;
+    try { job = JSON.parse(reader.result); }
+    catch (e) { importZsgError('This is not a valid .zsg file — it is not readable JSON.'); return; }
+    if (!job || typeof job !== 'object' || !Array.isArray(job.surfaces)) {
+      importZsgError('This does not look like a ZSGround .zsg job file.'); return;
+    }
+    importZsg(job);
+  };
+  reader.onerror = function () { importZsgError('Could not read the file.'); };
+  reader.readAsText(f);
+});
 function markSaved(t) {
   var el = document.getElementById('jobSaved');
   if (el) el.textContent = 'saved ' + new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1147,8 +1665,11 @@ function touch() {
   if (RESTORING) return;
   DIRTY = true;
 }
-function saveNow() {
-  if (RESTORING || !DIRTY) return Promise.resolve();
+/*  force=true (the 💾 button) writes even if nothing changed since the last
+ *  beat — the point is to let the user confirm "yes, saved now" on demand.
+ *  Same write either way: this browser only, until accounts exist. */
+function saveNow(force) {
+  if (RESTORING || (!DIRTY && !force)) return Promise.resolve();
   DIRTY = false;
   return ZSJob.put(collectJob())
     .then(function () { markSaved(Date.now()); })
@@ -1181,6 +1702,11 @@ function applyJob(job) {
   if (job.appearance && job.appearance.colors)
     for (var k in COLOR_DEF) if (job.appearance.colors[k]) COLORS[k] = job.appearance.colors[k];
   if (job.appearance && typeof job.appearance.tintPts === 'boolean') TINT = job.appearance.tintPts;
+  if (job.appearance && job.appearance.lblSize > 0) LBLSIZE = job.appearance.lblSize;
+  GEO = { epsg: (job.geo && job.geo.epsg) || '' };
+  GEOFIT = null; GEOFIT_BUSY = false;
+  var ge = document.getElementById('geoEpsg'); if (ge) ge.value = GEO.epsg;
+  var go = document.getElementById('geoOut'); if (go) go.innerHTML = '';
   JOBNAME = job.name || 'Untitled job';
 
   var list = (job.surfaces && job.surfaces.length) ? job.surfaces : [{}];
@@ -1198,17 +1724,28 @@ function applyJob(job) {
   var a = SURFACES[ACTIVE];
   EDITS = a.edits; UNDO = a.undo; REDO = a.redo;
   RES = null; PICK = null; MEANZ = null; ZCUT = { p: 0, v: 0 };
+  // Labels come back only once Calculate has rebuilt the contours they're
+  // pinned to (see EDITS.extralbl's own comment for the tradeoff this accepts).
+  EXTRALBL = EDITS.extralbl;
   writeSettings(a.settings);
+  var jv = job.volume || {};                // older jobs have none
+  VOL = { a: jv.a != null ? jv.a : 0, b: jv.b != null ? jv.b : 1, src: jv.src || '', ring: jv.ring || null,
+          step: jv.step || '1.00', show: jv.show !== false, res: null, img: null };
+  volDropResult();
 
   var has = Object.keys(GEOM).length;
   document.getElementById('cLayers').hidden = !has;
   document.getElementById('cCalc').hidden = !has;
-  document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
   document.getElementById('cOut').hidden = true;
   renderJob(); renderFiles(); buildColorUI(); renderLayers(); renderSurfaceChips();
   if (typeof edBadge === 'function') edBadge();
+  vChecks();
   has ? fit() : draw();
   RESTORING = false;
+  // Opening a job (Import .zsg, or the autosave restore) used to leave every
+  // surface uncalculated until the user pressed Calculate by hand, once per
+  // surface. Do it for them, right away.
+  if (has) autoCalcSurfaces();
 }
 
 /*  ============================ SWITCHING ============================
@@ -1225,6 +1762,7 @@ function loadActive() {
   writeSettings(s.settings);
   EDITS = s.edits; UNDO = s.undo; REDO = s.redo;
   RES = s.res || null;
+  EXTRALBL = EDITS.extralbl;
   MEANZ = null; ZCUT = { p: 0, v: 0 };
   clearPick();
   var has = Object.keys(GEOM).length;
@@ -1234,7 +1772,7 @@ function loadActive() {
   document.getElementById('edStale').hidden = true;
   document.getElementById('dxfOut').innerHTML = '';
   if (RES) show(RES);
-  edBadge();                       // also sets cEdit.hidden
+  edBadge();
   refreshZRange();
   renderSurfaceChips();
   draw();                          // the view (pan/zoom) is shared, so keep it
@@ -1258,6 +1796,7 @@ window.removeSurface = function (i) {
   if (!confirm('Remove "' + SURFACES[i].name + '"? Its settings and edits are lost.')) return;
   if (i === ACTIVE) { /* dropping the live one — nothing to stash */ }
   else stashActive();
+  volSurfaceRemoved(i);
   SURFACES.splice(i, 1);
   if (i < ACTIVE) ACTIVE--;
   else if (i === ACTIVE) ACTIVE = Math.min(ACTIVE, SURFACES.length - 1);
@@ -1300,6 +1839,7 @@ function renderSurfaceUI(){
   var bl = selS('brk').length;
   document.getElementById('nPointsTag').textContent = sel('pts').length ? pt + ' pt' : '';
   document.getElementById('nBrkTag').textContent = sel('brk').length ? bl + (bl === 1 ? ' layer' : ' layers') : '';
+  renderVolume();                  // surface names and boundary layers feed its pickers
 }
 function renderSurfaceChips() {
   renderSurfaceUI();
@@ -1653,7 +2193,10 @@ function wipe(names, full){
     RES = null; MEANZ = null; ZCUT = {p:0, v:0};
     SURFACES = [ newSurface('Surface 1') ]; ACTIVE = 0;
     EDITS = SURFACES[0].edits; UNDO = SURFACES[0].undo; REDO = SURFACES[0].redo;
+    EXTRALBL = EDITS.extralbl;
     writeSettings(SURFACES[0].settings);
+    VOL = { a:0, b:1, src:'', ring:null, step:'1.00', show:true, res:null, img:null };
+    volDropResult();
     DRAWING = null; MOVING = null;
     ['out','info','dxfOut'].forEach(function(id){ var e=document.getElementById(id); if(e) e.innerHTML=''; });
   }
@@ -1661,7 +2204,6 @@ function wipe(names, full){
   clearPick(); renderFiles(); renderLayers(); renderSurfaceChips(); edBadge();
   document.getElementById('cLayers').hidden = !left;
   document.getElementById('cCalc').hidden = !left;
-  document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
   document.getElementById('cOut').hidden = !RES;
   left ? fit() : draw();
   touch();
@@ -1695,7 +2237,7 @@ function zStats(){
   var eat = function(p){ var z = p[2]; if (z == null) return;
     if (z < lo) lo = z; if (z > hi) hi = z; s += z; n++; };
   selS('pts').forEach(function(nm){
-    if (!VIS[nm]) return;
+    if (!VIS[nm] || !GEOM[nm]) return;    // a job's settings can land before its drawing does
     GEOM[nm].points.forEach(eat);
     GEOM[nm].lines.forEach(function(L){ L.forEach(eat); });
   });
@@ -1703,10 +2245,31 @@ function zStats(){
 }
 function refreshZRange(){
   var el = document.getElementById('zRange'); if (!el) return;
-  var st = zStats();
+  var st = zStats(), sh = zShift();
   el.textContent = st
-    ? 'range ' + fmt(st.min,2) + ' – ' + fmt(st.max,2) + ' m · mean ' + fmt(st.mean,2)
+    ? 'range ' + fmt(st.min,2) + ' – ' + fmt(st.max,2) + ' m · mean ' + fmt(st.mean,2) +
+      (sh ? ' · shifted ' + fmt(st.min+sh,2) + ' – ' + fmt(st.max+sh,2) + ' m' : '')
     : 'Pick the points layer to see its range.';
+}
+
+/*  The active surface's elevation shift, in metres — 0 when the field is
+ *  empty or not a number. Each surface keeps its own (it lives in settings). */
+function zShift(){ var v = numIn('zShift'); return isFinite(v) ? v : 0; }
+/*  One line for the info panels: where an original elevation lands on the
+ *  shifted surface. Nothing when there is no shift or no elevation. */
+function shiftNote(z){
+  var sh = zShift();
+  if (!sh || z == null) return '';
+  return 'On the surface ' + fmt(z + sh, 3) + ' m (shift ' + (sh > 0 ? '+' : '') + fmt(sh, 3) + ')<br>';
+}
+/*  "The limits are on the shifted surface" means something only while there
+ *  is a shift, so it is greyed out otherwise. Its tick is kept, not cleared:
+ *  with no shift the two readings of the limits are the same anyway. */
+function zShiftUI(){
+  var on = zShift() !== 0;
+  document.getElementById('zlimSh').disabled = !on;
+  document.getElementById('zlimShL').style.opacity = on ? '' : '.45';
+  refreshZRange();
 }
 
 // -------------------------------------------------------- what is sent ---
@@ -1784,11 +2347,19 @@ function payload(){
     return o == null ? p : [p[0], p[1], o];
   };
 
-  /*  The elevation band. NaN when the field is empty — then that side is off. */
+  /*  The elevation band. NaN when the field is empty — then that side is off.
+   *  The limits are read against the ORIGINAL elevations, unless the user ticked
+   *  that they were typed for the shifted surface. */
   var zlo = numIn('zlo'), zhi = numIn('zhi');
   var loOn = !isNaN(zlo), hiOn = !isNaN(zhi);
-  var inband = function(z){ return z == null || ((!loOn || z >= zlo) && (!hiOn || z <= zhi)); };
+  var sh = zShift();
+  var limOff = document.getElementById('zlimSh').checked ? sh : 0;
+  var inband = function(z){ return z == null || ((!loOn || z + limOff >= zlo) && (!hiOn || z + limOff <= zhi)); };
   ZCUT = {p:0, v:0};
+  /*  The whole-surface shift, applied to everything that leaves for the server
+   *  AFTER the band and the edits have had their say. A vertex without an
+   *  elevation stays without one — no elevation is invented. */
+  var up = function(p){ return (!sh || p[2] == null) ? p : [p[0], p[1], p[2] + sh]; };
 
   /*  Only the layers this surface pulls from (Points / Breaklines / Boundary
    *  nodes). The role is declared once; a surface picks a subset. */
@@ -1840,12 +2411,20 @@ function payload(){
   EDITS.bnd.forEach(considerBnd);
 
   var tolMm = numIn('snapTol');
+  var maxEdge = numIn('maxEdge');
+  if (sh){
+    pts = pts.map(up);
+    brk = brk.map(function(L){ return L.map(up); });
+  }
   return {points:pts, breaklines:brk, boundary:bnd,
-          interval:numIn('iv'), clip:document.getElementById('clip').checked,
+          interval:numIn('iv'), clip:true,
           breakline_z:document.getElementById('blz').value,
           tol: (isNaN(tolMm) ? 1 : tolMm) / 1000,
+          max_edge: (isNaN(maxEdge) ? 0 : maxEdge),
+          lines_only: document.getElementById('linesOnly').checked,
+          smooth: (+document.getElementById('smooth').value || 0) / 100,
           swap_edges:EDITS.swap, remove_tris:EDITS.hole,
-          mesh:document.getElementById('wmesh').checked};
+          mesh:true};
 }
 
 function build(quiet){
@@ -1853,7 +2432,10 @@ function build(quiet){
   var b = payload();
   var mz = 0; for (var mi = 0; mi < b.points.length; mi++) mz += b.points[mi][2];
   MEANZ = b.points.length ? mz / b.points.length : null;
-  if (b.points.length < 3){
+  /*  A file can be nothing but 3D breaklines — no points layer at all — and
+   *  "lines only" ignores the points layer on purpose. Either way, if there
+   *  is not a single breakline either, there is nothing to build from. */
+  if (b.points.length < 3 && !b.breaklines.length){
     warn('out', ZCUT.p ? 'Fewer than 3 points are left inside the elevation limits.'
                        : 'At least 3 points with an elevation are needed.');
     return;
@@ -1861,11 +2443,13 @@ function build(quiet){
   if (!(b.interval > 0)){ warn('out','Give a contour interval in metres.'); return; }
   var btn = document.getElementById('go'); btn.disabled = true;
   var forSurface = ACTIVE;              // the result belongs to this surface
+  var shiftAt = zShift();               // the shift this result was built with
   document.getElementById('out').innerHTML = '<div class="hint">Calculating…</div>';
   fetch(ZSServer.api('/api/dtm/build'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
     .then(function(r){ return r.json(); })
     .then(function(j){
       btn.disabled = false;
+      if (j.ok) j.shift = shiftAt;
       if (!j.ok){
         if (forSurface === ACTIVE) warn('out', esc(j.error));
         return;
@@ -1878,6 +2462,9 @@ function build(quiet){
       }
       // The selection pointed into the PREVIOUS result: its contour no longer
       // exists as an object. Keeping it would highlight a line that is gone.
+      // EXTRALBL is kept ON PURPOSE — the user wants placed labels to
+      // survive a recalculation (and a browser close), even though their
+      // (z,i) now points into a brand new set of contour lines.
       RES = j; SURFACES[ACTIVE].res = j; clearPick(); show(j); draw();
       document.getElementById('cOut').hidden = false;
       clearUploadHint();
@@ -1886,15 +2473,50 @@ function build(quiet){
     .catch(function(e){ btn.disabled = false; if (forSurface === ACTIVE) warn('out','The server did not answer: '+esc(e.message)); });
 }
 
+/*  Calculate a surface that is NOT on screen right now — same request
+ *  build() sends, but quiet: no "Calculating…", no warnings, matching how
+ *  build() itself already stays silent when the user switches away from a
+ *  surface while it is still in flight. Used right after opening a job so
+ *  every surface has a result, not only the active one. */
+function buildSurfaceQuiet(i){
+  var s = SURFACES[i]; if (!s) return;
+  var b = payloadOf(i);
+  if (b.points.length < 3 && !b.breaklines.length) return;
+  if (!(b.interval > 0)) return;
+  var shiftAt = +(s.settings && s.settings.zShift) || 0;
+  fetch(ZSServer.api('/api/dtm/build'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!j.ok) return;
+      j.shift = shiftAt;
+      s.res = j;
+      // The user switched to this surface while the quiet build was in
+      // flight — show it now, same as build() would.
+      if (SURFACES[ACTIVE] === s){
+        RES = j; clearPick(); show(j); draw();
+        document.getElementById('cOut').hidden = false;
+        edBadge();
+      }
+    })
+    .catch(function(){});
+}
+/*  The active surface goes through the normal build() (its usual feedback
+ *  still applies); every other surface is calculated quietly in the
+ *  background, so switching to it later shows a result immediately. */
+function autoCalcSurfaces(){
+  SURFACES.forEach(function(s, i){ if (i === ACTIVE) build(); else buildSurfaceQuiet(i); });
+}
+
 function show(j){
   var r = j.report, c = j.contours;
   var h = '<div class="tblwrap" style="max-height:none"><table><tbody>' +
     '<tr><td>Points</td><td class="mono">'+r.points+(r.added_by_breaklines?(' +'+r.added_by_breaklines+' from lines'):'')+'</td></tr>' +
-    '<tr><td>Triangles</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' outside the boundary'):'')+'</td></tr>' +
+    '<tr><td>Triangles</td><td class="mono">'+r.triangles+(r.outside_boundary?(' · '+r.outside_boundary+' outside the boundary'):'')+(r.dropped_long_edge?(' · '+r.dropped_long_edge+' over the max edge'):'')+'</td></tr>' +
     '<tr><td>Constraints</td><td class="mono">'+r.constraints+(r.constraints_failed?(' · '+r.constraints_failed+' unmet'):' ✓')+'</td></tr>' +
     '<tr><td>Area</td><td class="mono">'+fmt(r.area,1)+' m² · '+fmt(r.area/10000,4)+' ha</td></tr>' +
     '<tr><td>Elevations</td><td class="mono">'+fmt(r.zmin,3)+' – '+fmt(r.zmax,3)+' m'+
-      (MEANZ!=null?' · mean '+fmt(MEANZ,3):'')+'</td></tr>';
+      (MEANZ!=null?' · mean '+fmt(MEANZ,3):'')+'</td></tr>' +
+    (j.shift ? '<tr><td>Shift</td><td class="mono">'+(j.shift>0?'+':'')+fmt(j.shift,3)+' m — included above</td></tr>' : '');
   if (c) h += '<tr><td>Contours</td><td class="mono">'+c.count+' levels every '+c.interval+' m · '+fmt(c.length,0)+' m</td></tr>';
   h += '</tbody></table></div>';
   if (ZCUT.p || ZCUT.v){
@@ -1922,6 +2544,16 @@ function dxf(){
   b.with_breaklines = document.getElementById('dBrk').checked;
   b.with_points = document.getElementById('dPts').checked;
   b.name = 'DTM';
+  var pscale = numIn('pscale');
+  if (!isNaN(pscale) && pscale > 0) b.print_scale = pscale;
+  var pmm = numIn('pmm');
+  if (!isNaN(pmm) && pmm > 0) b.label_mm = pmm;
+  // Every label the user placed (via "New label line"), so the export reads
+  // the same as the screen — the server projects each one onto its own
+  // (z,i) line independently, so several can share one line.
+  if (EXTRALBL.length) b.extra_labels = EXTRALBL.map(function(e){
+    return {z: e.z, i: e.i, x: e.x, y: e.y};
+  });
   document.getElementById('dxfOut').innerHTML = '<div class="hint">Writing…</div>';
   fetch(ZSServer.api('/api/dtm/dxf'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
     .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'error'); }); })
@@ -1933,6 +2565,50 @@ function dxf(){
       document.getElementById('dxfOut').innerHTML = '<div class="okbox">DTM_EGSA87.dxf — '+(txt.length/1024).toFixed(0)+' KB</div>';
     })
     .catch(function(e){ warn('dxfOut', esc(e.message)); });
+}
+
+/*  The triangulated surface as a LandXML TIN, for Civil3D — see
+ *  dtm_landxml.py for the format and the (unverified — no real Civil3D to
+ *  test against) coordinate-order note. No contour/label options: LandXML
+ *  carries the surface, not a drawing. */
+function landxml(){
+  var b = payload();
+  b.with_breaklines = document.getElementById('dBrk').checked;
+  b.with_points = document.getElementById('dPts').checked;
+  b.name = JOBNAME || 'DTM';
+  document.getElementById('landxmlOut').innerHTML = '<div class="hint">Writing…</div>';
+  fetch(ZSServer.api('/api/dtm/landxml'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'error'); }); })
+    .then(function(txt){
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], {type:'application/xml'}));
+      a.download = 'DTM_EGSA87.xml'; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+      document.getElementById('landxmlOut').innerHTML = '<div class="okbox">DTM_EGSA87.xml — '+(txt.length/1024).toFixed(0)+' KB</div>';
+    })
+    .catch(function(e){ warn('landxmlOut', esc(e.message)); });
+}
+
+/*  A regular elevation grid (Esri ASCII Grid) — same sampling the Volume
+ *  tool already uses, applied to one surface instead of a difference. See
+ *  dtm_dem.py for the format and why DEM import for contours is NOT built
+ *  (a raster re-triangulated with CDT is a bad fit, and hits MAX_POINTS
+ *  fast on anything but a small plot). */
+function dem(){
+  var b = payload();
+  b.spacing = numIn('demStep');
+  b.name = JOBNAME || 'DTM';
+  document.getElementById('demOut').innerHTML = '<div class="hint">Writing…</div>';
+  fetch(ZSServer.api('/api/dtm/dem'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)})
+    .then(function(r){ return r.ok ? r.text() : r.json().then(function(j){ throw new Error(j.error||'error'); }); })
+    .then(function(txt){
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], {type:'text/plain'}));
+      a.download = 'DTM_EGSA87.asc'; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+      document.getElementById('demOut').innerHTML = '<div class="okbox">DTM_EGSA87.asc — '+(txt.length/1024).toFixed(0)+' KB</div>';
+    })
+    .catch(function(e){ warn('demOut', esc(e.message)); });
 }
 
 // ---------------------------------------------------------- the canvas ---
@@ -1986,7 +2662,7 @@ function togEP(k){
 }
 /*  The ticks next to the View menu rows. */
 function vChecks(){
-  [['mesh','vMesh'],['iso','vIso'],['z','vZ']].forEach(function(p){
+  [['mesh','vMesh'],['iso','vIso'],['labels','vLbl'],['z','vZ'],['basemap','vSat']].forEach(function(p){
     var b = document.getElementById(p[1]); if (!b) return;
     var c = b.querySelector('.chk'); if (c) c.textContent = SHOW[p[0]] ? '✓' : '';
   });
@@ -1996,9 +2672,226 @@ function vChecks(){
   });
   var ba = document.getElementById('vpAdd');
   if (ba){ var ca = ba.querySelector('.chk'); if (ca) ca.textContent = DRAWVIS.add ? '✓' : ''; }
+  // Placing a label makes no sense while labels are hidden.
+  var lb = document.getElementById('mLblLn');
+  if (lb) lb.disabled = !SHOW.labels;
+  // Nothing to line up without an EPSG.
+  var vs = document.getElementById('vSat');
+  if (vs) vs.disabled = !(GEO.epsg && /^\d+$/.test(GEO.epsg));
 }
 var SX = function(x){ return x*T.s + T.x; };
 var SY = function(y){ return -y*T.s + T.y; };
+
+/*  ============================ SATELLITE BASEMAP ============================
+ *  Purely a visual background, drawn UNDER everything else — never touches
+ *  the calculation, an edit, a snap, or any exported coordinate.
+ *
+ *  The drawing lives in whatever EPSG the user names (GEO.epsg); web map
+ *  tiles live in Web Mercator (EPSG:3857). To line the two up without
+ *  needing a full projection library in the browser: ask the server for the
+ *  WGS84 lon/lat of TWO points from the drawing's own bounds (payload()-free,
+ *  one small request — see /api/dtm/geo), turn those into Mercator metres
+ *  with the standard closed-form formula (exact, no library needed), and fit
+ *  a similarity transform (uniform scale + rotation + offset, as one complex
+ *  multiply) from the two point pairs. Two points is enough and correct: at
+ *  the scale of one drawing (tens to low hundreds of metres) any real
+ *  projection is locally conformal, so there is no meaningful shear to miss
+ *  — and this same trick already exists in the toolbox as the standalone
+ *  "affine/ομοιότητας" tool. Whatever grid-convergence angle ΕΓΣΑ87 has at
+ *  this longitude comes out of the fit on its own — nothing about it is
+ *  assumed or hardcoded. */
+var GEO = {epsg: ''};
+var GEOFIT = null, GEOFIT_BUSY = false;     // {epsg, bkey, k:{re,im}, t:{re,im}}
+var TILECACHE = {};                          // "z/x/y" -> {img, loaded}
+var MERC_R = 6378137;
+
+function lonLatToMerc(lon, lat){
+  return [MERC_R * lon * Math.PI/180,
+          MERC_R * Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360))];
+}
+function mercToLonLat(mx, my){
+  return [mx / MERC_R * 180/Math.PI,
+          (2*Math.atan(Math.exp(my/MERC_R)) - Math.PI/2) * 180/Math.PI];
+}
+function lonLatToTile(lon, lat, z){
+  var n = Math.pow(2, z);
+  var latRad = lat * Math.PI/180;
+  return [Math.floor((lon+180)/360*n),
+          Math.floor((1 - Math.log(Math.tan(latRad) + 1/Math.cos(latRad))/Math.PI) / 2 * n)];
+}
+function cxDiv(a, b){ var d = b.re*b.re + b.im*b.im; return {re:(a.re*b.re+a.im*b.im)/d, im:(a.im*b.re-a.re*b.im)/d}; }
+function cxInv(a){ var d = a.re*a.re + a.im*a.im; return {re: a.re/d, im: -a.im/d}; }
+function cxMul(a, b){ return {re: a.re*b.re - a.im*b.im, im: a.re*b.im + a.im*b.re}; }
+
+function geoEpsgChanged(v){
+  GEO.epsg = (v || '').trim();
+  GEOFIT = null; GEOFIT_BUSY = false;
+  document.getElementById('geoOut').innerHTML = '';
+  vChecks(); touch(); draw();
+}
+
+function boundsKey(b){ return b.map(function(v){ return v.toFixed(1); }).join(','); }
+
+/*  Returns the current fit, or null while one is missing/being fetched (the
+ *  fetch itself triggers a redraw when it lands — draw() just skips the
+ *  basemap for this one frame). Refetches on its own whenever the EPSG or
+ *  the drawing's own bounds change — no need to invalidate it by hand at
+ *  every place the drawing can change. */
+function ensureGeoFit(){
+  var epsg = (GEO.epsg || '').trim();
+  if (!/^\d+$/.test(epsg)) return null;
+  var b = bounds(); if (!b) return null;
+  var bk = boundsKey(b);
+  if (GEOFIT && GEOFIT.epsg === epsg && GEOFIT.bkey === bk) return GEOFIT;
+  if (GEOFIT_BUSY) return null;
+  var p1 = [b[0], b[1]], p2 = [b[2], b[3]];
+  if (Math.hypot(p2[0]-p1[0], p2[1]-p1[1]) < 1) return null;   // too small a view to fit reliably
+  GEOFIT_BUSY = true;
+  fetch(ZSServer.api('/api/dtm/geo'), {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({epsg: +epsg, points: [p1, p2]})})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      GEOFIT_BUSY = false;
+      if (!j.ok) { warn('geoOut', esc(j.error)); return; }
+      var w1 = lonLatToMerc(j.points[0][0], j.points[0][1]);
+      var w2 = lonLatToMerc(j.points[1][0], j.points[1][1]);
+      var z1 = {re:p1[0], im:p1[1]}, z2 = {re:p2[0], im:p2[1]};
+      var k = cxDiv({re:w2[0]-w1[0], im:w2[1]-w1[1]}, {re:z2.re-z1.re, im:z2.im-z1.im});
+      var kz1 = cxMul(k, z1);
+      var t = {re: w1[0]-kz1.re, im: w1[1]-kz1.im};
+      document.getElementById('geoOut').innerHTML = '';
+      GEOFIT = {epsg: epsg, bkey: bk, k: k, t: t};
+      draw();
+    })
+    .catch(function(e){ GEOFIT_BUSY = false; warn('geoOut', 'The server did not answer: ' + esc(e.message)); });
+  return null;
+}
+
+/*  A∘B as one {a,b,c,d,e,f} (canvas setTransform/transform convention:
+ *  x'=a·x+c·y+e, y'=b·x+d·y+f) — apply B first, then A. */
+function mulAffine(A, B){
+  return {
+    a: A.a*B.a + A.c*B.b, b: A.b*B.a + A.d*B.b,
+    c: A.a*B.c + A.c*B.d, d: A.b*B.c + A.d*B.d,
+    e: A.a*B.e + A.c*B.f + A.e, f: A.b*B.e + A.d*B.f + A.f
+  };
+}
+
+var MAX_BASEMAP_TILES = 64;   // a fetch budget, not a hard cap on area — zoom out and it just gets coarser
+
+function drawBasemap(){
+  if (!SHOW.basemap) return;
+  var fit = ensureGeoFit(); if (!fit) return;
+  var invK = cxInv(fit.k);
+  // local -> mercator (fit.k·z+fit.t) inverted: mercator -> local.
+  var toLocal = function(mx, my){
+    var d = {re: mx-fit.t.re, im: my-fit.t.im};
+    var l = cxMul(invK, d);
+    return [l.re, l.im];
+  };
+  // The 4 corners of the visible world rectangle, in lon/lat, to pick a
+  // covering tile range (the view may come out slightly rotated in Mercator
+  // space — corners, not just two, are needed to bound it safely).
+  var corners = [[VIEW[0],VIEW[1]],[VIEW[2],VIEW[1]],[VIEW[2],VIEW[3]],[VIEW[0],VIEW[3]]];
+  var mercPts = corners.map(function(p){ var kz = cxMul(fit.k, {re:p[0], im:p[1]}); return [kz.re+fit.t.re, kz.im+fit.t.im]; });
+  // Zoom level: match tile resolution to screen resolution. |k| = Mercator
+  // metres per local metre (captures Web Mercator's own latitude-dependent
+  // scale automatically, no separate correction needed).
+  var kmag = Math.hypot(fit.k.re, fit.k.im);
+  var mercPerPx = kmag / T.s;
+  var z = Math.round(Math.log2((2*Math.PI*MERC_R) / (256 * Math.max(mercPerPx, 1e-6))));
+  // 20 is Esri World Imagery's own practical ceiling — cities have real detail
+  // up there, but most of the country does not. A tile that turns out to be
+  // the flat grey "nothing here yet" placeholder is caught below and swapped
+  // for its parent, so asking high never shows that placeholder — it only
+  // ever shows the best real imagery this spot actually has.
+  z = Math.max(0, Math.min(20, z));
+
+  var tileRange = function(zz){
+    var tx0=Infinity, ty0=Infinity, tx1=-Infinity, ty1=-Infinity;
+    mercPts.forEach(function(m){
+      var ll = mercToLonLat(m[0], m[1]);
+      var t = lonLatToTile(ll[0], ll[1], zz);
+      tx0 = Math.min(tx0, t[0]); tx1 = Math.max(tx1, t[0]);
+      ty0 = Math.min(ty0, t[1]); ty1 = Math.max(ty1, t[1]);
+    });
+    return [tx0, ty0, tx1, ty1];
+  };
+  var r = tileRange(z);
+  while (z > 0 && (r[2]-r[0]+1) * (r[3]-r[1]+1) > MAX_BASEMAP_TILES) { z--; r = tileRange(z); }
+  var n = Math.pow(2, z);
+
+  var worldSize = 2*Math.PI*MERC_R;
+  var tileSizeMerc = worldSize / n;
+  var mpp = tileSizeMerc / 256;
+
+  // screen <- local (existing view) — no rotation, just SX/SY's own scale/flip/pan.
+  var M3 = {a:T.s, b:0, c:0, d:-T.s, e:T.x, f:T.y};
+  // local <- mercator (inverse of the fit).
+  var M2 = {a:invK.re, b:invK.im, c:-invK.im, d:invK.re,
+            e: -(invK.re*fit.t.re - invK.im*fit.t.im), f: -(invK.im*fit.t.re + invK.re*fit.t.im)};
+
+  for (var tx = Math.max(0,r[0]); tx <= Math.min(n-1,r[2]); tx++){
+    for (var ty = Math.max(0,r[1]); ty <= Math.min(n-1,r[3]); ty++){
+      var mercX0 = -Math.PI*MERC_R + tx*tileSizeMerc;
+      var mercY0 =  Math.PI*MERC_R - ty*tileSizeMerc;
+      // tile-pixel(0..256) <- mercator: x grows right, y grows down (south).
+      var M1 = {a: mpp, b:0, c:0, d:-mpp, e: mercX0, f: mercY0};
+      var M = mulAffine(M3, mulAffine(M2, M1));
+      var pick = pickBasemapTile(z, tx, ty);
+      if (!pick) continue;
+      ctx.save();
+      ctx.transform(M.a, M.b, M.c, M.d, M.e, M.f);
+      try { ctx.drawImage(pick.img, pick.sx, pick.sy, pick.sw, pick.sw, 0, 0, 256, 256); } catch (e) {}
+      ctx.restore();
+    }
+  }
+}
+
+function fetchTile(z, x, y){
+  var key = z+'/'+x+'/'+y;
+  var ent = TILECACHE[key];
+  if (ent) return ent;
+  ent = TILECACHE[key] = {img: new Image(), loaded: false, flat: false};
+  var url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x;
+  /*  fetch() first, not a plain <img src>: Esri's "nothing at this depth
+   *  yet" placeholder is a fixed, tiny (2521-byte) stand-in image — real
+   *  imagery here has run 14 KB+ at every spot and zoom tried. Content-Length
+   *  is a CORS-safelisted header (readable cross-origin without any special
+   *  server config, unlike most headers — ETag, which would have been a
+   *  cleaner signal, is NOT exposed and came back null when tried). This is
+   *  the whole reason z can be asked for generously: a spot with less
+   *  imagery just falls back a step (see pickBasemapTile), never shows the
+   *  placeholder square. */
+  fetch(url).then(function(r){
+    if (!r.ok) throw new Error('http '+r.status);
+    ent.flat = +(r.headers.get('content-length') || 0) < 5000;
+    return r.blob();
+  }).then(function(blob){
+    ent.img.onload = function(){ ent.loaded = true; draw(); };
+    ent.img.src = URL.createObjectURL(blob);
+  }).catch(function(){});   // this slot just stays empty for the session
+  return ent;
+}
+/*  The exact (z,x,y) tile if it is loaded and real; otherwise its parent,
+ *  grandparent, and so on — cropped to the matching corner each step up —
+ *  until one is real, the same "overzoom" trick every slippy map uses so a
+ *  spot with less imagery just looks softer instead of blank. Ζίτσα, this
+ *  tool's own test area, needed TWO steps (both z-1 and z-2 were still the
+ *  placeholder before z-3 finally had real imagery) — one step alone was
+ *  not enough, hence the loop instead of a single fixed hop. */
+function pickBasemapTile(z, x, y){
+  var cz = z, cx = x, cy = y, qx = 0, qy = 0, qs = 256;
+  while (true){
+    var ent = fetchTile(cz, cx, cy);
+    if (ent.loaded && !ent.flat) return {img: ent.img, sx: qx, sy: qy, sw: qs};
+    if (cz <= 0 || qs < 2) return null;
+    qx = (cx % 2) * 128 + qx / 2;
+    qy = (cy % 2) * 128 + qy / 2;
+    qs = qs / 2;
+    cx = Math.floor(cx / 2); cy = Math.floor(cy / 2); cz--;
+  }
+}
 
 /*  PANNED separates a click from a drag: the same button both moves the
  *  drawing and asks what is under it, and letting go after a pan must not
@@ -2045,6 +2938,102 @@ function isMainLevel(z){
   if (!RES || !RES.contours) return false;
   var q = z / (RES.contours.interval * 5);
   return Math.abs(q - Math.round(q)) < 1e-6;
+}
+
+/*  ==================== CONTOUR LABEL POSITIONS ====================
+ *
+ *  There is no automatic label — the user asked for that explicitly ("no
+ *  random ones at all"): every label on screen is one the user placed, via
+ *  the "New label line" tool. Each is `EDITS.extralbl` entry {z, i, x, y}:
+ *  the elevation, which line at that elevation (its index into that level's
+ *  `lines`), and a world-space point that gets re-projected onto the line
+ *  whenever it's drawn, dragged or exported — so it always lands exactly on
+ *  the geometry even after floating-point drift, and dragging can never pull
+ *  it off its contour. A list, not a dict, because a diagonal cut can cross
+ *  the same ring twice.
+ *
+ *  It lives in `edits`, not off on its own, on purpose: placing one goes
+ *  through `push()` so Ctrl+Z undoes it exactly like a breakline, and it
+ *  rides along with every other edit into the job (survives a browser
+ *  close) and back out again — no separate stash/load/collectJob wiring.
+ *  EXTRALBL below is just a short alias for `EDITS.extralbl`, kept in sync
+ *  wherever EDITS itself is swapped (loadActive, applyJob).
+ *
+ *  RISK ACCEPTED KNOWINGLY: after a fresh Calculate the same (z, i) might now
+ *  be a DIFFERENT ring, if the surface's edits changed which contours exist
+ *  or how many pieces they break into — the label would silently reattach to
+ *  the wrong line. The user chose this over losing placed labels every time
+ *  the browser closes; unlike everything else here, dragging one afterwards
+ *  is NOT itself undo-tracked (see the mouseup handler). */
+var EXTRALBL = SURFACES[0].edits.extralbl, LBLDRAG = null;
+
+/** The nearest point on a polyline to (x,y), plus the tangent direction of
+ *  the segment it landed on — how a dragged label snaps back onto its line. */
+function projectOnPolyline(x, y, L){
+  var best = null, bd = Infinity;
+  for (var i = 0; i < L.length - 1; i++){
+    var ax=L[i][0], ay=L[i][1], bx=L[i+1][0], by=L[i+1][1];
+    var dx=bx-ax, dy=by-ay, len2=dx*dx+dy*dy;
+    var t = len2 ? ((x-ax)*dx+(y-ay)*dy)/len2 : 0;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    var px=ax+t*dx, py=ay+t*dy, d=(x-px)*(x-px)+(y-py)*(y-py);
+    if (d < bd){
+      bd = d;
+      var ang = Math.atan2(dy, dx);
+      if (ang > Math.PI / 2) ang -= Math.PI;
+      else if (ang <= -Math.PI / 2) ang += Math.PI;
+      best = {x:px, y:py, ang:ang};
+    }
+  }
+  return best;
+}
+/** The contour line at elevation z, index i within that level's lines. */
+function findContourLine(z, i){
+  if (!RES || !RES.contours) return null;
+  for (var k = 0; k < RES.contours.levels.length; k++){
+    var lv = RES.contours.levels[k];
+    if (Math.abs(lv.z - z) < 1e-6) return lv.lines[i] || null;
+  }
+  return null;
+}
+/** Where segment p1→p2 crosses segment p3→p4, plus the direction of p3→p4
+ *  — null if the segments don't cross. Used once, when a label line is
+ *  finished, to drop an EXTRALBL entry at every crossing. */
+function segXsect(p1, p2, p3, p4){
+  var d1x=p2[0]-p1[0], d1y=p2[1]-p1[1], d2x=p4[0]-p3[0], d2y=p4[1]-p3[1];
+  var den = d1x*d2y - d1y*d2x;
+  if (Math.abs(den) < 1e-12) return null;
+  var t = ((p3[0]-p1[0])*d2y - (p3[1]-p1[1])*d2x) / den;
+  var u = ((p3[0]-p1[0])*d1y - (p3[1]-p1[1])*d1x) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return {x: p3[0] + u*d2x, y: p3[1] + u*d2y};
+}
+/** Which label, if any, sits under a screen point — for drag pickup and the
+ *  right-click delete menu. Picks whichever is CLOSEST to the point, so two
+ *  labels that render near each other resolve to the one actually meant. */
+function hitLabel(mx, my){
+  if (!RES || !RES.contours || !SHOW.labels || !EXTRALBL.length) return null;
+  ctx.save(); ctx.font = LBLSIZE + 'px Consolas,monospace';
+  var best = null, bestD = Infinity;
+  EXTRALBL.forEach(function(e, idx){
+    var L = findContourLine(e.z, e.i);
+    if (!L || L.length < 2) return;
+    var live = (LBLDRAG && LBLDRAG.idx === idx) ? LBLDRAG.live : null;
+    var spot = live || projectOnPolyline(e.x, e.y, L);
+    if (!spot) return;
+    var sx = SX(spot.x), sy = SY(spot.y);
+    var sang = -spot.ang;                 // screen mirrors world (SY flips y)
+    var dx = mx - sx, dy = my - sy;
+    var c = Math.cos(-sang), s = Math.sin(-sang);
+    var lx = dx*c - dy*s, ly = dx*s + dy*c;   // into the label's own, rotated frame
+    var w = ctx.measureText(fmt(e.z, 3)).width, pad = LBLSIZE * 0.25;
+    if (Math.abs(lx) <= w / 2 + pad && Math.abs(ly) <= LBLSIZE / 2 + pad){
+      var d = dx*dx + dy*dy;
+      if (d < bestD){ bestD = d; best = {idx: idx, z: e.z, i: e.i, line: L}; }
+    }
+  });
+  ctx.restore();
+  return best;
 }
 
 /*  The bounding box of every line is computed ONCE and hung on it. Without
@@ -2107,6 +3096,8 @@ function draw(){
   VIEW = [(0 - T.x)/T.s - pad, -(r.height - T.y)/T.s - pad,
           (r.width - T.x)/T.s + pad, -(0 - T.y)/T.s + pad];
 
+  drawBasemap();                   // satellite tiles, under everything
+
   /*  1. Background: layers with no role. Dim, only for orientation. Each may
    *     carry its own colour (Layer roles table) — one stroke per layer so
    *     they can differ; otherwise the shared "Base drawing" colour. */
@@ -2132,6 +3123,8 @@ function draw(){
    *  ghost. They are only for orientation and play no part in the surface, so
    *  "erase" means erase. A right-click where the line ran still offers
    *  Restore (rcHit keeps the geometry), and Ctrl+Z brings it straight back. */
+
+  drawVolume();                    // cut / fill grid, under every line
 
   /*  2. Triangles of the model.
    *
@@ -2176,18 +3169,12 @@ function draw(){
 
   // 3. Contours. Every fifth one heavier, as on a drawing.
   if (RES && RES.contours && SHOW.iso){
-    /*  ONLY WHEN THE CONTOURS ARE A SMEAR — sub-pixel apart — do the minor
-     *  ones drop out and the index ones carry on alone. Across a whole 50 km
-     *  project the 616 levels can be fractions of a pixel apart: drawing them
-     *  all is a smear that costs real time. As soon as you zoom in they return.
-     *  The threshold is deliberately tight: at any normal zoom every contour
-     *  is drawn. */
-    /*  The mean spacing between contours is area / total length — it works
-     *  even in the long narrow corridor of a road, where "the square root of
-     *  the area over the count" gave 3.6 m instead of 81 m and erased the
-     *  contours even when zoomed in. */
-    var gap = RES.report.area / Math.max(RES.contours.length, 1);
-    var dense = gap * T.s < 1.5;
+    /*  Used to drop the minor contours when sub-pixel apart (a huge project,
+     *  zoomed out) to avoid a slow smear — the user asked for every contour
+     *  to stay visible always, at any zoom, so the drop-out is switched off.
+     *  ISODENSE stays wired everywhere (picking, hover) so it does the right
+     *  thing — nothing — while it is always false. */
+    var dense = false;
     ISODENSE = dense;
 
     ctx.strokeStyle = COLORS.minor; ctx.lineWidth = 1; ctx.beginPath();
@@ -2202,6 +3189,37 @@ function draw(){
       lv.lines.forEach(function(L){ addPoly(L); });
     });
     ctx.stroke();
+
+    // Elevation labels — every one placed by the user via "New label line"
+    // (EXTRALBL); there is no automatic one. Reading a label upside down
+    // would defeat the point of it, so the angle is always kept within ±90°
+    // of horizontal. A background patch the colour of the canvas hides the
+    // contour running underneath — standard, not a toggle, the same way a
+    // printed drawing masks the line behind a label.
+    if (SHOW.labels && !dense && EXTRALBL.length){
+      ctx.save();
+      ctx.font = LBLSIZE + 'px Consolas,monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      EXTRALBL.forEach(function(e, idx){
+        var L = findContourLine(e.z, e.i);
+        if (!L) return;
+        var live = (LBLDRAG && LBLDRAG.idx === idx) ? LBLDRAG.live : null;
+        var spot = live || projectOnPolyline(e.x, e.y, L);
+        if (!spot) return;
+        var sang = -spot.ang;   // screen space mirrors world (SY flips y)
+        var txt = fmt(e.z, 3);
+        var w = ctx.measureText(txt).width, pad = LBLSIZE * 0.25;
+        ctx.save();
+        ctx.translate(SX(spot.x), SY(spot.y));
+        ctx.rotate(sang);
+        ctx.fillStyle = COLORS.bg;
+        ctx.fillRect(-w / 2 - pad, -LBLSIZE / 2 - pad, w + pad * 2, LBLSIZE + pad * 2);
+        ctx.fillStyle = COLORS.labels;
+        ctx.fillText(txt, 0, 0);
+        ctx.restore();
+      });
+      ctx.restore();
+    }
   }
 
   // 4. Whatever this surface pulls from, on top. Layers a role layer is
@@ -2382,20 +3400,20 @@ function draw(){
 
   // The line (or boundary shape) being drawn right now.
   if (DRAWING && DRAWING.length){
-    var drawCol = MODE === 'bnddraw' ? COLORS.bnd : COLORS.brk;
+    var drawCol = MODE === 'voldraw' ? DRAWCOL.vol : (MODE === 'bnddraw' ? COLORS.bnd : COLORS.brk);
     ctx.strokeStyle = drawCol; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
-    poly(DRAWING, MODE === 'bnddraw' && DRAWING.length > 1);   // preview the closing edge
+    poly(DRAWING, (MODE === 'bnddraw' || MODE === 'voldraw') && DRAWING.length > 1);   // preview the closing edge
     ctx.setLineDash([]);
     ctx.fillStyle = drawCol;
     DRAWING.forEach(function(v){ ctx.fillRect(SX(v[0])-3, SY(v[1])-3, 6, 6); });
   }
   /*  Breaklines Α — the snap node under the cursor, and a rubber band to it
    *  from the last vertex. A green ring means "a click here lands a vertex". */
-  if (MODE === 'brk' && SNAPHOV){
+  if ((MODE === 'brk' || MODE === 'voldraw' || MODE === 'bnddraw') && SNAPHOV){
     var qx = SX(SNAPHOV[0]), qy = SY(SNAPHOV[1]);
     if (DRAWING && DRAWING.length){
       var lp = DRAWING[DRAWING.length - 1];
-      ctx.strokeStyle = COLORS.brk; ctx.lineWidth = 1.5; ctx.setLineDash([2,3]);
+      ctx.strokeStyle = MODE === 'voldraw' ? DRAWCOL.vol : (MODE === 'bnddraw' ? COLORS.bnd : COLORS.brk); ctx.lineWidth = 1.5; ctx.setLineDash([2,3]);
       ctx.beginPath(); ctx.moveTo(SX(lp[0]), SY(lp[1])); ctx.lineTo(qx, qy); ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -2406,6 +3424,13 @@ function draw(){
   if (MODE === 'brkid' && IDHOV){
     ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(SX(IDHOV[0]), SY(IDHOV[1]), 7, 0, 6.284); ctx.stroke();
+  }
+  // Every other tool that picks a single point or breakline vertex — the
+  // same green ring as SNAPHOV/IDHOV, so you always see what a click would
+  // land on before committing to it.
+  if (HOVER){
+    ctx.strokeStyle = '#7cffb2'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(SX(HOVER[0]), SY(HOVER[1]), 7, 0, 6.284); ctx.stroke();
   }
   // 6. What the last click identified — over everything, so it is found again.
   if (PICK){
@@ -2464,6 +3489,13 @@ function draw(){
       } else if (it.line){
         ctx.strokeStyle = '#000'; ctx.lineWidth = 4.5; poly(it.line);
         ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 2; poly(it.line);
+        // Every vertex of the selected line, same square as a selected point —
+        // so it's clear where the nodes are before using a vertex tool on it.
+        it.line.forEach(function(v){
+          var vx = SX(v[0]), vy = SY(v[1]);
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(vx-4, vy-4, 8, 8);
+          ctx.strokeStyle = '#4db6ff'; ctx.lineWidth = 1.5; ctx.strokeRect(vx-4, vy-4, 8, 8);
+        });
       }
     });
     ctx.restore();
@@ -2499,7 +3531,8 @@ function draw(){
     cross(mfx,mfy);
     if (MOVING.origin) cross(mox,moy);
     ctx.stroke();
-    ctx.beginPath(); ctx.arc(mtx, mty, 4.5, 0, 6.284); ctx.stroke();
+    ctx.strokeStyle = MOVING.snapped ? '#7cffb2' : '#ff9a3d'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mtx, mty, MOVING.snapped ? 7 : 4.5, 0, 6.284); ctx.stroke();
   }
 
   /*  Breaklines Γ — the line redrawn with the dragged vertex following the
@@ -2519,8 +3552,9 @@ function draw(){
     ctx.beginPath(); ctx.arc(btx, bty, BMOV.snapped ? 7 : 4.5, 0, 6.284); ctx.stroke();
   }
 
-  /*  Boundary ▾ — same idea, free (no snap ring). A closed ring's shared
-   *  start/end corner follows together, so the preview never shows a gap. */
+  /*  Boundary ▾ — same idea as BMOV, with volSnap's X/Y-only ring. A closed
+   *  ring's shared start/end corner follows together, so the preview never
+   *  shows a gap. */
   if (BNDMOV){
     var dg = bndGeom(BNDMOV.line);
     var dclosed = dg.length > 2 &&
@@ -2535,8 +3569,8 @@ function draw(){
       if (di) ctx.lineTo(dvx, dvy); else ctx.moveTo(dvx, dvy);
     }
     ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle = COLORS.bnd; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(SX(BNDMOV.to[0]), SY(BNDMOV.to[1]), 4.5, 0, 6.284); ctx.stroke();
+    ctx.strokeStyle = BNDMOV.snapped ? '#7cffb2' : COLORS.bnd; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(SX(BNDMOV.to[0]), SY(BNDMOV.to[1]), BNDMOV.snapped ? 7 : 4.5, 0, 6.284); ctx.stroke();
   }
 
   /*  Breaklines Ε — the parallel copy previewed while the side is chosen, and
@@ -2570,7 +3604,7 @@ function draw(){
   var DRAWING = null;        // the line being drawn right now
   var MOVING = null;         // the point being dragged right now
   var MZSRC = null;          // Match elevation: the point the elevation is copied FROM
-  var HOVER = null;
+  var HOVER = null, _hovRAF = 0;   // the shared hover ring for every other single-pick tool
   var SNAPHOV = null, _snapRAF = 0;   // Breaklines Α — the node the cursor would snap onto
   var BMOV = null;           // Breaklines Γ — the breakline vertex being dragged
   var BNDMOV = null;         // Boundary ▾ — the boundary vertex being dragged
@@ -2580,9 +3614,11 @@ function draw(){
   var MODE_NAME = {
     select:'Select', pan:'Pan', del:'Delete point', move:'Move point', add:'Add point',
     elev:'Elevation change', matchz:'Match elevation',
-    brk:'New line', brkid:'Vertex info', brkmv:'Move a vertex', brkvz:'Vertex elevation', brkraise:'Line elevation',
+    brk:'New line', brkid:'Vertex info', brkmv:'Move a vertex', addbrkv:'Add vertex', delbrkv:'Delete vertex',
+  brkvz:'Vertex elevation', brkraise:'Line elevation',
     brkoffset:'Offset a line', brk23d:'Make 3D', delbrk:'Delete line', swap:'Swap edge', hole:'Delete triangle',
-    bnddraw:'Draw boundary', bndmv:'Move a boundary vertex', bnddel:'Delete boundary'
+    bnddraw:'Draw boundary', bndmv:'Move a boundary vertex', bnddel:'Delete boundary',
+    lblln:'New label line', voldraw:'Draw volume boundary'
   };
   function setMode(m){
     // Picking a click-tool again drops back to Select, the resting state of a
@@ -2591,7 +3627,8 @@ function draw(){
     // re-arms rather than toggling off; Esc leaves.
     var sticky = m === 'elev' || m === 'matchz';
     MODE = (MODE === m && m !== 'select' && !sticky) ? 'select' : m;
-    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null; IDHOV = null; BNDMOV = null;
+    VOLSEL = false;
+    DRAWING = null; MOVING = null; MZSRC = null; SNAPHOV = null; BMOV = null; BOFF = null; BOFFHOV = null; IDHOV = null; BNDMOV = null; HOVER = null;
     if (typeof SELNEXT !== 'undefined') SELNEXT = null;   // a mode change disarms the one-shot pick
     if (typeof cvmClose === 'function') cvmClose();
     // Select and Elevation change both work on a selection — keep it across the
@@ -2619,23 +3656,27 @@ function draw(){
       select:'Click / box to select (L→R whole, R→L touching) · Delete removes · right-click for tools · Esc clears.',
       pan:   'Drag to pan, wheel to zoom · click a point or a contour for its elevation.',
       del:   'Click a point to take it OUT of the calculation · a deleted one again hides its cross · a moved point’s origin splits the move.',
-      move:  'Drag a point to a new position. Its elevation stays the same.',
+      move:  'Drag a point to a new position — its elevation stays the same. A green ring near a point or 3D-breakline node means it snaps there.',
       add:   'Click for a new point — you will be asked for its elevation.',
       elev:  'Select points (click / box), then press Enter to set their elevation · Esc clears.',
       matchz:'Click the point to copy the elevation FROM, then the point to copy it ONTO · Esc exits.',
       brk:   'Every vertex snaps to a point or a 3D-breakline node · Enter keeps drawing, Esc finishes · right-click for options.',
       brkid: 'Click a breakline vertex to see its X, Y, Z.',
       brkmv: 'Drag a breakline vertex — its elevation stays. Land it on a survey point and it asks which level wins.',
+  addbrkv: 'Click on a breakline segment to insert a new vertex there — its elevation is interpolated along the line.',
+  delbrkv: 'Click a breakline vertex to remove it, keeping the rest of the line. Down to one vertex left deletes the whole line instead.',
       brkvz: 'Click a breakline vertex to set its elevation. A survey point on it can follow.',
       brkraise: 'Click a breakline to change the elevation of the whole line. Survey points on it can follow.',
       brkoffset:'Click a breakline, set the distance, then click the side for a parallel copy.',
       brk23d: 'Click a flat breakline to fill it in with real elevations, from the survey points it touches.',
-      bnddraw:'Click to place each corner, Enter or right-click to close the shape · Esc finishes.',
-      bndmv: 'Drag any boundary vertex — free, no snapping.',
+      bnddraw:'Click to place each corner — a green ring means it snaps to a point or vertex · Enter or right-click to close the shape · Esc finishes.',
+      voldraw:'Click each corner of the volume boundary — a green ring means it snaps to a point or vertex · Enter or right-click closes it · Esc finishes. A new one replaces the old.',
+      bndmv: 'Drag any boundary vertex — a green ring near a point or vertex means it snaps there.',
       bnddel:'Click a boundary to remove it from this surface — a drawn one goes for good.',
       delbrk:'Click a breakline to delete it (turns red & dashed) · click a red one again to hide it · Ctrl+Z, or right-click Restore, brings it back.',
       swap:  'Click a triangle edge to swap its diagonal.',
-      hole:  'Click a triangle to delete it — a hole in the surface.'
+      hole:  'Click a triangle to delete it — a hole in the surface.',
+      lblln: 'Click to place each point of the cutting line, Enter or right-click to finish · Esc cancels. A label drops at every contour it crosses, then the line itself is gone — drag or right-click a label afterwards.'
     }[MODE] || '';
     draw();
   }
@@ -2698,16 +3739,18 @@ function draw(){
   }
   window.undoEdit = function(){
     var u = UNDO.pop(); if (!u) return;
+    if (u.op === 'vol'){ REDO.push(u); volSetState(u.before); edBadge(); return; }   // volume boundary — no recalc
     edApply(u, true); REDO.push(u); afterEdit();
   };
   window.redoEdit = function(){
     var u = REDO.pop(); if (!u) return;
+    if (u.op === 'vol'){ UNDO.push(u); volSetState(u.after); edBadge(); return; }
     edApply(u, false); UNDO.push(u); afterEdit();
   };
   window.clearEdits = function(){
     if (UNDO.length && !confirm('Undo all ' + UNDO.length + ' edits?')) return;
     // Emptied in place — EDITS/UNDO/REDO are the ACTIVE surface's own arrays.
-    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
+    ['del','delhide','add','move','setz','brk','swap','hole','brkcut','brkhide','basecut','brkmv','bnd','bndmv','extralbl'].forEach(function(k){ if (EDITS[k]) EDITS[k].length = 0; });
     UNDO.length = 0; REDO.length = 0; afterEdit();
   };
 
@@ -2726,32 +3769,25 @@ function draw(){
     if (basePointCount() <= AUTO_LIMIT) build(true);
     else document.getElementById('edStale').hidden = false;
   }
+  /*  A drawing-style setting (contour smoothing) follows the same rule: an
+   *  existing result redraws on its own when the drawing is small enough. */
+  window.settingChanged = function(){
+    touch();
+    if (!RES) return;
+    if (basePointCount() <= AUTO_LIMIT) build(true);
+    else document.getElementById('edStale').hidden = false;
+  };
   function basePointCount(){
     return selS('pts').reduce(function(s,n){ return s + GEOM[n].points.length; }, 0);
   }
   function edBadge(){
     var n = UNDO.length;
     renderDrawLayers();                 // the DrawPoints / DrawLines counts
-    document.getElementById('edN').textContent = n;
-    document.getElementById('cEdit').hidden = !(UNDO.length || REDO.length);
-    document.getElementById('edUndo').disabled = !UNDO.length;
-    document.getElementById('edRedo').disabled = !REDO.length;
     var mu = document.getElementById('mUndo'), mr = document.getElementById('mRedo'),
         mn = document.getElementById('mUndoN');
     if (mu) mu.disabled = !UNDO.length;
     if (mr) mr.disabled = !REDO.length;
     if (mn) mn.textContent = n ? String(n) : '';
-    var d = EDITS;
-    document.getElementById('edList').innerHTML = !n ? '' :
-      '<div class="hint">' +
-      [[d.del.length + (d.delhide||[]).length,'deleted points'], [d.add.length,'new points'],
-       [(d.move||[]).length,'moved points'], [(d.setz||[]).length,'elevations changed'],
-       [d.brk.length,'new lines'], [d.swap.length,'swapped edges'],
-       [d.hole.length,'deleted triangles'], [(d.brkmv||[]).length,'moved lines'],
-       [(d.brkcut||[]).length + (d.brkhide||[]).length + (d.basecut||[]).length,'lines removed'],
-       [(d.bnd||[]).length,'new boundaries'], [(d.bndmv||[]).length,'moved boundaries']]
-      .filter(function(p){ return p[0]; })
-      .map(function(p){ return p[0] + ' ' + p[1]; }).join(' · ') + '</div>';
   }
 
   // --------------------------------------------------------- picking ----
@@ -2807,6 +3843,32 @@ function draw(){
     });
     EDITS.brk.forEach(function(L){ if (!isCutLine(L)) scan(L); });
     // Vertices of the line being drawn, so it can close on itself.
+    if (DRAWING) DRAWING.forEach(consider);
+    return best;
+  }
+
+  /*  Volume boundary — optional snap: the nearest point or line vertex of any
+   *  visible layer (role or background), the drawn points, lines and
+   *  boundaries, or the shape's own first corner so it can close. Nothing in
+   *  reach → null, and the click lands where it is. Only X/Y matter here. */
+  function volSnap(mx, my, px){
+    px = px || 12;
+    var best = null, bd = px * px;
+    var consider = function(p){
+      if (!p || p[0] < VIEW[0] || p[0] > VIEW[2] || p[1] < VIEW[1] || p[1] > VIEW[3]) return;
+      var dx = SX(p[0]) - mx, dy = SY(p[1]) - my, d = dx*dx + dy*dy;
+      if (d < bd){ bd = d; best = [p[0], p[1]]; }
+    };
+    Object.keys(GEOM).forEach(function(n){
+      if (!VIS[n]) return;
+      if (ROLE[n] ? !surfHas(ROLE[n], n) : !fileOn(n)) return;
+      GEOM[n].points.forEach(consider);
+      GEOM[n].lines.forEach(function(L){ L.forEach(consider); });
+    });
+    EDITS.add.forEach(consider);
+    (EDITS.move || []).forEach(function(m){ consider(m.to); });
+    EDITS.brk.forEach(function(L){ L.forEach(consider); });
+    EDITS.bnd.forEach(function(L){ L.forEach(consider); });
     if (DRAWING) DRAWING.forEach(consider);
     return best;
   }
@@ -2887,11 +3949,11 @@ function draw(){
     if (PICK.kind === 'pt'){
       h += '<div class="k" style="color:' + COLORS.pts + '">Point</div>' +
            '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
-           '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
+           '<div class="d">' + shiftNote(PICK.z) + 'X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
     } else if (PICK.kind === 'brkv'){
       h += '<div class="k" style="color:' + COLORS.brk + '">Breakline vertex</div>' +
            '<div class="v">' + (PICK.z == null ? '— no elevation' : fmt(PICK.z,3) + ' m') + '</div>' +
-           '<div class="d">X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
+           '<div class="d">' + shiftNote(PICK.z) + 'X ' + fmt(PICK.x,3) + '<br>Y ' + fmt(PICK.y,3) + '</div>';
     } else {
       h += '<div class="k" style="color:' + (PICK.main ? COLORS.index : COLORS.minor) + '">' +
              (PICK.main ? 'Index contour' : 'Contour') + '</div>' +
@@ -2984,7 +4046,15 @@ function draw(){
       }
     }
     else if (MODE === 'add'){
-      var z = prompt('Elevation of the new point (m):', RES ? RES.report.zmin.toFixed(2) : '');
+      // Prefill with the surface's own elevation at this spot, if it has one
+      // yet — the user can keep it, type a different value, or Cancel.
+      var sz = surfaceZAt(mx, my, w[0], w[1]);
+      var defZ = sz != null ? sz : (RES ? (RES.report.zmin - (RES.shift || 0)) : null);
+      var sh = RES ? (RES.shift || 0) : 0;
+      var addMsg = sh ? 'This surface is shifted ' + (sh > 0 ? '+' : '') + fmt(sh, 2) +
+        ' m — enter the ORIGINAL elevation (m), the shift is added automatically:' :
+        'Elevation of the new point (m):';
+      var z = prompt(addMsg, defZ == null ? '' : defZ.toFixed(2));
       if (z == null) return;
       var zz = parseFloat(String(z).trim().replace(',', '.'));
       if (!Number.isFinite(zz)){ setStatusEd('The elevation could not be read.'); return; }
@@ -3005,9 +4075,18 @@ function draw(){
       }
       draw();
     }
-    else if (MODE === 'bnddraw'){
-      // Free placement — no snap, no elevation: the boundary only sets the
-      // area of interest, it never enters the triangulation.
+    else if (MODE === 'bnddraw' || MODE === 'voldraw'){
+      // Snaps to any point or line vertex, X/Y only — no elevation, a
+      // boundary never enters the triangulation, same as the volume polygon
+      // it shares this tool with. Nothing in reach → the click lands free.
+      if (!DRAWING) DRAWING = [];
+      var vs = volSnap(mx, my, 12);
+      DRAWING.push(vs || [w[0], w[1]]);
+      draw();
+    }
+    else if (MODE === 'lblln'){
+      // Free placement, exactly like the boundary — a label line has no role
+      // in the calculation either, it only says where to drop labels.
       if (!DRAWING) DRAWING = [];
       DRAWING.push([w[0], w[1]]);
       draw();
@@ -3021,6 +4100,28 @@ function draw(){
       var hv = pickBrkVertex(mx, my, 12);
       if (hv) openVertexZDialog(hv);
       else setStatusEd('No breakline vertex there.');
+    }
+    else if (MODE === 'delbrkv'){
+      var dv = pickBrkVertex(mx, my, 12);
+      if (!dv){ setStatusEd('No breakline vertex there.'); return; }
+      var curD = brkGeom(dv.line);
+      if (curD.length <= 2){
+        // One vertex would be left — that is not a line any more.
+        push('brkcut', curD.map(function(p){ return p.slice(); }));
+        setStatusEd('Only one vertex would be left — the whole line was deleted instead. Ctrl+Z to undo.');
+      } else {
+        var nextD = curD.slice(); nextD.splice(dv.vi, 1);
+        commitSteps(brkReplaceSteps(dv.line, dv.layer, nextD));
+        setStatusEd('Vertex deleted — Ctrl+Z to undo.');
+      }
+    }
+    else if (MODE === 'addbrkv'){
+      var av = pickBrkSegment(mx, my, 12);
+      if (!av){ setStatusEd('No breakline there.'); return; }
+      var curA = brkGeom(av.line);
+      var nextA = curA.slice(); nextA.splice(av.si + 1, 0, av.point);
+      commitSteps(brkReplaceSteps(av.line, av.layer, nextA));
+      setStatusEd('Vertex added — Ctrl+Z to undo.');
     }
     else if (MODE === 'brkraise'){
       var wr = pickBrkWhole(mx, my, 12);
@@ -3078,7 +4179,7 @@ function draw(){
     if (mb && !mb.hidden){ if (ev.key === 'Escape') modalClose(); return; }
     var tn = ((ev.target && ev.target.tagName) || '').toLowerCase();
     var typing = tn === 'input' || tn === 'textarea' || tn === 'select';
-    if (ev.key === 'Enter' && (MODE === 'brk' || MODE === 'bnddraw') && !typing) endLine();   // finish, stay in the tool
+    if (ev.key === 'Enter' && (MODE === 'brk' || MODE === 'bnddraw' || MODE === 'lblln' || MODE === 'voldraw') && !typing) endLine();   // finish, stay in the tool
     if (ev.key === 'Enter' && MODE === 'elev' && !typing){            // set the elevation of the selection
       ev.preventDefault();
       var ep = (typeof SEL !== 'undefined') ? SEL.filter(function(s){ return s.t === 'pt'; }) : [];
@@ -3087,7 +4188,7 @@ function draw(){
       return;
     }
     if (ev.key === 'Escape'){
-      if ((MODE === 'brk' || MODE === 'bnddraw') && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line/shape
+      if ((MODE === 'brk' || MODE === 'bnddraw' || MODE === 'lblln' || MODE === 'voldraw') && DRAWING){ endLine(); setMode('select'); return; }  // Esc finishes the line/shape
       DRAWING = null; clearPick();
       if (typeof selClear === 'function') selClear();
       setMode('select');                    // Esc always lands back in Select
@@ -3104,6 +4205,7 @@ function draw(){
     if (ctrl && kz){ ev.preventDefault(); (ev.shiftKey ? redoEdit : undoEdit)(); return; }
     if (ctrl && ky){ ev.preventDefault(); redoEdit(); return; }
     if (typing) return;
+    if (ev.key === 'Delete' && VOLSEL){ ev.preventDefault(); volDeleteRing(); return; }
     // Delete removes the selection — the same as the right-click "Delete them".
     if (ev.key === 'Delete' && MODE === 'select' && typeof SEL !== 'undefined' && SEL.length){
       ev.preventDefault();
@@ -3111,6 +4213,19 @@ function draw(){
     }
   });
   function endLine(){
+    if (MODE === 'voldraw'){
+      // Not an edit of any surface — its own state, no undo; a new polygon
+      // simply replaces the previous one, and the node switches to it.
+      if (DRAWING && DRAWING.length >= 3){
+        var vr = DRAWING.map(function(v){ return [v[0], v[1]]; });
+        vr.push(vr[0].slice());
+        var vbefore = volState();
+        volSetState({ ring: vr, src: 'drawn' });
+        volRecord(vbefore);
+      }
+      DRAWING = null; draw();
+      return;
+    }
     if (MODE === 'bnddraw'){
       if (DRAWING && DRAWING.length >= 3){
         var ring = DRAWING.map(function(v){ return [v[0], v[1]]; });
@@ -3118,6 +4233,44 @@ function draw(){
         push('bnd', ring);
       }
       DRAWING = null; draw();
+      return;
+    }
+    if (MODE === 'lblln'){
+      // One-shot: the line itself is never kept, only what it crosses. Each
+      // crossing becomes an ordinary EDITS.extralbl entry — draggable and
+      // deletable exactly like any other label, tied to its own (z, line
+      // index) so it survives being moved later. All the labels from one
+      // line are ONE undo step (edAdd, not push, so afterEdit() runs once).
+      if (DRAWING && DRAWING.length >= 2){
+        if (!RES || !RES.contours){
+          setStatusEd('Run the calculation first.');
+        } else {
+          var withMinor = confirm('Also place labels on the minor (non-index) contours this line crosses?');
+          var LL = DRAWING, steps = [];
+          for (var ls = 0; ls < LL.length - 1; ls++){
+            RES.contours.levels.forEach(function(lv){
+              if (!withMinor && !isMainLevel(lv.z)) return;
+              lv.lines.forEach(function(L, li){
+                for (var k = 0; k < L.length - 1; k++){
+                  var hit = segXsect(LL[ls], LL[ls + 1], L[k], L[k + 1]);
+                  if (hit) steps.push(edAdd('extralbl', {z: lv.z, i: li, x: hit.x, y: hit.y}));
+                }
+              });
+            });
+          }
+          if (steps.length){
+            UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+            REDO.length = 0;
+            setStatusEd(steps.length + ' label' + (steps.length === 1 ? '' : 's') + ' added — Ctrl+Z to undo.');
+          } else {
+            setStatusEd('That line did not cross any contour.');
+          }
+        }
+      }
+      // One-shot: unlike a breakline, drawing another isn't the usual next
+      // move — back to Select so the new labels can be dragged right away.
+      DRAWING = null; afterEdit();
+      setMode('select');
       return;
     }
     if (DRAWING && DRAWING.length >= 2){
@@ -3143,6 +4296,36 @@ function draw(){
       for (var i = 0; i < G.length; i++){
         var dx = SX(G[i][0]) - mx, dy = SY(G[i][1]) - my, d = dx*dx + dy*dy;
         if (d < bd){ bd = d; best = { line:L, layer:layer, vi:i, v:G[i] }; }
+      }
+    };
+    selS('brk').forEach(function(n){
+      if (VIS[n]) GEOM[n].lines.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) scan(L, n); });
+    });
+    if (DRAWVIS.brk) EDITS.brk.forEach(function(L){ if (L.length >= 2 && !isCutLine(L)) scan(L, null); });
+    return best;
+  }
+  /*  The closest point on any breakline SEGMENT (not just a vertex) — for
+   *  Add vertex. Elevation is interpolated along the segment; a segment
+   *  between two 2D (no-z) nodes stays 2D, no elevation is invented. */
+  function pickBrkSegment(mx, my, px){
+    px = px || 12;
+    var best = null, bd = px * px;
+    var scan = function(L, layer){
+      var G = brkGeom(L);
+      for (var i = 0; i < G.length - 1; i++){
+        var A = G[i], B = G[i+1];
+        var ax = SX(A[0]), ay = SY(A[1]), bx = SX(B[0]), by = SY(B[1]);
+        var dx = bx-ax, dy = by-ay, len2 = dx*dx+dy*dy;
+        var t = len2 ? ((mx-ax)*dx+(my-ay)*dy)/len2 : 0;
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        var sx = ax+t*dx, sy = ay+t*dy;
+        var d = (mx-sx)*(mx-sx) + (my-sy)*(my-sy);
+        if (d < bd){
+          bd = d;
+          var wx = A[0] + t*(B[0]-A[0]), wy = A[1] + t*(B[1]-A[1]);
+          var wz = (A[2] != null && B[2] != null) ? (A[2] + t*(B[2]-A[2])) : null;
+          best = { line:L, layer:layer, si:i, point:[wx, wy, wz] };
+        }
       }
     };
     selS('brk').forEach(function(n){
@@ -3529,7 +4712,12 @@ function draw(){
   }, true);
   window.addEventListener('mousemove', function(ev){
     if (!MOVING) return;
-    MOVING.to = world(ev); draw();
+    var r = cv.getBoundingClientRect();
+    var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    var s = snapVertex(mx, my, 14);   // soft snap — elevation stays MOVING.z
+    MOVING.snapped = !!s;
+    MOVING.to = s ? [s[0], s[1]] : world(ev);
+    draw();
   });
   window.addEventListener('mousemove', function(ev){
     if (!BMOV) return;
@@ -3545,18 +4733,25 @@ function draw(){
   });
   window.addEventListener('mousemove', function(ev){
     if (!BNDMOV) return;
-    BNDMOV.to = world(ev); draw();          // free — no snap
+    var r = cv.getBoundingClientRect();
+    var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    var s = volSnap(mx, my, 12);   // soft snap, X/Y only — a boundary has no elevation
+    BNDMOV.snapped = !!s;
+    BNDMOV.to = s || world(ev);
+    draw();
   });
-  /*  While a breakline is being drawn, show where the next click would land —
-   *  the cursor only ever produces a vertex on a valid snap node. One scan per
-   *  frame at most. */
+  /*  While a breakline/boundary is being drawn, show where the next click
+   *  would land — the cursor only ever produces a vertex on a valid snap
+   *  node (breaklines) or the nearest one if any is in reach (boundary/
+   *  volume, which fall back to a free click). One scan per frame at most. */
   window.addEventListener('mousemove', function(ev){
-    if (MODE !== 'brk'){ if (SNAPHOV){ SNAPHOV = null; draw(); } return; }
+    if (MODE !== 'brk' && MODE !== 'voldraw' && MODE !== 'bnddraw'){ if (SNAPHOV){ SNAPHOV = null; draw(); } return; }
     if (_snapRAF) return;
     _snapRAF = requestAnimationFrame(function(){
       _snapRAF = 0;
       var r = cv.getBoundingClientRect();
-      SNAPHOV = snapVertex(ev.clientX - r.left, ev.clientY - r.top, 14);
+      var hx = ev.clientX - r.left, hy = ev.clientY - r.top;
+      SNAPHOV = (MODE === 'voldraw' || MODE === 'bnddraw') ? volSnap(hx, hy, 12) : snapVertex(hx, hy, 14);
       draw();
     });
   });
@@ -3570,6 +4765,34 @@ function draw(){
       var r = cv.getBoundingClientRect();
       var hv = pickBrkVertex(ev.clientX - r.left, ev.clientY - r.top, 12);
       IDHOV = hv ? hv.v : null;
+      draw();
+    });
+  });
+  /*  Every other tool that asks for a single vertex, a segment, or a survey
+   *  point — one shared hover ring (HOVER) instead of a SNAPHOV/IDHOV-style
+   *  pair per tool. Modes that pick a WHOLE line/edge/triangle (Line
+   *  elevation, Make 3D, Offset, Delete line, Swap edge, Delete triangle)
+   *  are deliberately left out — this is only for single point/vertex picks. */
+  var _brkVertexModes = { brkmv:10, brkvz:12, delbrkv:12 };
+  var _ptModes = { move:1, del:1, matchz:1, elev:1 };
+  window.addEventListener('mousemove', function(ev){
+    var isSeg = MODE === 'addbrkv';
+    var isBnd = MODE === 'bndmv';
+    if (!_brkVertexModes[MODE] && !_ptModes[MODE] && !isSeg && !isBnd){
+      if (HOVER){ HOVER = null; draw(); }
+      return;
+    }
+    if (_hovRAF) return;
+    _hovRAF = requestAnimationFrame(function(){
+      _hovRAF = 0;
+      var r = cv.getBoundingClientRect();
+      var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+      var h = null;
+      if (isSeg){ var sg = pickBrkSegment(mx, my, 12); h = sg ? sg.point : null; }
+      else if (isBnd){ var bv = pickBndVertex(mx, my, 10); h = bv ? bv.v : null; }
+      else if (_brkVertexModes[MODE]){ var vv = pickBrkVertex(mx, my, _brkVertexModes[MODE]); h = vv ? vv.v : null; }
+      else { h = pickPoint(mx, my, 10); }
+      HOVER = h;
       draw();
     });
   });
@@ -3876,6 +5099,26 @@ function draw(){
     return null;
   }
 
+  /*  Elevation at (px, py) inside a triangle's world-space footprint, by
+   *  barycentric weight of its three vertices — the map from screen to
+   *  world is affine, so the weights are the same either way. */
+  function baryZ(px, py, p){
+    var a = p[0], b = p[1], c = p[2];
+    var d = (b[1]-c[1])*(a[0]-c[0]) + (c[0]-b[0])*(a[1]-c[1]);
+    if (Math.abs(d) < 1e-9) return null;
+    var w1 = ((b[1]-c[1])*(px-c[0]) + (c[0]-b[0])*(py-c[1])) / d;
+    var w2 = ((c[1]-a[1])*(px-c[0]) + (a[0]-c[0])*(py-c[1])) / d;
+    return w1*a[2] + w2*b[2] + (1-w1-w2)*c[2];
+  }
+  /*  The model surface's elevation directly under a click, in ORIGINAL
+   *  (unshifted) units — null off the mesh, or before a first Calculate. */
+  function surfaceZAt(mx, my, wx, wy){
+    var hit = hitTri(mx, my);
+    if (!hit) return null;
+    var z = baryZ(wx, wy, hit.p);
+    return z == null ? null : z - (RES.shift || 0);
+  }
+
   /*  Every pickable polyline on screen, tagged with its kind — honouring the
    *  Select-menu filter. Breaklines and boundary follow the active surface;
    *  'base' is every line on a role-less, shown layer (the orientation
@@ -4097,7 +5340,7 @@ function draw(){
       lines.push('Y ' + fmt(s.y, 3));
       return '<div class="k" style="color:'+COLORS.pts+'">' + kind + '</div>' +
         '<div class="v">' + (cur == null ? '— no elevation' : fmt(cur,3)+' m') + '</div>' +
-        '<div class="d">' + lines.join('<br>') + '</div>';
+        '<div class="d">' + shiftNote(cur) + lines.join('<br>') + '</div>';
     }
     if (s.t === 'delpt'){
       var dz = origZ(s.x, s.y);
@@ -4182,9 +5425,23 @@ function draw(){
   cv.addEventListener('mousedown', function(ev){
     if ((MODE !== 'select' && MODE !== 'elev') || ev.button !== 0) return;
     var r = cv.getBoundingClientRect();
-    sdown = {x: ev.clientX - r.left, y: ev.clientY - r.top, shift: ev.shiftKey, moved: false};
+    var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    // A label under the cursor is picked up for a drag ALONG ITS OWN LINE,
+    // ahead of the ordinary box/click selection below.
+    if (MODE === 'select'){
+      var lh = hitLabel(mx, my);
+      if (lh){ LBLDRAG = lh; return; }
+    }
+    sdown = {x: mx, y: my, shift: ev.shiftKey, moved: false};
   }, true);
   window.addEventListener('mousemove', function(ev){
+    if (LBLDRAG){
+      var r = cv.getBoundingClientRect();
+      var wx = (ev.clientX - r.left - T.x) / T.s, wy = -(ev.clientY - r.top - T.y) / T.s;
+      LBLDRAG.live = projectOnPolyline(wx, wy, LBLDRAG.line);
+      draw();
+      return;
+    }
     if (!sdown) return;
     var r = cv.getBoundingClientRect();
     var x = ev.clientX - r.left, y = ev.clientY - r.top;
@@ -4192,6 +5449,19 @@ function draw(){
     if (sdown.moved){ BOX = {x0: sdown.x, y0: sdown.y, x1: x, y1: y}; draw(); }
   });
   window.addEventListener('mouseup', function(ev){
+    if (LBLDRAG){
+      if (LBLDRAG.live){
+        // Changed IN PLACE, on purpose: the label's creation is one UNDO
+        // record holding this very object, matched by REFERENCE (edFind
+        // tries indexOf first) — so undoing that creation still finds and
+        // removes it correctly no matter where it's been dragged since.
+        // Dragging itself has no undo step of its own.
+        EXTRALBL[LBLDRAG.idx].x = LBLDRAG.live.x;
+        EXTRALBL[LBLDRAG.idx].y = LBLDRAG.live.y;
+      }
+      LBLDRAG = null; draw(); touch();
+      return;
+    }
     if (!sdown) return;
     var s = sdown; sdown = null;
     if (s.moved && BOX){
@@ -4201,6 +5471,12 @@ function draw(){
       else SEL = hits;
     } else {
       var r = cv.getBoundingClientRect();
+      if (MODE === 'select' && volHit(ev.clientX - r.left, ev.clientY - r.top)){
+        VOLSEL = true; SEL = []; showSel(); draw();
+        setStatusEd('Volume boundary picked — Delete removes it.');
+        return;
+      }
+      if (VOLSEL){ VOLSEL = false; }
       var it = hitOne(ev.clientX - r.left, ev.clientY - r.top);
       if (it) selAdd(it, s.shift);
       else if (!s.shift) SEL = [];
@@ -4270,6 +5546,14 @@ function draw(){
       if (d < bd){ bd = d; best = m; }
     });
     return best;
+  }
+  /*  Is the cursor on the drawn volume boundary (visible)? Within 8 px of an edge. */
+  function volHit(mx, my){
+    if (!VOL.ring || !DRAWVIS.vol) return false;
+    var R = VOL.ring;
+    for (var i = 1; i < R.length; i++)
+      if (segDist(mx, my, SX(R[i-1][0]), SY(R[i-1][1]), SX(R[i][0]), SY(R[i][1])) < 8) return true;
+    return false;
   }
   function rcHit(mx, my){
     var dp = pickDeletedPoint(mx, my, 10);
@@ -4557,11 +5841,12 @@ function draw(){
   cv.addEventListener('contextmenu', function(ev){
     ev.preventDefault();
     if (typeof closeMenus === 'function') closeMenus();
-    if ((MODE === 'brk' || MODE === 'bnddraw') && DRAWING){    // a line/shape is being drawn — its own menu
-      var drawWord = MODE === 'bnddraw' ? 'shape' : 'line';
+    if ((MODE === 'brk' || MODE === 'bnddraw' || MODE === 'lblln' || MODE === 'voldraw') && DRAWING){    // a line/shape is being drawn — its own menu
+      var shapeMode = MODE === 'bnddraw' || MODE === 'voldraw';
+      var drawWord = MODE === 'voldraw' ? 'volume boundary' : (MODE === 'bnddraw' ? 'shape' : (MODE === 'lblln' ? 'label line' : 'line'));
       cvmOpen(ev.clientX, ev.clientY, [
         { hd:'Drawing a ' + drawWord + ' · ' + DRAWING.length + (DRAWING.length === 1 ? ' point' : ' points') },
-        { label:'Finish the ' + drawWord, k:'✔', disabled:DRAWING.length < (MODE === 'bnddraw' ? 3 : 2),
+        { label:'Finish the ' + drawWord, k:'✔', disabled:DRAWING.length < (shapeMode ? 3 : 2),
           run:function(){ endLine(); setMode('select'); } },
         { label:'Undo last point', k:'↶',
           run:function(){ DRAWING.pop(); if (!DRAWING.length) DRAWING = null; draw(); } },
@@ -4570,7 +5855,36 @@ function draw(){
       return;
     }
     var r = cv.getBoundingClientRect();
-    var hit = rcHit(ev.clientX - r.left, ev.clientY - r.top);
+    var mx0 = ev.clientX - r.left, my0 = ev.clientY - r.top;
+    if (volHit(mx0, my0)){
+      VOLSEL = true; draw();
+      cvmOpen(ev.clientX, ev.clientY, [
+        { hd:'Volume boundary' },
+        { label:'Delete volume boundary', k:'✖', run:function(){ volDeleteRing(); } }
+      ]);
+      return;
+    }
+    if (SHOW.labels && EXTRALBL.length){
+      var elh = hitLabel(mx0, my0);
+      if (elh){
+        cvmOpen(ev.clientX, ev.clientY, [
+          { hd:'Label · ' + fmt(elh.z, 3) + ' m' },
+          { label:'Delete label', k:'✖', run:function(){
+            pullOut('extralbl', EXTRALBL[elh.idx]);
+          } },
+          { label:'Delete all ' + EXTRALBL.length + ' extra labels', k:'✖',
+            run:function(){
+              var steps = EXTRALBL.slice().map(function(it){ return edDel('extralbl', it); }).filter(Boolean);
+              if (!steps.length) return;
+              UNDO.push(steps.length === 1 ? steps[0] : { op:'group', items:steps });
+              REDO.length = 0;
+              afterEdit();
+            } }
+        ]);
+        return;
+      }
+    }
+    var hit = rcHit(mx0, my0);
     var items;
     var selPts = (typeof SEL !== 'undefined') ? SEL.filter(function(s){ return s.t === 'pt'; }) : [];
     var hitInSel = hit && SEL.some(function(s){ return sameItem(s, hit); });
@@ -4671,10 +5985,18 @@ setMode('select');
 renderSurfaceChips();
 
 // The calculation settings are part of the job too.
-['iv','zlo','zhi','snapTol'].forEach(function(id){
+['iv','zlo','zhi','snapTol','maxEdge'].forEach(function(id){
   document.getElementById(id).addEventListener('input', touch);
 });
-['blz','clip','wmesh'].forEach(function(id){
+/*  The shift changes every elevation, so an existing result is rebuilt — on
+ *  leaving the field, not on every keystroke. The limits tick only matters
+ *  while there is a shift. */
+document.getElementById('zShift').addEventListener('input', function(){ zShiftUI(); touch(); });
+document.getElementById('zShift').addEventListener('change', settingChanged);
+document.getElementById('zlimSh').addEventListener('change', settingChanged);
+// Released, not dragged: one recalculation per setting, not one per pixel.
+document.getElementById('smooth').addEventListener('change', settingChanged);
+['blz','linesOnly'].forEach(function(id){
   document.getElementById(id).addEventListener('change', touch);
 });
 
