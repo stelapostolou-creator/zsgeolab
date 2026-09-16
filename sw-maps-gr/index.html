@@ -523,10 +523,63 @@
     if(en) en.classList.toggle('active', l==='en'); if(el) el.classList.toggle('active', l==='el');
   }
 
+  /*  Esri World Imagery: μερικά σημεία δεν έχουν πραγματική εικόνα σε βαθύ ζουμ —
+   *  ο server επιστρέφει ένα σταθερό, μικρό (~2,5 KB) γκρι "τίποτα εδώ ακόμα" tile
+   *  αντί για σφάλμα (πραγματική εικόνα είναι πάντα πολλά KB). Χωρίς έλεγχο, το
+   *  Leaflet θα δείχνει αυτό το γκρι τετράγωνο. Ίδιος μηχανισμός με το ZSGround
+   *  (`isoypseis`, 15/9): fetch() για να διαβαστεί το Content-Length (CORS-safe
+   *  header, το ETag δοκιμάστηκε εκεί και δεν είναι διαβάσιμο cross-origin),
+   *  και αν είναι "άδειο" ξαναδοκιμάζει στον γονέα tile (μικρότερο z), κομμένο
+   *  στο σωστό κομμάτι — αναδρομικά, όσα επίπεδα χρειαστεί, μέχρι να βρεθεί
+   *  πραγματική εικόνα. Έτσι το ζουμ φτάνει όσο πιο βαθιά γίνεται χωρίς να
+   *  δείξει ποτέ το γκρι τετράγωνο — απλά η καλύτερη εικόνα που υπάρχει εκεί. */
+  var ESRI_TILE_CACHE = {};
+  function esriFetchTile(z, x, y){
+    var key = z + '/' + x + '/' + y;
+    var ent = ESRI_TILE_CACHE[key];
+    if (ent) return ent;
+    ent = ESRI_TILE_CACHE[key] = {};
+    var url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
+    ent.ready = fetch(url).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      ent.flat = +(r.headers.get('content-length') || 0) < 5000;
+      return r.blob();
+    }).then(function(blob){
+      return new Promise(function(res){
+        var img = new Image();
+        img.onload = function(){ ent.img = img; res(ent); };
+        img.onerror = function(){ ent.failed = true; res(ent); };
+        img.src = URL.createObjectURL(blob);
+      });
+    }).catch(function(){ ent.failed = true; return ent; });
+    return ent;
+  }
+  var EsriOverzoomLayer = L.GridLayer.extend({
+    createTile: function(coords, done){
+      var tile = document.createElement('canvas');
+      tile.width = 256; tile.height = 256;
+      var ctx = tile.getContext('2d');
+      function attempt(z, x, y, qx, qy, qs){
+        esriFetchTile(z, x, y).ready.then(function(ent){
+          if (!ent.failed && !ent.flat){
+            try { ctx.drawImage(ent.img, qx, qy, qs, qs, 0, 0, 256, 256); } catch(e){}
+            done(null, tile);
+            return;
+          }
+          if (ent.failed || z <= 0 || qs < 2){ done(null, tile); return; }
+          attempt(z - 1, Math.floor(x / 2), Math.floor(y / 2),
+                  (x % 2) * 128 + qx / 2, (y % 2) * 128 + qy / 2, qs / 2);
+        });
+      }
+      attempt(coords.z, coords.x, coords.y, 0, 0, 256);
+      return tile;
+    }
+  });
+
   // --- Map ---
   map=L.map('map',{zoomControl:true,maxZoom:24}).setView([39.68,20.85],13);
   var streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:24,maxNativeZoom:19,attribution:'© OSM'});
-  var imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19,attribution:'© Esri, Maxar'});
+  var imagery=new EsriOverzoomLayer({maxZoom:24,attribution:'© Esri, Maxar'});
   var esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19});
   var satLabeled=L.layerGroup([imagery,esriLabels]).addTo(map);
   L.control.layers({'🛰️ Δορυφόρος':satLabeled,'🗺️ Χάρτης (OSM)':streets},{},{collapsed:true,position:'topright'}).addTo(map);
