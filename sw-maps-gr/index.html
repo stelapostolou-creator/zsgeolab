@@ -405,6 +405,20 @@
           <button class="btn ghost" onclick="pfFromPoints()">⛏ Από σημεία</button>
         </div>
         <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Προσθήκη κόμβου σε Χ.Θ. (m)</label><input id="pfAddCh" type="text" inputmode="decimal" placeholder="π.χ. 15.00"></div>
+          <button class="btn ghost" onclick="pfAddNode()">➕ Προσθήκη κόμβου</button>
+        </div>
+        <div class="hint" style="margin-top:10px">Κλίση ανάμεσα σε δύο κορυφές: η κορυφή «από» πρέπει να έχει ήδη γνωστό υψόμετρο — υπολογίζει το υψόμετρο της κορυφής «σε» από την κλίση. Π.χ. 1→15 με κλίση, μετά γράφεις απευθείας το υψόμετρο της 30 — κάθε τμήμα παρεμβάλλεται μόνο του.</div>
+        <div class="row2" style="margin-top:6px">
+          <div class="fld"><label>Από κορυφή # → Σε κορυφή #</label>
+            <div style="display:flex;gap:6px">
+              <input id="pfSlopeFrom" type="text" inputmode="numeric" style="width:100%" placeholder="από #">
+              <input id="pfSlopeTo" type="text" inputmode="numeric" style="width:100%" placeholder="σε #">
+            </div></div>
+          <div class="fld"><label>Κλίση % (π.χ. -2.5)</label><input id="pfSlopePct" type="text" inputmode="decimal" placeholder="%"></div>
+        </div>
+        <button class="btn ghost" style="width:100%;margin-top:8px" onclick="pfApplySlope()">📏 Εφαρμογή κλίσης</button>
+        <div class="row2" style="margin-top:10px">
           <div class="fld"><label>Βήμα πύκνωσης (m)</label><input id="pfStep" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 5.00"></div>
           <button class="btn" onclick="pfCompute()">📐 Υπολογισμός</button>
         </div>
@@ -1453,7 +1467,7 @@
    *  Κορυφές ΕΞΩ από τα γνωστά υψόμετρα δεν παίρνουν τιμή. Η προέκταση μιας
    *  κλίσης πέρα από τη μέτρηση είναι μαντεψιά που μοιάζει με μέτρηση.
    */
-  var pfV = [], pfName = '';
+  var pfV = [], pfName = '', pfLastOut = null;
 
   function pfSource(){
     var mode = document.getElementById('pfSrc').value;
@@ -1489,8 +1503,16 @@
   };
 
   function pfRender(){
-    if (!pfV.length){ document.getElementById('pfTable').innerHTML = ''; return; }
-    var h = '<div class="tblwrap" style="margin-top:12px"><table><thead><tr>' +
+    var host = document.getElementById('pfTable');
+    if (!pfV.length){ host.innerHTML = ''; return; }
+    // Το .tblwrap ξαναφτιάχνεται από την αρχή σε κάθε render — χωρίς αυτό, ένα
+    // τικ/ξετίκ σε κορυφή μακριά κάτω σε μεγάλη γραμμή πετάει τη θέα στην αρχή.
+    var oldWrap = host.querySelector('.tblwrap');
+    var savedScroll = oldWrap ? oldWrap.scrollTop : 0;
+    var h = '<div style="display:flex;gap:8px;margin:10px 0 4px">' +
+            '<button class="btn ghost small" type="button" onclick="pfSetAllUse(true)">☑ Όλα γνωστά</button>' +
+            '<button class="btn ghost small" type="button" onclick="pfSetAllUse(false)">☐ Κανένα γνωστό</button></div>' +
+            '<div class="tblwrap"><table><thead><tr>' +
             '<th>#</th><th>Χ.Θ.</th><th>X</th><th>Y</th><th>Υψόμετρο</th><th title="Χρήση ως γνωστό">γν.</th></tr></thead><tbody>';
     pfV.forEach(function(v, k){
       h += '<tr' + (v.z != null && !v.use ? ' style="opacity:.55"' : '') + '>' +
@@ -1511,8 +1533,56 @@
          '<br>Ξετίκαρε μια κορυφή για να μη μετρήσει ως γνωστή: το υψόμετρό της ' +
          'θα βγει με παρεμβολή από τις υπόλοιπες. <b>Δεν χρειάζεται βήμα</b> — ' +
          'οι κορυφές βγαίνουν πάντα.</div>';
-    document.getElementById('pfTable').innerHTML = h;
+    host.innerHTML = h;
+    var newWrap = host.querySelector('.tblwrap');
+    if (newWrap) newWrap.scrollTop = savedScroll;
   }
+
+  window.pfSetAllUse = function(on){
+    pfV.forEach(function(v){ if (v.z != null) v.use = !!on; });
+    pfRender();
+  };
+
+  /** Νέος κόμβος σε δοσμένη Χ.Θ. — θέση X/Y πάνω στη γραμμή (pfXYat), χωρίς υψόμετρο ακόμα. */
+  window.pfAddNode = function(){
+    if (!pfV.length){ alert('Φόρτωσε πρώτα τις κορυφές.'); return; }
+    var ch = parseFloat(String(document.getElementById('pfAddCh').value).replace(',', '.'));
+    var total = pfV[pfV.length - 1].ch;
+    if (!Number.isFinite(ch) || ch < 0 || ch > total){
+      alert('Δώσε Χ.Θ. μέσα στο εύρος 0 έως ' + total.toFixed(2) + ' m.');
+      return;
+    }
+    if (pfV.some(function(v){ return Math.abs(v.ch - ch) < 0.005; })){
+      alert('Υπάρχει ήδη κορυφή σε αυτή τη Χ.Θ.');
+      return;
+    }
+    var xy = pfXYat(ch);
+    pfV.push({i:0, ch:ch, x:xy.x, y:xy.y, z:null, use:false});
+    pfV.sort(function(a, b){ return a.ch - b.ch; });
+    pfV.forEach(function(v, k){ v.i = k + 1; });   // ξανααρίθμηση # μετά την εισαγωγή
+    document.getElementById('pfAddCh').value = '';
+    pfRender();
+    setStatus('προστέθηκε κόμβος στη Χ.Θ. ' + ch.toFixed(2) + ' m', 'ok');
+  };
+
+  /** Υψόμετρο στην κορυφή «σε» από κλίση % ξεκινώντας από τη γνωστή τιμή στην κορυφή «από». */
+  window.pfApplySlope = function(){
+    if (!pfV.length){ alert('Φόρτωσε πρώτα τις κορυφές.'); return; }
+    var fromI = parseInt(document.getElementById('pfSlopeFrom').value, 10);
+    var toI = parseInt(document.getElementById('pfSlopeTo').value, 10);
+    var pct = parseFloat(String(document.getElementById('pfSlopePct').value).replace(',', '.'));
+    var from = pfV[fromI - 1], to = pfV[toI - 1];
+    if (!from || !to){ alert('Δώσε έγκυρους αριθμούς κορυφών (1..' + pfV.length + ').'); return; }
+    if (from.z == null || !from.use){
+      alert('Η κορυφή ' + fromI + ' πρέπει να έχει γνωστό υψόμετρο πρώτα (γράψε τιμή ή «Από σημεία»).');
+      return;
+    }
+    if (!Number.isFinite(pct)){ alert('Δώσε κλίση σε % (π.χ. -2.5).'); return; }
+    to.z = from.z + pct / 100 * (to.ch - from.ch);
+    to.use = true;
+    pfRender();
+    setStatus('κορυφή ' + toI + ': υψόμετρο ' + to.z.toFixed(3) + ' m από κλίση ' + pct + '%', 'ok');
+  };
 
   window.pfSetZ = function(k, val){
     var n = parseFloat(String(val).replace(',', '.'));
@@ -1605,17 +1675,16 @@
       if (!uniq.length || Math.abs(c - uniq[uniq.length-1]) > 0.005) uniq.push(c);
     });
 
-    var made = 0, outside = 0, out = [];
-    var lyr = 'Μηκοτομή';
+    var outside = 0, out = [];
     uniq.forEach(function(c){
       var z = pfZat(known, c);
       if (z == null){ outside++; return; }
       var xy = pfXYat(c);
       var id = pfName + '_' + c.toFixed(2);
       out.push({id:id, ch:c, x:xy.x, y:xy.y, z:z});
-      if (addVertex(id, {x:xy.x, y:xy.y, zGiven:z}, 'Χ.Θ. ' + c.toFixed(2), lyr)) made++;
     });
-    renderMap();
+    var made = out.length;
+    pfLastOut = out;   // η Αποστολή διαβάζει από εδώ — ο Υπολογισμός δεν στέλνει τίποτα μόνος του
 
     /*  Κορυφές που ξετικαρίστηκαν: δείχνεται πόσο διαφέρει η μετρημένη τιμή
      *  από αυτή που δίνει η κλίση. Αυτή η διαφορά είναι το ζητούμενο. */
@@ -1644,8 +1713,10 @@
       '<div class="tblwrap" style="margin-top:8px"><table><thead><tr><th>Κορυφές</th><th>Χ.Θ.</th>' +
       '<th>Μήκος</th><th>ΔΖ</th><th>Κλίση</th><th>1:n</th></tr></thead><tbody>' + rows +
       '</tbody></table></div>' +
-      '<div class="hint" style="margin-top:10px">Έγιναν <b>' + made + '</b> σημεία στο layer «' +
-      lyr + '» · συνολικό μήκος ' + total.toFixed(2) + ' m</div>';
+      '<div class="hint" style="margin-top:10px">Υπολογίστηκαν <b>' + made + '</b> σημεία · ' +
+      'συνολικό μήκος ' + total.toFixed(2) + ' m — δεν έχουν σταλεί ακόμα.</div>' +
+      (made ? '<button class="btn green" style="width:100%;margin-top:8px" onclick="pfSend()">' +
+              '📤 Αποστολή στα σημεία (' + made + ')</button>' : '');
     if (noStep){
       // Πληροφορία, όχι προειδοποίηση: το ξετικάρισμα κορυφών δουλεύει
       // κανονικά χωρίς βήμα, και είναι συνηθισμένος τρόπος χρήσης.
@@ -1686,7 +1757,26 @@
     }
     html += '</div>';
     host.innerHTML = html;
-    setStatus('μηκοτομή: ' + made + ' σημεία \u2713', 'ok');
+    setStatus('μηκοτομή: υπολογίστηκαν ' + made + ' σημεία — πάτα Αποστολή', 'ok');
+  };
+
+  window.pfSend = function(){
+    if (!pfLastOut || !pfLastOut.length){
+      alert('Δεν υπάρχει υπολογισμός για αποστολή. Πάτα πρώτα Υπολογισμό.');
+      return;
+    }
+    var n = 1;
+    while (computed.some(function(c){ return c.layer === ('Μηκοτομή' + n); })) n++;
+    var lyr = 'Μηκοτομή' + n;
+    pfLastOut.forEach(function(o){
+      var w = gridsOK ? HEPOS.toWGS84(o.x, o.y, o.z) : {lat:null, lon:null, h:o.z};
+      computed.push({id:lyr + '_' + o.ch.toFixed(2), x:o.x, y:o.y, z:o.z, zReal:true,
+                     lat:w.lat, lon:w.lon, h:w.h, remarks:'Χ.Θ. ' + o.ch.toFixed(2), fix:4, layer:lyr});
+    });
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    renderMap();
+    setStatus('μηκοτομή: στάλθηκαν ' + pfLastOut.length + ' σημεία στο layer «' + lyr + '» ✓', 'ok');
   };
 
 
