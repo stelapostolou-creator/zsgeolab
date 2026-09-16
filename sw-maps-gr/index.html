@@ -113,6 +113,8 @@
   .tabbar::-webkit-scrollbar{height:0;}
   .tabbar .tb{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s;}
   .tabbar .tb.active{background:var(--navy2);border-color:var(--navy2);color:#fff;}
+  .tabbar .tb-clear{flex:0 0 auto;background:var(--card);border:1px solid var(--red);color:var(--red);border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .tabbar .tb-clear:active{background:var(--red);color:#fff;}
   .pane{display:none;} .pane.show{display:block;}
   .lnpick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
   .lp{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--mut);background:var(--bg2);}
@@ -196,6 +198,7 @@
     <div class="map-wrap"><div id="map"></div></div>
 
     <div class="tabbar">
+      <button class="tb-clear" onclick="clearAllSelection()" title="Καθαρίζει κάθε επιλογή σημείου/γραμμής (P1/P2, Γραμμή 1/2)">✕ Επιλογή</button>
       <button class="tb active" data-pane="data" onclick="showPane('data')">📂 Δεδομένα</button>
       <button class="tb" data-pane="stake" onclick="showPane('stake')">🎯 Χάραξη</button>
       <button class="tb" data-pane="calc" onclick="showPane('calc')">📐 Υπολογισμοί</button>
@@ -438,6 +441,14 @@
           <div class="fld"><label>Απόσταση (m)</label><input id="ofDist" type="text" step="0.01" inputmode="decimal" placeholder="π.χ. 2.50 ή -2.50"></div>
           <button class="btn" onclick="makeOffset()">↔ Offset</button>
         </div>
+        <div class="fld" style="margin-top:10px"><label>Κατακόρυφη μετατόπιση</label>
+          <select id="ofZMode" onchange="ofZRender()">
+            <option value="none">Καμία — ίδιο υψόμετρο με την πηγή</option>
+            <option value="dz">Σταθερό Δz (±m)</option>
+            <option value="slope">Κλίση % από την αρχή της γραμμής</option>
+          </select></div>
+        <div class="fld" id="ofZValWrap" hidden style="margin-top:8px"><label id="ofZValLbl">Δz (m)</label>
+          <input id="ofZVal" type="text" inputmode="decimal" placeholder="π.χ. -1.50 ή 2.5"></div>
         <div id="ofResult"></div>
         <div class="compbar" style="margin-top:14px">
           <span class="pill">Γραμμές που φτιάχτηκαν: <b id="genN">0</b></span>
@@ -455,6 +466,12 @@
           <button class="btn ghost" onclick="vlScan()">🔄 Ανανέωση</button>
         </div>
         <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους</label><select id="vlSurf"></select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Τελική επιφάνεια από LandXML — μόνο για σύγκριση</label>
+            <div class="hint" style="margin:0">Παίρνει μόνο τα σημεία (points), όχι έτοιμο τριγωνισμό — ξανατριγωνοποιείται εδώ, ίδια λογική με κάθε άλλη επιφάνεια.</div></div>
+          <button class="btn ghost" onclick="document.getElementById('fileLandxml').click()">📥 LandXML</button>
+        </div>
+        <input type="file" id="fileLandxml" accept=".xml,.landxml" style="display:none">
         <div class="row2" style="margin-top:10px">
           <div class="fld"><label>Σφίξιμο περιγράμματος — κενό = κυρτό (ασφαλές)</label>
             <input id="vlTight" type="text" inputmode="decimal" placeholder="κενό"></div>
@@ -499,9 +516,16 @@
           <button class="btn green" onclick="vlExportDxf()">📐 DXF</button>
         </div>
         <div class="opt" style="margin-top:10px"><input type="checkbox" id="vlDxfIso" checked><label for="vlDxfIso">Ισοϋψείς (κάθε 5η σε δικό της layer, με υψόμετρο)</label></div>
-        <div class="opt"><input type="checkbox" id="vlDxfDtm" checked><label for="vlDxfDtm">Ψηφιακό μοντέλο — τρίγωνα 3DFACE</label></div>
+        <div class="opt"><input type="checkbox" id="vlDxfDtm" checked><label for="vlDxfDtm">Ψηφιακό μοντέλο — τρίγωνα 3DFACE + σημεία</label></div>
         <div class="opt"><input type="checkbox" id="vlDxfClip" checked><label for="vlDxfClip">Κοπή ισοϋψών στο πολύγωνο</label></div>
-        <div class="hint">Αν έχεις διαλέξει <b>δεύτερη επιφάνεια</b>, μπαίνουν και οι δύο σε ξεχωριστά layers.</div>
+        <div class="fld" id="vlDxfWhichWrap" hidden style="margin-top:10px"><label>Έχεις δεύτερη επιφάνεια — ποια στο DXF;</label>
+          <select id="vlDxfWhich">
+            <option value="both">Και οι δύο (2 ξεχωριστά αρχεία)</option>
+            <option value="A">Μόνο η πρώτη (Α)</option>
+            <option value="B">Μόνο η δεύτερη (Β)</option>
+          </select></div>
+        <div class="hint">Κάθε επιφάνεια βγαίνει σε <b>δικό της αρχείο</b> — layers πάντα σταθερά αγγλικά (POINTS, DTM, CONTOURS, CONTOURS_INDEX, BOUNDARY), όχι το όνομά της, ώστε ελληνικά ονόματα να μην χαλάνε το DXF.</div>
+        <button class="btn ghost" style="width:100%;margin-top:10px" onclick="vlExportLandXML()">🏗 LandXML (η επιφάνεια, χωρίς ισοϋψείς)</button>
       </div>
     </section>
 
@@ -511,10 +535,18 @@
       <div class="opt"><input type="checkbox" id="chkGeoid" checked><label for="chkGeoid">Ορθομετρικό ύψος (Z = h − N γεωειδούς)</label></div>
       <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (γραμμές/πολύγωνα με υψόμετρο)</label></div>
       <div class="opt"><input type="checkbox" id="dxfFlat"><label for="dxfFlat">DXF: σημεία επίπεδα Z=0 (ετικέτα με πραγματικό υψόμετρο)</label></div>
+      <div class="opt"><input type="checkbox" id="txtOnlyStake"><label for="txtOnlyStake">TXT: μόνο τα σημεία χάραξης (όχι τα μετρημένα του μοντέλου)</label></div>
       <div class="btns">
         <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF (ΕΓΣΑ87)</button>
         <button class="btn" id="btnCsv" onclick="exportTXT()" disabled>📄 TXT σημείων (ανά layer)</button>
       </div>
+      <div class="opt"><input type="checkbox" id="kmlOnly2d"><label for="kmlOnly2d">KML: μόνο οι γραμμές χωρίς υψόμετρο (2D) — άδειο = όλες</label></div>
+      <div class="opt"><input type="checkbox" id="geojsonPts"><label for="geojsonPts">GeoJSON: να μπουν και τα σημεία (όχι μόνο γραμμές)</label></div>
+      <div class="row2" style="margin-top:8px">
+        <button class="btn ghost" onclick="exportKML()">🌍 KML γραμμών</button>
+        <button class="btn ghost" onclick="exportGeoJSON()">🗺 GeoJSON γραμμών</button>
+      </div>
+      <div class="hint" style="margin-top:6px">Όλες οι γραμμές — του μοντέλου, offset, περίγραμμα, εισαγμένες από DXF, μηκοτομή — με πραγματικό υψόμετρο όπου υπάρχει, για Import → Layer στο SW Maps (ή άλλη εφαρμογή). Δοκίμασε και τα δύο — άλλη εφαρμογή διαβάζει καλύτερα το ένα ή το άλλο.</div>
       <hr style="border:0;border-top:1px solid var(--line);margin:18px 0 12px">
       <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: να μπει και η περιγραφή (4η στήλη → στο SW «όνομα:περιγραφή»)</label></div>
       <button class="btn green" style="width:100%;margin-top:8px" onclick="exportStakeCSV()">📤 CSV χάραξης (για SW Maps)</button>
@@ -614,6 +646,7 @@
   // --- File handlers ---
   document.getElementById('fileDb').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadDb(f); e.target.value=''; });
   document.getElementById('fileXls').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadXls(f); e.target.value=''; });
+  document.getElementById('fileLandxml').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadLandXML(f); e.target.value=''; });
 
   function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
 
@@ -665,11 +698,14 @@
   }
   function setModel(m,fname){
     if(window.jobOnNewFile) jobOnNewFile(fname);   // άλλη βάση = νέα εργασία
+    // Χωρίς αυτό, μια επιλογή (P1/P2, Γραμμή 1/2) από την ΠΡΟΗΓΟΥΜΕΝΗ δουλειά
+    // έμενε σαν ίχνος (highlight στον χάρτη) μέχρι να διαλέξει κάτι νέο ο χρήστης.
+    pick.p1=pick.p2=null; LSEL.a=LSEL.b=null;
     model=m; layerState={};
     m.layers.forEach(function(l){ layerState[l.name]=true; });
     if(fname) model.__fname=fname;
     transformModel();
-    renderSummary(); renderLayers(); renderMap();
+    renderSummary(); renderLayers(); renderMap(); renderLines();
     document.getElementById('btnDxf').disabled=false;
     document.getElementById('btnCsv').disabled=false;
     setStatus((model.__fname||'')+(gridsOK?'':' · grids…'), gridsOK?'':'err');
@@ -727,6 +763,9 @@
     if(model) model.features.forEach(function(f){
       if(f.geomType==='LINE'||f.geomType==='POLYGON') names[f.layer]=1;
     });
+    // Και οι γραμμές από εισαγωγή DXF/offset/κτλ (genLines) — αλλιώς η λίστα
+    // έμενε κενή/απενεργοποιημένη όταν οι μόνες γραμμές δεν ήρθαν από SW Maps DB/Excel.
+    genLines.forEach(function(g){ names[g.layer]=1; });
     var list=Object.keys(names).sort();
     sel.innerHTML='<option value="*">Όλα τα layers</option>'+
       list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
@@ -1078,6 +1117,18 @@
   window.swapLines = function(){ var t=LSEL.a; LSEL.a=LSEL.b; LSEL.b=t; renderLines(); };
   window.clearLines = function(){ LSEL.a=LSEL.b=null; renderLines(); };
 
+  /*  Ένα κουμπί, πάντα ορατό (tabbar, όχι μέσα σε συγκεκριμένο εργαλείο), που
+   *  καθαρίζει ΚΑΘΕ επιλογή μαζί — P1/P2, Γραμμή 1/2, και τα τσεκαρισμένα
+   *  κουτάκια στον πίνακα σημείων (Δεδομένα). Ζητήθηκε ρητά από τον χρήστη
+   *  ώστε να μη μένει «ίχνος» επιλογής ορατό ενώ δουλεύει σε άλλο εργαλείο. */
+  window.clearAllSelection = function(){
+    pick.p1 = pick.p2 = null;
+    LSEL.a = LSEL.b = null;
+    renderLines();
+    renderMap();
+    setStatus('καθαρίστηκε η επιλογή', 'ok');
+  };
+
   function segLabel(s){
     if (!s) return '—';
     var d = Math.hypot(s.q.x - s.p.x, s.q.y - s.p.y);
@@ -1221,11 +1272,27 @@
     return 1;
   }
 
+  /*  Ίδιο με το addVertex, ΧΩΡΙΣ το «already there»: όταν σκοπίμως θέλουμε
+   *  ΚΑΘΕ κορυφή κάθε γραμμής να βγει σε σημείο, ακόμα κι αν συμπίπτει με
+   *  κορυφή άλλης γραμμής (κοινό σημείο δύο γραμμών) — ίδια λογική με τη
+   *  μηκοτομή, που διαβάζει τις κορυφές απευθείας από τη γραμμή, χωρίς dedup. */
+  function addVertexForce(id, p, rem, layer){
+    if (p.x == null) return 0;
+    var z = (p.zGiven != null) ? p.zGiven : realZ(p);
+    var w = gridsOK ? HEPOS.toWGS84(p.x, p.y, z) : {lat:p.lat, lon:p.lon, h:z};
+    computed.push({id:id, x:p.x, y:p.y, z:z, zReal:true,
+                   lat:(p.lat != null ? p.lat : w.lat), lon:(p.lon != null ? p.lon : w.lon),
+                   h:w.h, remarks:rem, fix:4, layer:layer || VXLAYER});
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    return 1;
+  }
+
   window.makeVertexPoints = function(){
-    if (!model){ alert('Δεν υπάρχουν φορτωμένα δεδομένα.'); return; }
+    if (!model && !genLines.length){ alert('Δεν υπάρχουν φορτωμένα δεδομένα.'); return; }
     var want = document.getElementById('vxLayer').value;
-    var made = 0, dup = 0, skipped = 0, feats = 0;
-    model.features.forEach(function(f){
+    var made = 0, skipped = 0, feats = 0;
+    if (model) model.features.forEach(function(f){
       if (f.geomType !== 'LINE' && f.geomType !== 'POLYGON') return;
       if (want !== '*' && f.layer !== want) return;
       if (layerState[f.layer] === false) return;     // κρυμμένο layer δεν παράγει σημεία
@@ -1237,16 +1304,35 @@
       }
       feats++;
       var base = (f.name || f.layer || 'V');
+      // Ξεχωριστό layer ανά ΠΗΓΑΙΟ layer — αλλιώς η επιλογή «ανά layer ή σε
+      // όλα» δεν φαινόταν να κάνει τίποτα: όλα κατέληγαν στο ίδιο «Κορυφές».
+      var outLyr = VXLAYER + '_' + f.layer;
       pts.forEach(function(p, i){
         if (p.x == null){ skipped++; return; }
-        var n = addVertex(base + '_' + (i+1), p, 'κορυφή', VXLAYER);
-        if (n) made++; else dup++;
+        made += addVertexForce(base + '_' + (i+1), p, 'κορυφή', outLyr);
+      });
+    });
+    // Και οι γραμμές από εισαγωγή DXF/offset/κτλ (genLines) — δεν ζουν στο
+    // model, αλλιώς αυτό το εργαλείο έλεγε «δεν υπάρχουν δεδομένα» ενώ οι
+    // γραμμές φαίνονταν κανονικά στον χάρτη.
+    genLines.forEach(function(g){
+      if (want !== '*' && g.layer !== want) return;
+      if (layerState[g.layer] === false) return;
+      var pts = g.pts.slice();
+      if (pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001) pts.pop();
+      }
+      feats++;
+      var outLyr = VXLAYER + '_' + g.layer;
+      pts.forEach(function(p, i){
+        if (p.x == null){ skipped++; return; }
+        made += addVertexForce(g.id + '_' + (i+1), p, 'κορυφή', outLyr);
       });
     });
     renderMap();
     if (!feats){ setStatus('Δεν βρέθηκαν γραμμές ή πολύγωνα σε αυτή την επιλογή.','warn'); return; }
     var msg = 'έγιναν ' + made + ' σημεία από ' + feats + ' αντικείμενα';
-    if (dup) msg += ' · ' + dup + ' υπήρχαν ήδη';
     if (skipped) msg += ' · ' + skipped + ' χωρίς συντεταγμένες';
     setStatus(msg + ' \u2713', 'ok');
   };
@@ -1348,15 +1434,30 @@
    *  τομή φεύγει μακριά και η γραμμή αυτοτέμνεται — αυτό ΔΕΝ διορθώνεται
    *  σιωπηλά, επιστρέφεται προειδοποίηση.
    */
-  function offsetPolyline(pts, d){
+  window.ofZRender = function(){
+    var mode = document.getElementById('ofZMode').value;
+    document.getElementById('ofZValWrap').hidden = (mode === 'none');
+    document.getElementById('ofZValLbl').textContent = (mode === 'slope') ? 'Κλίση % (π.χ. -2.5)' : 'Δz (m)';
+  };
+
+  /**
+   *  Προαιρετική κατακόρυφη μετατόπιση πάνω στο υψόμετρο που ήδη έχει η
+   *  γραμμή-πηγή (όχι αντί γι' αυτό) — ΙΔΙΟ Δz σε ΚΑΘΕ κόμβο (π.χ. κόμβος Α
+   *  200 m → Α' 201 m), όχι κάτι που μεγαλώνει κατά μήκος της γραμμής:
+   *  - Σταθερό Δz: όπως δίνεται.
+   *  - Κλίση %: επί της ΙΔΙΑΣ της απόστασης offset — π.χ. offset 0,20 m με
+   *    κλίση 5% = Δz 0,01 m σε κάθε κόμβο, σαν κλίση πλαγιάς/ρείθρου.
+   */
+  function offsetPolyline(pts, d, zMode, zVal){
     if (pts.length < 2) return {err:'Χρειάζονται τουλάχιστον 2 κορυφές.'};
+    var dz = (zMode === 'dz') ? zVal : (zMode === 'slope') ? (zVal / 100 * d) : 0;
     var segs = [];
     for (var i = 0; i < pts.length - 1; i++){
       var n = rightNormal(pts[i], pts[i+1]);
       if (!n) continue;                       // διπλή κορυφή: αγνοείται
       segs.push({a:{x:pts[i].x + d*n.x,   y:pts[i].y + d*n.y},
                  b:{x:pts[i+1].x + d*n.x, y:pts[i+1].y + d*n.y},
-                 z1:pts[i].z||0, z2:pts[i+1].z||0, L:n.L});
+                 z1:(pts[i].z||0) + dz, z2:(pts[i+1].z||0) + dz, L:n.L});
     }
     if (!segs.length) return {err:'Μηδενικό μήκος γραμμής.'};
 
@@ -1372,7 +1473,7 @@
     }
     var last = segs[segs.length - 1];
     out.push({x:last.b.x, y:last.b.y, z:last.z2});
-    return {pts:out, warn:warn};
+    return {pts:out, warn:warn, dz:dz};
   }
 
   /** Οι κορυφές της πηγής, ανάλογα με την επιλογή. */
@@ -1406,7 +1507,14 @@
     }
     var src = offsetSource();
     if (src.err){ host.innerHTML = '<div class="warnbox">' + esc(src.err) + '</div>'; return; }
-    var res = offsetPolyline(src.pts, d);
+
+    var zMode = document.getElementById('ofZMode').value;
+    var zVal = numIn('ofZVal');
+    if (zMode !== 'none' && !Number.isFinite(zVal)){
+      host.innerHTML = '<div class="warnbox">Δώσε ' + (zMode === 'slope' ? 'κλίση %' : 'Δz') + '.</div>';
+      return;
+    }
+    var res = offsetPolyline(src.pts, d, zMode, zVal);
     if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
 
     var id = src.name + '_off' + (d > 0 ? '+' : '') + d.toFixed(2);
@@ -1424,7 +1532,10 @@
       '<div class="big">' + esc(id) + '</div>' +
       '<div style="color:var(--mut);font-size:12px;margin-top:6px">' +
         pts.length + ' κορυφές · μήκος ' + len.toFixed(2) + ' m · ' +
-        (d < 0 ? 'αριστερά' : 'δεξιά') + ' ' + Math.abs(d).toFixed(2) + ' m</div>';
+        (d < 0 ? 'αριστερά' : 'δεξιά') + ' ' + Math.abs(d).toFixed(2) + ' m' +
+        (zMode !== 'none' ? ' · Δz ' + (res.dz >= 0 ? '+' : '') + res.dz.toFixed(3) + ' m σε κάθε κόμβο' +
+          (zMode === 'slope' ? ' (κλίση ' + zVal + '% × ' + d.toFixed(2) + ' m offset)' : '') : '') +
+        '</div>';
     if (res.warn.length){
       html += '<div class="warnbox"><b>⚠ Η γραμμή πιθανόν αυτοτέμνεται</b> στις κορυφές ' +
         res.warn.join(', ') + '. Η γωνία είναι πολύ κλειστή για τόση μετατόπιση — ' +
@@ -1766,17 +1877,27 @@
       return;
     }
     var n = 1;
-    while (computed.some(function(c){ return c.layer === ('Μηκοτομή' + n); })) n++;
+    while (computed.some(function(c){ return c.layer === ('Μηκοτομή' + n); }) ||
+           genLines.some(function(g){ return g.layer === ('Μηκοτομή' + n); })) n++;
     var lyr = 'Μηκοτομή' + n;
+    var linePts = [];
     pfLastOut.forEach(function(o){
       var w = gridsOK ? HEPOS.toWGS84(o.x, o.y, o.z) : {lat:null, lon:null, h:o.z};
       computed.push({id:lyr + '_' + o.ch.toFixed(2), x:o.x, y:o.y, z:o.z, zReal:true,
                      lat:w.lat, lon:w.lon, h:w.h, remarks:'Χ.Θ. ' + o.ch.toFixed(2), fix:4, layer:lyr});
+      linePts.push({x:o.x, y:o.y, z:o.z, lat:w.lat, lon:w.lon});
     });
+    // Ίδιο layer name με τα σημεία: το renderLayers() τα ομαδοποιεί σε ΜΙΑ σειρά
+    // «LINE+POINT» — και η γραμμή μπαίνει στο DXF export σαν 3D polyline (dxf3d).
+    // Ίδιο όνομα δύο φορές θα έφτιαχνε δεύτερη γραμμή πάνω στην πρώτη.
+    genLines = genLines.filter(function(g){ return g.id !== lyr; });
+    if (linePts.length >= 2){
+      genLines.push({id:lyr, layer:lyr, remarks:'Μηκοτομή — γραμμή με υψόμετρα ανά Χ.Θ.', pts:linePts});
+    }
     document.getElementById('btnCsv').disabled = false;
     document.getElementById('btnDxf').disabled = false;
     renderMap();
-    setStatus('μηκοτομή: στάλθηκαν ' + pfLastOut.length + ' σημεία στο layer «' + lyr + '» ✓', 'ok');
+    setStatus('μηκοτομή: στάλθηκαν ' + pfLastOut.length + ' σημεία + γραμμή στο layer «' + lyr + '» ✓', 'ok');
   };
 
 
@@ -2262,6 +2383,80 @@
     d+='0\nENDSEC\n0\nEOF\n';
     download(d,'SW_Maps_EGSA87.dxf');
   }
+  // --- KML export: μόνο γραμμές (μοντέλο + genLines — offset/hull/DXF-εισαγμένες/μηκοτομή) ---
+  function kmlEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function kmlCoords(pts){
+    return pts.map(function(p){ return p.lon.toFixed(8)+','+p.lat.toFixed(8)+','+(p.z||0).toFixed(3); }).join(' ');
+  }
+  function kmlPlacemark(name, pts, closed, mode){
+    var tag = closed ? 'Polygon' : 'LineString';
+    var body = closed
+      ? '<outerBoundaryIs><LinearRing><altitudeMode>' + mode + '</altitudeMode><coordinates>' + kmlCoords(pts) + '</coordinates></LinearRing></outerBoundaryIs>'
+      : '<altitudeMode>' + mode + '</altitudeMode><coordinates>' + kmlCoords(pts) + '</coordinates>';
+    return '<Placemark><name>' + kmlEsc(name) + '</name><styleUrl>#swline</styleUrl><' + tag + '>' + body + '</' + tag + '></Placemark>\n';
+  }
+  /** Χωρίς αξιόπιστο "ήταν πραγματικό Ζ" σε αυτό το σημείο (τα genLines το έχουν
+   *  ήδη λύσει σε αριθμό) — heuristic: αν ΟΛΕΣ οι κορυφές είναι ουσιαστικά 0,
+   *  θεωρείται 2D (καμία γραμμή μας δεν έχει σκόπιμα υψόμετρο ακριβώς 0.000). */
+  function lineIsFlat(pts){ return pts.every(function(p){ return Math.abs(p.z || 0) < 0.001; }); }
+  function exportKML(){
+    if (!model && !genLines.length){ alert('Δεν υπάρχουν γραμμές.'); return; }
+    var mode = 'clampToGround';   // absolute δεν φαινόταν αξιόπιστα — πάντα πάνω στο έδαφος
+    var only2d = document.getElementById('kmlOnly2d').checked;
+    var body = '';
+    if (model) model.features.forEach(function(f){
+      if (f.geomType === 'POINT') return;
+      var pts = f.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      if (pts.length < 2) return;
+      if (only2d && !lineIsFlat(pts)) return;
+      body += kmlPlacemark(f.name || f.layer, pts, f.geomType === 'POLYGON', mode);
+    });
+    genLines.forEach(function(g){
+      var pts = g.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      if (pts.length < 2) return;
+      if (only2d && !lineIsFlat(pts)) return;
+      body += kmlPlacemark(g.id, pts, false, mode);
+    });
+    if (!body){ alert('Καμία γραμμή με έγκυρες συντεταγμένες.'); return; }
+    var kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n' +
+      '<name>SW Maps GR — γραμμές</name>\n' +
+      '<Style id="swline"><LineStyle><color>ffa0e500</color><width>3</width></LineStyle>' +
+      '<PolyStyle><fill>0</fill></PolyStyle></Style>\n' + body + '</Document></kml>\n';
+    download(kml, 'SW_Maps_lines.kml');
+  }
+  // --- GeoJSON export: ίδιο σύνολο γραμμών με το KML, χωρίς altitudeMode (raw 3D coords) ---
+  function geojsonFeature(name, pts, closed){
+    var coords = pts.map(function(p){ return [+p.lon.toFixed(8), +p.lat.toFixed(8), +(p.z||0).toFixed(3)]; });
+    var geom = closed ? {type:'Polygon', coordinates:[coords]} : {type:'LineString', coordinates:coords};
+    return {type:'Feature', properties:{name:name}, geometry:geom};
+  }
+  function geojsonPoint(name, p, remarks){
+    return {type:'Feature', properties:{name:name, remarks:remarks||''},
+            geometry:{type:'Point', coordinates:[+p.lon.toFixed(8), +p.lat.toFixed(8), +(p.z||0).toFixed(3)]}};
+  }
+  function exportGeoJSON(){
+    if (!model && !genLines.length && !computed.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    var withPts = document.getElementById('geojsonPts').checked;
+    var feats = [];
+    if (model) model.features.forEach(function(f){
+      if (f.geomType === 'POINT') return;   // μόνο τα σημεία χάραξης (computed), όχι τα μετρημένα του μοντέλου
+      var pts = f.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      if (pts.length < 2) return;
+      feats.push(geojsonFeature(f.name || f.layer, pts, f.geomType === 'POLYGON'));
+    });
+    if (withPts) computed.forEach(function(c){
+      if (c.lat == null || c.lon == null) return;
+      feats.push(geojsonPoint(c.id, c, c.remarks));
+    });
+    genLines.forEach(function(g){
+      var pts = g.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      if (pts.length < 2) return;
+      feats.push(geojsonFeature(g.id, pts, false));
+    });
+    if (!feats.length){ alert('Καμία εγκυρη γεωμετρία (σημεία/γραμμές) με συντεταγμένες.'); return; }
+    download(JSON.stringify({type:'FeatureCollection', features:feats}), 'SW_Maps_points_lines.geojson');
+  }
   function dxfName(s){ s=String(s==null?'':s).trim().replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_'); return s||'0'; }
   function dxfText(s){ return String(s==null?'':s).replace(/[\r\n]+/g,' '); }
   function num(v){ return (v==null||isNaN(v))?'0.000':(+v).toFixed(3); }
@@ -2269,8 +2464,9 @@
   // --- TXT export: όλα τα σημεία των σχημάτων -> ΕΓΣΑ87, ανά layer (id,X,Y,Z,περιγραφή,layer) ---
   function exportTXT(){
     if(!model && !computed.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    var onlyStake = document.getElementById('txtOnlyStake').checked;
     var out=[];
-    if(model){
+    if(model && !onlyStake){
       model.features.forEach(function(f){
         f.pts.forEach(function(p,i){
           if(p.x==null) return;
@@ -2286,7 +2482,10 @@
 
   function download(text,name){
     var mime = /\.dxf$/i.test(name) ? 'application/octet-stream'
-             : /\.csv$/i.test(name) ? 'text/csv' : 'text/plain';
+             : /\.csv$/i.test(name) ? 'text/csv'
+             : /\.kml$/i.test(name) ? 'application/vnd.google-earth.kml+xml'
+             : /\.geojson$/i.test(name) ? 'application/geo+json'
+             : /\.xml$/i.test(name) ? 'application/xml' : 'text/plain';
     var blob=new Blob([text],{type:mime+';charset=utf-8'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download=name; a.rel='noopener';
@@ -2309,6 +2508,58 @@
    *  ΤΑ ΣΗΜΕΙΑ ΔΕΝ ΠΕΙΡΑΖΟΝΤΑΙ. Διαβάζονται μόνο· τίποτα δεν γράφεται πίσω.
    */
   var VOLSETS = [], VOLRINGS = [];
+
+  /*  LandXML — μόνο σαν επιφάνεια ΣΥΓΚΡΙΣΗΣ (π.χ. τελική/σχεδιαστική επιφάνεια
+   *  από Civil3D). Διαβάζονται ΜΟΝΟ τα points — όχι το έτοιμο Faces τριγωνισμό
+   *  του LandXML — γιατί το εργαλείο των Όγκων εδώ κάνει ΗΔΗ δικό του απλό
+   *  (μη-constrained) Delaunay για ΚΑΘΕ επιφάνεια, άρα καμία ανάγκη για δεύτερο
+   *  μηχανισμό τριγωνισμού. Σειρά συντεταγμένων μέσα στο <P>: Northing Easting
+   *  Elevation (LandXML default χωρίς <CoordinateSystem>) — ίδια σύμβαση με το
+   *  ZSGround/dtm_landxml.py, που είναι η αρχή αλήθειας γι' αυτό το format. */
+  var LANDXML_SURF = [];
+  function parseLandXMLPoints(text){
+    var doc = new DOMParser().parseFromString(text, 'text/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('Μη έγκυρο XML.');
+    var pEls = [], pntsList = doc.getElementsByTagName('Pnts');
+    for (var i = 0; i < pntsList.length; i++){
+      var ps = pntsList[i].getElementsByTagName('P');
+      for (var j = 0; j < ps.length; j++) pEls.push(ps[j]);
+    }
+    if (!pEls.length){
+      var all = doc.getElementsByTagName('P');
+      for (var k = 0; k < all.length; k++) pEls.push(all[k]);
+    }
+    if (!pEls.length) throw new Error('Δεν βρέθηκαν σημεία (<P>) στο LandXML.');
+    var pts = [];
+    pEls.forEach(function(el){
+      var parts = (el.textContent || '').trim().split(/\s+/).map(Number);
+      if (parts.length < 3 || parts.some(isNaN)) return;
+      pts.push({ x: parts[1], y: parts[0], z: parts[2] });   // Easting, Northing, Elevation
+    });
+    if (pts.length < 3) throw new Error('Λιγότερα από 3 έγκυρα σημεία στο LandXML.');
+    return pts;
+  }
+  function loadLandXML(file){
+    var r = new FileReader();
+    r.onload = function(e){
+      try{
+        var pts = parseLandXMLPoints(e.target.result);
+        var chk = egsaLooksOk(pts);
+        var name = file.name.replace(/\.[^.]+$/, '');
+        LANDXML_SURF.push({ name: name, pts: pts });
+        vlScan();
+        var msg = 'LandXML «' + name + '»: ' + pts.length + ' σημεία';
+        if (chk.bad > chk.total * 0.2){
+          msg += ' — ⚠ ' + chk.bad + '/' + chk.total + ' εκτός ΕΓΣΑ87 εύρους (πιθανό λάθος σειρά Y/X)';
+        }
+        setStatus(msg, chk.bad > chk.total * 0.2 ? 'err' : 'ok');
+      }catch(err){
+        setStatus('σφάλμα LandXML', 'err');
+        alert('Σφάλμα ανάγνωσης LandXML:\n' + err.message);
+      }
+    };
+    r.readAsText(file);
+  }
 
   /** Οι διαθέσιμες επιφάνειες: τι σύνολα σημείων με υψόμετρο υπάρχουν. */
   function vlPointSets(){
@@ -2343,6 +2594,9 @@
     });
     if (mine.length) sets.push({ key: 'C', label: 'Υπολογισμένα σημεία — ' + mine.length, pts: mine });
     if (sets.length > 1) sets.push({ key: 'A', label: 'Όλα μαζί — ' + all.length + ' σημεία', pts: all });
+    LANDXML_SURF.forEach(function(s, i){
+      sets.push({ key: 'X:' + i, label: '🏗 ' + s.name + ' (LandXML) — ' + s.pts.length + ' σημεία', pts: s.pts });
+    });
     return sets;
   }
 
@@ -2417,6 +2671,7 @@
     var two = document.getElementById('vlMode').value === 'surf2';
     document.getElementById('vlRefWrap').hidden = two;
     document.getElementById('vlSurf2Wrap').hidden = !two;
+    document.getElementById('vlDxfWhichWrap').hidden = !two;
   };
 
   function vlNum(v){ return v.toLocaleString('el-GR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
@@ -2585,6 +2840,86 @@
     return out;
   }
 
+  /*  Σταθερά αγγλικά ονόματα layer — ΟΧΙ παρμένα από το label της επιφάνειας
+   *  (που μπορεί να έχει ελληνικά/emoji, π.χ. layer από το SW Maps ή τίτλο
+   *  LandXML) — ένα χειρόγραφο ASCII DXF με μη-ASCII σε group code 2 (όνομα
+   *  layer) είναι γνωστή αιτία «δεν ανοίγει» σε strict CAD readers. Με μία
+   *  επιφάνεια ανά αρχείο (βλ. παρακάτω) αυτά τα ονόματα δεν χρειάζεται καν
+   *  να ξεχωρίζουν Α/Β — κάθε αρχείο έχει τη δική του πλήρη σειρά layers. */
+  function vlDxfOne(S, ring, wantIso, wantDtm, clip, step, maxEdge){
+    var lyr = {}, ents = '';
+    function addLyr(n, c){ if (!(n in lyr)) lyr[n] = c; }
+    var note = S.set.label + ': ';
+
+    if (wantDtm){
+      var m = Vol.mesh(S.set.pts, maxEdge);
+      if (m.err) return { err: m.err };
+      addLyr('DTM', S.col);
+      m.tris.forEach(function(t){
+        // Το 3DFACE θέλει τέσσερις κορυφές· η τρίτη επαναλαμβάνεται.
+        ents += '0\n3DFACE\n8\nDTM\n' +
+          '10\n' + num(t[0].x) + '\n20\n' + num(t[0].y) + '\n30\n' + num(t[0].z) + '\n' +
+          '11\n' + num(t[1].x) + '\n21\n' + num(t[1].y) + '\n31\n' + num(t[1].z) + '\n' +
+          '12\n' + num(t[2].x) + '\n22\n' + num(t[2].y) + '\n32\n' + num(t[2].z) + '\n' +
+          '13\n' + num(t[2].x) + '\n23\n' + num(t[2].y) + '\n33\n' + num(t[2].z) + '\n';
+      });
+      note += m.tris.length + ' triangles';
+      addLyr('POINTS', S.col);
+      S.set.pts.forEach(function(p){
+        ents += '0\nPOINT\n8\nPOINTS\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n' + num(p.z) + '\n';
+      });
+    }
+
+    if (wantIso){
+      var c = Vol.contours(S.set.pts, { interval: step, maxEdge: maxEdge,
+                                        ring: clip ? ring.ring : null });
+      if (c.err) return { err: S.set.label + ': ' + c.err };
+      // Κάθε πέμπτη σε δικό της layer: έτσι πάχυνε ο τοπογράφος τις κύριες.
+      addLyr('CONTOURS', S.col); addLyr('CONTOURS_INDEX', 1); addLyr('CONTOURS_TEXT', 2);
+      var nl = 0;
+      c.levels.forEach(function(L){
+        var main = Math.abs(L.z / (step * 5) - Math.round(L.z / (step * 5))) < 1e-6;
+        var lay = main ? 'CONTOURS_INDEX' : 'CONTOURS';
+        L.lines.forEach(function(P){
+          if (P.length < 2) return;
+          nl++;
+          ents += '0\nPOLYLINE\n8\n' + lay + '\n66\n1\n70\n8\n';
+          P.forEach(function(p){
+            ents += '0\nVERTEX\n8\n' + lay + '\n70\n32\n10\n' + num(p.x) +
+                    '\n20\n' + num(p.y) + '\n30\n' + num(L.z) + '\n';
+          });
+          ents += '0\nSEQEND\n8\n' + lay + '\n';
+          // Ετικέτα στη μέση, μόνο σε γραμμές που χωράνε να διαβαστούν.
+          if (main && P.length >= 4){
+            var q = P[Math.floor(P.length / 2)];
+            ents += '0\nTEXT\n8\nCONTOURS_TEXT\n10\n' + num(q.x) + '\n20\n' + num(q.y) +
+                    '\n30\n' + num(L.z) + '\n40\n0.400\n1\n' + num(L.z) + '\n';
+          }
+        });
+      });
+      note += (wantDtm ? ' · ' : '') + c.count + ' levels (' +
+        c.zmin.toFixed(2) + '–' + c.zmax.toFixed(2) + ' m) · ' + nl + ' lines · ' +
+        c.length.toFixed(0) + ' m';
+    }
+
+    if (ring){
+      addLyr('BOUNDARY', 6);
+      ents += '0\nPOLYLINE\n8\nBOUNDARY\n66\n1\n70\n1\n';
+      ring.ring.forEach(function(p){
+        ents += '0\nVERTEX\n8\nBOUNDARY\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n0.000\n';
+      });
+      ents += '0\nSEQEND\n8\nBOUNDARY\n';
+      note += ' · boundary ' + ring.ring.length + ' vertices · ' + ring.area.toFixed(1) + ' m²';
+    }
+
+    var d = '0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
+    Object.keys(lyr).forEach(function(n){
+      d += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
+    });
+    d += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
+    return { d: d, note: note };
+  }
+
   window.vlExportDxf = function(){
     var out = document.getElementById('vlOut');
     if (!VOLSETS.length){ vlScan(); vlWarn('Δεν υπάρχουν σημεία με υψόμετρο.'); return; }
@@ -2604,87 +2939,70 @@
     var maxEdge = numIn('vlMaxEdge');
     if (!(Number.isFinite(maxEdge) && maxEdge > 0)) maxEdge = 0;
 
-    var lyr = {}, ents = '', report = [];
-    function addLyr(n, c){ if (!(n in lyr)) lyr[n] = c; }
+    // Με δεύτερη επιφάνεια, ο χρήστης διαλέγει ποια — ή και τις δύο, ένα
+    // ξεχωριστό DXF η καθεμία (κανένα κοινό αρχείο πια, βλ. σχόλιο vlDxfOne).
+    if (surfaces.length > 1){
+      var which = document.getElementById('vlDxfWhich').value;
+      if (which === 'A') surfaces = [surfaces[0]];
+      else if (which === 'B') surfaces = [surfaces[1]];
+    }
 
+    var reports = [];
+    for (var s = 0; s < surfaces.length; s++){
+      var r = vlDxfOne(surfaces[s], ring, wantIso, wantDtm, clip, step, maxEdge);
+      if (r.err){ vlWarn(esc(r.err)); return; }
+      var tag = surfaces.length > 1 ? ('_' + surfaces[s].tag) : '';
+      var fname = 'Ogkoi_EGSA87' + tag + (wantIso ? '_isoypseis' : '') + (wantDtm ? '_dtm' : '') + '.dxf';
+      download(r.d, fname);
+      reports.push('<b>' + esc(fname) + '</b><br>' + esc(r.note));
+    }
+
+    out.innerHTML = '<div class="okbox">' + reports.join('<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">') + '</div>';
+    setStatus('DXF ✓ (' + reports.length + ' αρχείο' + (reports.length > 1 ? 'α' : '') + ')', 'ok');
+  };
+
+  /*  Το ίδιο τριγωνισμό (Vol.surface, index-τρίγωνα) με το DXF/3DFACE, απλά
+   *  σε LandXML points+faces — ίδια σύμβαση συντεταγμένων (Northing Easting
+   *  Elevation) με την εισαγωγή LandXML πιο πάνω, ώστε να είναι round-trip. */
+  function vlLandXML(name, pts, maxEdge){
+    var ox = pts[0].x, oy = pts[0].y;
+    var local = pts.map(function(p){ return { x: p.x - ox, y: p.y - oy, z: p.z }; });
+    var s = Vol.surface(local, maxEdge);
+    var pnts = pts.map(function(p, i){
+      return '<P id="' + (i + 1) + '">' + p.y.toFixed(3) + ' ' + p.x.toFixed(3) + ' ' + p.z.toFixed(3) + '</P>';
+    }).join('\n');
+    var faces = s.tris.map(function(t){ return '<F>' + (t[0]+1) + ' ' + (t[1]+1) + ' ' + (t[2]+1) + '</F>'; }).join('\n');
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<LandXML xmlns="http://www.landxml.org/schema/LandXML1.2" version="1.2">\n' +
+      '<Units><Metric areaUnit="squareMeter" linearUnit="meter" volumeUnit="cubicMeter" temperatureUnit="celsius" pressureUnit="mmHG"/></Units>\n' +
+      '<Surfaces><Surface name="' + kmlEsc(name) + '"><Definition surfType="TIN">\n' +
+      '<Pnts>\n' + pnts + '\n</Pnts>\n<Faces>\n' + faces + '\n</Faces>\n' +
+      '</Definition></Surface></Surfaces>\n</LandXML>\n';
+  }
+
+  window.vlExportLandXML = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('Δεν υπάρχουν σημεία με υψόμετρο.'); return; }
+    var surfaces = vlDxfLayers();
+    if (!surfaces.length){ vlWarn('Διάλεξε επιφάνεια.'); return; }
+    var maxEdge = numIn('vlMaxEdge');
+    if (!(Number.isFinite(maxEdge) && maxEdge > 0)) maxEdge = 0;
+    if (surfaces.length > 1){
+      var which = document.getElementById('vlDxfWhich').value;
+      if (which === 'A') surfaces = [surfaces[0]];
+      else if (which === 'B') surfaces = [surfaces[1]];
+    }
+    var reports = [];
     for (var s = 0; s < surfaces.length; s++){
       var S = surfaces[s];
-      var nm = dxfName(S.set.label.split(' —')[0]);
-      var note = S.tag + ' · ' + nm + ': ';
-
-      if (wantDtm){
-        var m = Vol.mesh(S.set.pts, maxEdge);
-        if (m.err){ vlWarn(esc(m.err)); return; }
-        var Ld = 'DTM_' + nm;
-        addLyr(Ld, S.col);
-        m.tris.forEach(function(t){
-          // Το 3DFACE θέλει τέσσερις κορυφές· η τρίτη επαναλαμβάνεται.
-          ents += '0\n3DFACE\n8\n' + Ld + '\n' +
-            '10\n' + num(t[0].x) + '\n20\n' + num(t[0].y) + '\n30\n' + num(t[0].z) + '\n' +
-            '11\n' + num(t[1].x) + '\n21\n' + num(t[1].y) + '\n31\n' + num(t[1].z) + '\n' +
-            '12\n' + num(t[2].x) + '\n22\n' + num(t[2].y) + '\n32\n' + num(t[2].z) + '\n' +
-            '13\n' + num(t[2].x) + '\n23\n' + num(t[2].y) + '\n33\n' + num(t[2].z) + '\n';
-        });
-        note += m.tris.length + ' τρίγωνα';
-      }
-
-      if (wantIso){
-        var c = Vol.contours(S.set.pts, { interval: step, maxEdge: maxEdge,
-                                          ring: clip ? ring.ring : null });
-        if (c.err){ vlWarn(esc(S.set.label) + ': ' + esc(c.err)); return; }
-        // Κάθε πέμπτη σε δικό της layer: έτσι πάχυνε ο τοπογράφος τις κύριες.
-        var Li = 'ISOY_' + nm, L5 = 'ISOY_' + nm + '_KYRIES', Lt = 'ISOY_' + nm + '_TEXT';
-        addLyr(Li, S.col); addLyr(L5, 1); addLyr(Lt, 2);
-        var nl = 0;
-        c.levels.forEach(function(L){
-          var main = Math.abs(L.z / (step * 5) - Math.round(L.z / (step * 5))) < 1e-6;
-          var lay = main ? L5 : Li;
-          L.lines.forEach(function(P){
-            if (P.length < 2) return;
-            nl++;
-            ents += '0\nPOLYLINE\n8\n' + lay + '\n66\n1\n70\n8\n';
-            P.forEach(function(p){
-              ents += '0\nVERTEX\n8\n' + lay + '\n70\n32\n10\n' + num(p.x) +
-                      '\n20\n' + num(p.y) + '\n30\n' + num(L.z) + '\n';
-            });
-            ents += '0\nSEQEND\n8\n' + lay + '\n';
-            // Ετικέτα στη μέση, μόνο σε γραμμές που χωράνε να διαβαστούν.
-            if (main && P.length >= 4){
-              var q = P[Math.floor(P.length / 2)];
-              ents += '0\nTEXT\n8\n' + Lt + '\n10\n' + num(q.x) + '\n20\n' + num(q.y) +
-                      '\n30\n' + num(L.z) + '\n40\n0.400\n1\n' + num(L.z) + '\n';
-            }
-          });
-        });
-        note += (wantDtm ? ' · ' : '') + c.count + ' στάθμες (' +
-          c.zmin.toFixed(2) + '–' + c.zmax.toFixed(2) + ' m) · ' + nl + ' γραμμές · ' +
-          c.length.toFixed(0) + ' m';
-      }
-      report.push(note);
+      var xml = vlLandXML(S.set.label.split(' —')[0], S.set.pts, maxEdge);
+      var tag = surfaces.length > 1 ? ('_' + S.tag) : '';
+      var fname = 'Ogkoi_EGSA87' + tag + '.xml';
+      download(xml, fname);
+      reports.push(esc(fname) + ' — ' + S.set.pts.length + ' points');
     }
-
-    if (ring){
-      addLyr('ORIO', 6);
-      ents += '0\nPOLYLINE\n8\nORIO\n66\n1\n70\n1\n';
-      ring.ring.forEach(function(p){
-        ents += '0\nVERTEX\n8\nORIO\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n0.000\n';
-      });
-      ents += '0\nSEQEND\n8\nORIO\n';
-      report.push('όριο · ' + ring.ring.length + ' κορυφές · ' + ring.area.toFixed(1) + ' m²');
-    }
-
-    var d = '0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
-    Object.keys(lyr).forEach(function(n){
-      d += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
-    });
-    d += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
-
-    var fname = 'Ogkoi_EGSA87' + (wantIso ? '_isoypseis' : '') + (wantDtm ? '_dtm' : '') + '.dxf';
-    download(d, fname);
-    out.innerHTML = '<div class="okbox"><b>' + esc(fname) + '</b><br>' +
-      report.map(esc).join('<br>') + '<br>Layers: ' + Object.keys(lyr).map(esc).join(', ') +
-      '</div>';
-    setStatus('DXF ✓', 'ok');
+    out.innerHTML = '<div class="okbox">' + reports.join('<br>') + '</div>';
+    setStatus('LandXML ✓', 'ok');
   };
 
 
