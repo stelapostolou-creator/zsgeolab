@@ -18,6 +18,7 @@
 <script src="../lib/vendor/proj4.js"></script>
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
+<script src="../lib/vendor/sql-wasm-binary.js"></script>
 <script src="../lib/swmaps.js?v=20260906i"></script>
 <script src="../lib/jobs.js?v=20260906i"></script>
 <style>
@@ -309,9 +310,18 @@
   document.getElementById('fileDb').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadDb(f); e.target.value=''; });
   document.getElementById('fileXls').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadXls(f); e.target.value=''; });
   function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
+  function b64ToBytes(b64){
+    var bin=atob(b64), n=bin.length, bytes=new Uint8Array(n);
+    for(var i=0;i<n;i++) bytes[i]=bin.charCodeAt(i);
+    return bytes;
+  }
   async function loadDb(file){
     try{ setStatus('loading DB…');
-      var SQL=await initSqlJs({locateFile:f=>'../lib/vendor/'+f});
+      // Χωρίς wasmBinary, το sql.js κάνει fetch() του .wasm — μπλοκάρεται από CORS
+      // όταν η σελίδα ανοίγει με διπλό κλικ (file://), άρα «δεν κάνει τίποτα» σιωπηλά.
+      var opts={locateFile:f=>'../lib/vendor/'+f};
+      if(window.SQL_WASM_BASE64) opts.wasmBinary=b64ToBytes(window.SQL_WASM_BASE64);
+      var SQL=await initSqlJs(opts);
       var db=new SQL.Database(new Uint8Array(await readBuf(file)));
       var m=SWMaps.fromDb(db); db.close();
       if(m.crs&&m.crs.code){ document.getElementById('epsgCode').value=m.crs.code; applyEPSG(true); setStatus('DB CRS: EPSG:'+m.crs.code,'ok'); }

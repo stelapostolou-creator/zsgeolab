@@ -17,6 +17,7 @@
 <script src="../lib/vendor/leaflet.js"></script>
 <script src="../lib/vendor/xlsx.full.min.js"></script>
 <script src="../lib/vendor/sql-wasm.js"></script>
+<script src="../lib/vendor/sql-wasm-binary.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
 <script src="../lib/hepos.js?v=20260906i"></script>
 <script src="../lib/hepos_grids.js"></script>
@@ -549,10 +550,19 @@
 
   function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
 
+  function b64ToBytes(b64){
+    var bin=atob(b64), n=bin.length, bytes=new Uint8Array(n);
+    for(var i=0;i<n;i++) bytes[i]=bin.charCodeAt(i);
+    return bytes;
+  }
   async function loadDb(file){
     try{
       setStatus('φόρτωση DB…');
-      var SQL=await initSqlJs({locateFile:f=>'../lib/vendor/'+f});
+      // Χωρίς wasmBinary, το sql.js κάνει fetch() του .wasm — μπλοκάρεται από CORS
+      // όταν η σελίδα ανοίγει με διπλό κλικ (file://), άρα «δεν κάνει τίποτα» σιωπηλά.
+      var opts={locateFile:f=>'../lib/vendor/'+f};
+      if(window.SQL_WASM_BASE64) opts.wasmBinary=b64ToBytes(window.SQL_WASM_BASE64);
+      var SQL=await initSqlJs(opts);
       var buf=await readBuf(file);
       var db=new SQL.Database(new Uint8Array(buf));
       var m=SWMaps.fromDb(db); db.close();
@@ -629,10 +639,16 @@
       model.features.forEach(function(f){ (byLayer[f.layer]=byLayer[f.layer]||{type:f.geomType,color:f.color,n:0}).n++; });
       Object.keys(byLayer).forEach(function(name){ addLayerRow(host,name,byLayer[name].type,byLayer[name].color,byLayer[name].n,true); rows++; });
     }
-    var comp={};
-    computed.forEach(function(cp){ var ly=cp.layer||'StakeOut'; comp[ly]=(comp[ly]||0)+1; });
-    genLines.forEach(function(g){ addLayerRow(host,g.id,'LINE','#00e5a0',g.pts.length,false); rows++; });
-    Object.keys(comp).forEach(function(name){ addLayerRow(host,name,'POINT','#ff8a8a',comp[name],false); rows++; });
+    // Μία σειρά ανά layer, όχι ανά γραμμή: ένα DXF layer με 1000 γραμμές είναι ΜΙΑ σειρά.
+    var grp={}, order=[];
+    function g_(n){ if(!grp[n]){ grp[n]={lines:0,pts:0}; order.push(n); } return grp[n]; }
+    genLines.forEach(function(g){ g_(g.layer).lines++; });
+    computed.forEach(function(cp){ g_(cp.layer||'StakeOut').pts++; });
+    order.forEach(function(name){
+      var s=grp[name];
+      var type = s.lines && s.pts ? 'LINE+POINT' : (s.lines ? 'LINE' : 'POINT');
+      addLayerRow(host,name,type,s.lines?'#00e5a0':'#ff8a8a',s.lines+s.pts,false); rows++;
+    });
     if(!rows) host.innerHTML='<div class="empty">Άνοιξε αρχείο SW Maps ή ανέβασε TXT για να δεις τα layers.</div>';
     fillVertexLayers();
   }
@@ -1624,8 +1640,10 @@
   /* ==================== ΕΙΣΑΓΩΓΗ DXF ====================
    *
    *  Το DXF είναι ζεύγη (κωδικός, τιμή) σε εναλλασσόμενες γραμμές. Διαβάζονται
-   *  POINT, LINE, LWPOLYLINE και POLYLINE/VERTEX. Ό,τι άλλο (κείμενα, blocks,
-   *  κύκλοι, hatch) αναφέρεται ως παραλειπόμενο αντί να αγνοηθεί σιωπηλά.
+   *  POINT, INSERT (σημείο = σημείο εισαγωγής του block· πολλά σχέδια βάζουν
+   *  τα σημεία τοπογραφίας σαν block/σύμβολο αντί για POINT), LINE, LWPOLYLINE
+   *  και POLYLINE/VERTEX. Ό,τι άλλο (κείμενα, κύκλοι, hatch) αναφέρεται ως
+   *  παραλειπόμενο αντί να αγνοηθεί σιωπηλά.
    *
    *  ΥΨΟΜΕΤΡΑ: η τρισδιάστατη πολυγραμμή έχει Z ανά κορυφή. Η δισδιάστατη έχει
    *  ΕΝΑ υψόμετρο για όλες (κωδικός 38 στη LWPOLYLINE) — που είναι εξίσου
@@ -1698,7 +1716,9 @@
     for (k = 0; k < ents.length; k++){
       var e = ents[k], T = e.type, lyr = dxfGet(e.pairs, 8, '0');
 
-      if (T === 'POINT'){
+      if (T === 'POINT' || T === 'INSERT'){
+        // INSERT (block reference): το σημείο εισαγωγής (10/20/30) είναι η θέση του
+        // block/συμβόλου στο σχέδιο — ίδιοι κωδικοί με το POINT.
         pts.push({id:'', layer:lyr, x:dxfNum(e.pairs,10,NaN), y:dxfNum(e.pairs,20,NaN), z:dxfNum(e.pairs,30,0)});
 
       } else if (T === 'LINE'){
@@ -1756,10 +1776,16 @@
       var host = document.getElementById('dxfPanel');
       if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
       if (!res.pts.length && !res.lines.length){
-        host.innerHTML = '<div class="warnbox">Δεν βρέθηκαν σημεία ή γραμμές. Υποστηρίζονται POINT, LINE, LWPOLYLINE, POLYLINE.</div>';
+        host.innerHTML = '<div class="warnbox">Δεν βρέθηκαν σημεία ή γραμμές. Υποστηρίζονται POINT, INSERT, LINE, LWPOLYLINE, POLYLINE.</div>';
         return;
       }
-      dxfPending = {name:file.name.replace(/\.[^.]+$/, ''), res:res};
+      var byLayer = {};
+      function lyStat(n){ return byLayer[n] = byLayer[n] || {pts:0, lines:0, polys:0}; }
+      res.pts.forEach(function(p){ lyStat(p.layer).pts++; });
+      res.lines.forEach(function(l){ if (l.closed) lyStat(l.layer).polys++; else lyStat(l.layer).lines++; });
+      var layerNames = Object.keys(byLayer).sort(function(a, b){ return a.localeCompare(b); });
+
+      dxfPending = {name:file.name.replace(/\.[^.]+$/, ''), res:res, layers:layerNames};
 
       var all = res.pts.concat([]);
       res.lines.forEach(function(l){ all = all.concat(l.pts); });
@@ -1782,6 +1808,25 @@
         h += '<div class="hint">Δεν διαβάστηκαν: ' +
              sk.map(function(t){ return esc(t) + ' ×' + res.skipped[t]; }).join(', ') + '</div>';
       }
+      // Τα layers ξεκινούν ΑΤΙΚΑΡΙΣΤΑ: ένα σχέδιο CAD έχει δεκάδες και ο χρήστης διαλέγει ό,τι χρειάζεται.
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">' +
+             '<b style="font-size:13px;color:#f0f6ff">Layers (' + layerNames.length + ')</b>' +
+             '<button class="btn ghost small" style="margin-left:auto" onclick="dxfPickAll(true)">☑ Όλα</button>' +
+             '<button class="btn ghost small" onclick="dxfPickAll(false)">☐ Κανένα</button>' +
+           '</div>' +
+           '<div id="dxLayers" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:2px 8px;margin-top:8px">';
+      layerNames.forEach(function(n, idx){
+        var s = byLayer[n], parts = [];
+        if (s.pts)   parts.push(s.pts + ' σημ.');
+        if (s.lines) parts.push(s.lines + ' γραμ.');
+        if (s.polys) parts.push(s.polys + ' πολ.');
+        h += '<label class="layer" style="cursor:pointer">' +
+               '<input type="checkbox" class="dxLy" value="' + idx + '" onchange="dxfPickCount()">' +
+               '<span class="nm">' + esc(n) + '</span>' +
+               '<span class="ct">' + parts.join(' · ') + '</span>' +
+             '</label>';
+      });
+      h += '</div><div class="hint" id="dxPickInfo">Επιλεγμένα: κανένα layer</div>';
       h += '<div class="opt" style="margin-top:10px"><input type="checkbox" id="dxVx" checked>' +
            '<label for="dxVx">Σημεία χάραξης σε κάθε κορυφή</label></div>' +
            '<div class="fld" style="margin-top:8px"><label>Υψόμετρο σημείων</label>' +
@@ -1800,9 +1845,37 @@
     r.readAsText(file);
   });
 
+  function dxfPickedLayers(){
+    var on = {};
+    document.querySelectorAll('#dxLayers .dxLy:checked').forEach(function(c){
+      on[dxfPending.layers[+c.value]] = true;
+    });
+    return on;
+  }
+  window.dxfPickCount = function(){
+    if (!dxfPending) return;
+    var on = dxfPickedLayers(), res = dxfPending.res;
+    var nLy = Object.keys(on).length;
+    var np = res.pts.filter(function(p){ return on[p.layer]; }).length;
+    var nl = res.lines.filter(function(l){ return on[l.layer]; }).length;
+    document.getElementById('dxPickInfo').textContent = nLy
+      ? 'Επιλεγμένα: ' + nLy + ' layers → ' + nl + ' γραμμές/πολύγωνα, ' + np + ' σημεία'
+      : 'Επιλεγμένα: κανένα layer';
+  };
+  window.dxfPickAll = function(v){
+    document.querySelectorAll('#dxLayers .dxLy').forEach(function(c){ c.checked = v; });
+    dxfPickCount();
+  };
+
   window.dxfImport = function(){
     if (!dxfPending) return;
-    var res = dxfPending.res, base = dxfPending.name;
+    var on = dxfPickedLayers();
+    if (!Object.keys(on).length){ alert('Διάλεξε τουλάχιστον ένα layer.'); return; }
+    var res = {
+      pts:   dxfPending.res.pts.filter(function(p){ return on[p.layer]; }),
+      lines: dxfPending.res.lines.filter(function(l){ return on[l.layer]; })
+    };
+    var base = dxfPending.name;
     var wantVx = document.getElementById('dxVx').checked;
     var zMode = document.getElementById('dxZ').value;
 
@@ -1839,16 +1912,17 @@
         var a = pts[0], b = pts[pts.length-1];
         if (Math.abs(a.x-b.x) > 0.001 || Math.abs(a.y-b.y) > 0.001) pts.push(toLL(l.pts[0], zOf(l.pts[0])));
       }
-      var id = base + '_' + l.layer + '_' + (k+1);
-      genLines.push({id:id, layer:id, remarks:'DXF · layer ' + l.layer, pts:pts});
+      var grpName = base + '_' + l.layer;
+      var id = grpName + '_' + (k+1);
+      genLines.push({id:id, layer:grpName, remarks:'DXF · layer ' + l.layer, pts:pts});
       nl++;
       if (wantVx) pts.forEach(function(p, j){
-        if (addVertex(id + '_' + (j+1), {x:p.x, y:p.y, zGiven:p.z}, 'DXF κορυφή', 'DXF')) np++;
+        if (addVertex(id + '_' + (j+1), {x:p.x, y:p.y, zGiven:p.z}, 'DXF κορυφή', grpName)) np++;
       });
     });
     res.pts.forEach(function(p, k){
       var z = zOf(p);
-      if (addVertex(base + '_P' + (k+1), {x:p.x, y:p.y, zGiven:z}, 'DXF σημείο', 'DXF')) np++;
+      if (addVertex(base + '_P' + (k+1), {x:p.x, y:p.y, zGiven:z}, 'DXF σημείο', base + '_' + p.layer)) np++;
     });
 
     dxfPending = null;
