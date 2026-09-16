@@ -535,6 +535,7 @@
       <div class="opt"><input type="checkbox" id="chkGeoid" checked><label for="chkGeoid">Ορθομετρικό ύψος (Z = h − N γεωειδούς)</label></div>
       <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (γραμμές/πολύγωνα με υψόμετρο)</label></div>
       <div class="opt"><input type="checkbox" id="dxfFlat"><label for="dxfFlat">DXF: σημεία επίπεδα Z=0 (ετικέτα με πραγματικό υψόμετρο)</label></div>
+      <div class="opt"><input type="checkbox" id="dxfOnlyStake"><label for="dxfOnlyStake">DXF: μόνο σημεία/γραμμές χάραξης (όχι το μοντέλο)</label></div>
       <div class="opt"><input type="checkbox" id="txtOnlyStake"><label for="txtOnlyStake">TXT: μόνο τα σημεία χάραξης (όχι τα μετρημένα του μοντέλου)</label></div>
       <div class="btns">
         <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF (ΕΓΣΑ87)</button>
@@ -2336,6 +2337,8 @@
   }
   function exportDXF(){
     if(!model && !computed.length && !genLines.length){ alert('Δεν υπάρχουν δεδομένα.'); return; }
+    var onlyStake=document.getElementById('dxfOnlyStake').checked;
+    if(onlyStake && !computed.length && !genLines.length){ alert('Δεν υπάρχουν σημεία/γραμμές χάραξης — μόνο δεδομένα μοντέλου.'); return; }
     if(!gridsOK){ if(!confirm('Τα grids ΕΓΣΑ δεν φορτώθηκαν — οι συντεταγμένες θα είναι ανακριβείς. Συνέχεια;')) return; }
     var scale=0.5;
     var poly3d=document.getElementById('dxf3d').checked, flat=document.getElementById('dxfFlat').checked;
@@ -2343,15 +2346,15 @@
     var lyr={};
     function addLyr(name,c){ if(!(name in lyr)) lyr[name]=c; }
     function ptLayers(base,col){ addLyr(base,col); addLyr(base+'_ID',2); addLyr(base+'_Z',4); addLyr(base+'_Desc',3); }
-    if(model) model.features.forEach(function(f){ var base=dxfName(f.layer), col=aci(f.color);
+    if(model && !onlyStake) model.features.forEach(function(f){ var base=dxfName(f.layer), col=aci(f.color);
       if(f.geomType==='POINT') ptLayers(base,col); else addLyr(base,col);
     });
     computed.forEach(function(c){ ptLayers(dxfName(c.layer||'StakeOut'),1); });
     genLines.forEach(function(g){ addLyr(dxfName(g.layer),3); });
-    // --- HEADER + TABLES (LAYER) ---
-    var d='0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
-    Object.keys(lyr).forEach(function(name){ d+='0\nLAYER\n2\n'+name+'\n70\n0\n62\n'+lyr[name]+'\n6\nCONTINUOUS\n'; });
-    d+='0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+    // --- HEADER + TABLES + BLOCKS (dxfPreamble) ---
+    var layerEnts='';
+    Object.keys(lyr).forEach(function(name){ layerEnts+='0\nLAYER\n2\n'+name+'\n70\n0\n62\n'+lyr[name]+'\n6\nCONTINUOUS\n'; });
+    var d=dxfPreamble(layerEnts)+'0\nSECTION\n2\nENTITIES\n';
     // --- helper: σημείο + κειμενάκια (αριθμός/υψόμετρο/περιγραφή σε sub-layers) ---
     function emitPoint(base,col,id,x,y,z,rem){
       var pz=flat?0:z;
@@ -2361,7 +2364,7 @@
       if(rem) d+='0\nTEXT\n8\n'+base+'_Desc\n62\n3\n10\n'+num(x+scale*1.7)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+dxfText(rem)+'\n';
     }
     // --- entities ---
-    if(model) model.features.forEach(function(f){
+    if(model && !onlyStake) model.features.forEach(function(f){
       var base=dxfName(f.layer), col=aci(f.color);
       if(f.geomType==='POINT'){
         f.pts.forEach(function(p){ emitPoint(base,col,(p.__id||f.name),p.x,p.y,p.z,f.remarks); });
@@ -2457,8 +2460,50 @@
     if (!feats.length){ alert('Καμία εγκυρη γεωμετρία (σημεία/γραμμές) με συντεταγμένες.'); return; }
     download(JSON.stringify({type:'FeatureCollection', features:feats}), 'SW_Maps_points_lines.geojson');
   }
-  function dxfName(s){ s=String(s==null?'':s).trim().replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_'); return s||'0'; }
-  function dxfText(s){ return String(s==null?'':s).replace(/[\r\n]+/g,' '); }
+  /*  ASCII DXF (καμία σελίδα κωδικών δηλωμένη) + όνομα layer με ελληνικά =
+   *  γνωστή αιτία «δεν ανοίγει» σε strict readers (π.χ. πραγματικό AutoCAD) —
+   *  ίδιο ζήτημα με τα layers των Όγκων, αλλά εδώ ΔΕΝ μπορούν να γίνουν
+   *  σταθερά αγγλικά (είναι τα ΔΙΚΑ ΤΟΥ ΧΡΗΣΤΗ layer names) — μεταγραφή σε
+   *  λατινικούς χαρακτήρες, ώστε να μείνουν αναγνωρίσιμα. */
+  var GREEKLISH = {
+    'Α':'A','Β':'V','Γ':'G','Δ':'D','Ε':'E','Ζ':'Z','Η':'I','Θ':'TH','Ι':'I','Κ':'K','Λ':'L','Μ':'M',
+    'Ν':'N','Ξ':'X','Ο':'O','Π':'P','Ρ':'R','Σ':'S','Τ':'T','Υ':'Y','Φ':'F','Χ':'CH','Ψ':'PS','Ω':'O',
+    'Ά':'A','Έ':'E','Ή':'I','Ί':'I','Ό':'O','Ύ':'Y','Ώ':'O','Ϊ':'I','Ϋ':'Y',
+    'α':'a','β':'v','γ':'g','δ':'d','ε':'e','ζ':'z','η':'i','θ':'th','ι':'i','κ':'k','λ':'l','μ':'m',
+    'ν':'n','ξ':'x','ο':'o','π':'p','ρ':'r','σ':'s','ς':'s','τ':'t','υ':'y','φ':'f','χ':'ch','ψ':'ps','ω':'o',
+    'ά':'a','έ':'e','ή':'i','ί':'i','ό':'o','ύ':'y','ώ':'o','ϊ':'i','ϋ':'y','ΐ':'i','ΰ':'y'
+  };
+  function greeklish(s){
+    return s.replace(/[Α-Ωα-ωΆΈΉΊΌΎΏΪΫάέήίόύώϊϋΐΰ]/g, function(ch){ return GREEKLISH[ch] || ch; });
+  }
+  /*  Χωρίς $ACADVER, το AutoCAD υποθέτει R12 — όριο 31 χαρακτήρων ανά layer
+   *  name με κάτι λίγο μακρύτερο, π.χ. layer_ID/_Desc). Το AC1015 (μοντέρνη
+   *  μορφή, όριο 255 χαρακτήρων) δοκιμάστηκε — χρειάζεται ΟΛΟΚΛΗΡΟ δικτυωμένο
+   *  σύστημα handle/owner (κωδικοί 5/330) σε κάθε πίνακα/entity, σαν μικρή
+   *  βάση δεδομένων· χωρίς αυτό «Bad handle 0» — πολύ ρίσκο για χειρόγραφο
+   *  DXF χωρίς πραγματική βιβλιοθήκη. Παραμένουμε στο R12 (δοκιμασμένο,
+   *  δουλεύει ΗΔΗ στους Όγκους) και κόβουμε τα ονόματα στο dxfName αντ' αυτού. */
+  function dxfPreamble(layerEnts){
+    return '0\nSECTION\n2\nHEADER\n0\nENDSEC\n' +
+      '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n0\n' + layerEnts + '0\nENDTAB\n0\nENDSEC\n';
+  }
+  function dxfName(s){
+    s = greeklish(String(s==null?'':s).trim());
+    s = s.replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_');
+    s = s.replace(/[^\x20-\x7E]/g,'');   // ό,τι μη-ASCII απομένει (π.χ. emoji) φεύγει, δεν αγνοείται σιωπηλά
+    s = s||'0';
+    // R12: όριο 31 χαρακτήρων ανά layer name. Τα σημεία προσθέτουν sub-layers
+    // (_ID/_Z/_Desc, μέχρι 5 χαρακτήρες) πάνω σε αυτό — κρατάμε περιθώριο.
+    if (s.length > 26) s = s.slice(0, 26);
+    return s;
+  }
+  /*  Το ίδιο πρόβλημα με τα layer names (μη-ASCII σε χειρόγραφο ASCII DXF)
+   *  ισχύει και για το ΠΕΡΙΕΧΟΜΕΝΟ ενός TEXT entity (π.χ. η περιγραφή ενός
+   *  σημείου) — δεν αρκούσε να διορθωθούν μόνο τα layer names. */
+  function dxfText(s){
+    s = greeklish(String(s==null?'':s).replace(/[\r\n]+/g,' '));
+    return s.replace(/[^\x20-\x7E]/g,'');
+  }
   function num(v){ return (v==null||isNaN(v))?'0.000':(+v).toFixed(3); }
 
   // --- TXT export: όλα τα σημεία των σχημάτων -> ΕΓΣΑ87, ανά layer (id,X,Y,Z,περιγραφή,layer) ---
@@ -2912,11 +2957,11 @@
       note += ' · boundary ' + ring.ring.length + ' vertices · ' + ring.area.toFixed(1) + ' m²';
     }
 
-    var d = '0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n';
+    var layerEnts = '';
     Object.keys(lyr).forEach(function(n){
-      d += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
+      layerEnts += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
     });
-    d += '0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
+    var d = dxfPreamble(layerEnts) + '0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
     return { d: d, note: note };
   }
 
