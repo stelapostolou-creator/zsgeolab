@@ -558,7 +558,10 @@
         <input type="checkbox" id="bsOn" onchange="BASESHIFT.on=this.checked">
         <label for="bsOn">Ενεργό στις εξαγωγές (Α → Β)</label>
       </div>
-      <div class="hint" style="margin-top:4px">Ποια layers παίρνουν το shift:</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <div class="hint" style="flex:1;margin:0">Ποια layers παίρνουν το shift:</div>
+        <button class="btn ghost small" onclick="bsToggleAllLayers()">☑ Όλα/κανένα</button>
+      </div>
       <div id="bsLayerList" style="margin-top:6px"></div>
     </div>
     <div class="card">
@@ -664,7 +667,14 @@
             z: (p.z != null ? p.z + BASESHIFT.dz : p.z)};
   }
 
-  function setStatus(t,cls){ var s=document.getElementById('status'); s.textContent=t; s.style.color = cls==='err'?'#ff9ea0':(cls==='ok'?'#8ff0b6':'#93a3bd'); }
+  /*  Ο χρήστης ζήτησε να φύγουν οι πράσινες («ok») επιβεβαιώσεις πάνω δεξιά —
+   *  ένιωθαν σαν συνεχής θόρυβος σε κάθε ενέργεια. Τα προειδοποιητικά/
+   *  σφάλματα (err/warn) και οι ουδέτερες ενδείξεις (όνομα αρχείου, grids)
+   *  παραμένουν, μόνο το πράσινο «όλα καλά» έφυγε. */
+  function setStatus(t,cls){
+    if(cls==='ok') return;
+    var s=document.getElementById('status'); s.textContent=t; s.style.color = cls==='err'?'#ff9ea0':'#93a3bd';
+  }
   function openAbout(){ document.getElementById('aboutModal').classList.add('show'); }
   function closeAbout(){ document.getElementById('aboutModal').classList.remove('show'); }
   function setAboutLang(l){
@@ -903,6 +913,11 @@
       chk.addEventListener('change', function(){ BASESHIFT.layers[this.getAttribute('data-name')]=this.checked; });
     });
   }
+  window.bsToggleAllLayers = function(){
+    var boxes=document.querySelectorAll('#bsLayerList input.bschk'); if(!boxes.length) return;
+    var anyOff=false; boxes.forEach(function(b){ if(!b.checked) anyOff=true; });
+    boxes.forEach(function(b){ b.checked=anyOff; BASESHIFT.layers[b.getAttribute('data-name')]=anyOff; });
+  };
 
   /** Στο dropdown μπαίνουν μόνο layers που ΕΧΟΥΝ κορυφές — όχι σημειακά. */
   function fillVertexLayers(){
