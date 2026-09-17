@@ -69,6 +69,7 @@
   .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
   .layer .nm{font-weight:700;color:#f0f6ff;} .layer .ty{font-size:11px;color:var(--mut);text-transform:uppercase;}
   .layer .ct{margin-left:auto;font-size:12px;color:var(--mut);}
+  .layer .shiftlbl{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--mut);cursor:pointer;white-space:nowrap;}
   .lyrdel{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;margin-left:8px;}
   .lyrdel:hover{border-color:var(--red);color:var(--red);}
   .empty{color:var(--mut);font-size:13px;text-align:center;padding:14px;}
@@ -260,6 +261,7 @@
         <button class="btn ghost small" onclick="toggleAllSel(this)">☑ Όλα/κανένα</button>
         <button class="btn small" onclick="sendToTools()">➜ Στα εργαλεία (P1/P2)</button>
         <button class="btn ghost small" onclick="copySelectedToStake()">📋 Αντιγραφή σε χάραξη</button>
+        <button class="btn ghost small" onclick="bsSetPairFromTable()" title="Τσέκαρε ακριβώς 2 σημεία πρώτα">⚓ Ζεύγος shift</button>
         <button class="btn red small" onclick="deleteSelected()">🗑 Διαγραφή επιλεγμένων</button>
       </div>
       <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Περιγραφή</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
@@ -465,7 +467,7 @@
           <div class="fld"><label>Περιοχή (πολύγωνο)</label><select id="vlRing"></select></div>
           <button class="btn ghost" onclick="vlScan()">🔄 Ανανέωση</button>
         </div>
-        <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους</label><select id="vlSurf"></select></div>
+        <div class="fld" style="margin-top:10px"><label>Επιφάνεια εδάφους</label><select id="vlSurf" onchange="renderVlShiftList()"></select></div>
         <div class="row2" style="margin-top:10px">
           <div class="fld"><label>Τελική επιφάνεια από LandXML — μόνο για σύγκριση</label>
             <div class="hint" style="margin:0">Παίρνει μόνο τα σημεία (points), όχι έτοιμο τριγωνισμό — ξανατριγωνοποιείται εδώ, ίδια λογική με κάθε άλλη επιφάνεια.</div></div>
@@ -480,14 +482,21 @@
         <div class="hint">Φτιάχνει πολύγωνο από τα <b>εξωτερικά σημεία</b> της επιφάνειας που διάλεξες, και το δείχνει στον χάρτη. Κενό σφίξιμο = κυρτό περίβλημα, δεν σπάει ποτέ. Με σφίξιμο (δοκίμασε 2 ως 3) ακολουθεί σχήματα σαν Γ — αλλά σε ακανόνιστα σημεία μπορεί να κομματιάσει, και θα στο πει.</div>
 
         <div class="fld" style="margin-top:10px"><label>Σύγκριση με</label>
-          <select id="vlMode" onchange="vlRender()">
+          <select id="vlMode" onchange="vlRender();renderVlShiftList()">
             <option value="ref">Σταθερό τελικό υψόμετρο</option>
             <option value="surf2">Δεύτερη επιφάνεια</option>
           </select></div>
         <div class="fld" id="vlRefWrap" style="margin-top:10px"><label>Τελικό υψόμετρο (m)</label>
           <input id="vlRef" type="text" inputmode="decimal" placeholder="π.χ. 797,500"></div>
         <div class="fld" id="vlSurf2Wrap" hidden style="margin-top:10px"><label>Δεύτερη επιφάνεια</label>
-          <select id="vlSurf2"></select></div>
+          <select id="vlSurf2" onchange="renderVlShiftList()"></select></div>
+        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;color:var(--mut);flex:1">Base shift ανά επιφάνεια — Τσέκαρε 2 σημεία στον πίνακα Σημείων, μετά ⚓ Ζεύγος shift εδώ.</label>
+            <button class="btn ghost small" onclick="vlShiftReset()">🗑 Καθαρισμός όλων</button>
+          </div>
+          <div id="vlShiftList" style="margin-top:6px"></div>
+        </div>
         <div id="vlInfo"></div>
       </div>
 
@@ -531,6 +540,28 @@
 
     <section class="pane" id="pane-out">
     <div class="card">
+      <h2><span class="c"></span>Base shift</h2>
+      <div class="hint">Επιλέγονται 2 σημεία στον πίνακα — Το shift εφαρμόζεται πάντα από το Α προς το Β — για αντίστροφα, κλικ ⇄.</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:10px">
+        <div style="text-align:center;flex:1"><div style="font-size:12px;color:var(--mut)">Α</div>
+          <div id="bsPLbl" style="font-weight:700;font-size:13px">—</div></div>
+        <button class="btn ghost small" onclick="bsSwapPair()" title="Αντιστροφή Α ⇄ Β">⇄</button>
+        <div style="text-align:center;flex:1"><div style="font-size:12px;color:var(--mut)">Β</div>
+          <div id="bsQLbl" style="font-weight:700;font-size:13px">—</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn ghost small" onclick="bsCompute()">Υπολογισμός μετατόπισης</button>
+        <span id="bsInfo" style="font-size:12px;color:var(--mut)"></span>
+        <button class="btn red small" style="margin-left:auto" onclick="bsClearPair()" title="Καθαρισμός ζεύγους shift">🗑 Καθαρισμός</button>
+      </div>
+      <div class="opt" style="margin-top:10px">
+        <input type="checkbox" id="bsOn" onchange="BASESHIFT.on=this.checked">
+        <label for="bsOn">Ενεργό στις εξαγωγές (Α → Β)</label>
+      </div>
+      <div class="hint" style="margin-top:4px">Ποια layers παίρνουν το shift:</div>
+      <div id="bsLayerList" style="margin-top:6px"></div>
+    </div>
+    <div class="card">
       <h2><span class="c"></span>Εξαγωγές</h2>
       <div class="opt"><input type="checkbox" id="chkGeoid" checked><label for="chkGeoid">Ορθομετρικό ύψος (Z = h − N γεωειδούς)</label></div>
       <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (γραμμές/πολύγωνα με υψόμετρο)</label></div>
@@ -560,6 +591,78 @@
 <script>
   var map, drawnLayer, model=null, layerState={}, gridsOK=false;
   var GEOM_DEFAULT={POINT:'#e0353a',LINE:'#2f6bbd',POLYGON:'#00c2c2'};
+
+  /*  Base shift — Α/Β είναι ΔΥΟ ΣΥΓΚΕΚΡΙΜΕΝΑ σημεία (BASESHIFT.refA/refB),
+   *  επιλεγμένα με τσεκ στον πίνακα Σημείων + «Ζεύγος shift»
+   *  (bsSetPairFromTable) — ΟΧΙ το κοινό pick.p1/p2 που χρησιμοποιούν
+   *  Χάραξη/Πολικά/κτλ, ώστε το ζεύγος να ΜΗΝ αλλάζει όταν ο χρήστης
+   *  διαλέγει σημεία αλλού, και να επιβιώνει σε ΚΑΘΕ γενικό καθάρισμα
+   *  (clearAllSelection/clearAllData, κανένα από τα δύο δεν αγγίζει το
+   *  BASESHIFT) — καθαρίζεται ΜΟΝΟ με το δικό του κουμπί (bsClearPair). Ένα
+   *  μόνο τικ (BASESHIFT.on) αποφασίζει αν εφαρμόζεται καθόλου· ανά layer
+   *  (BASESHIFT.layers[name]) ποιο συμμετέχει. Πάντα Α→Β — για αντίστροφα ο
+   *  χρήστης πατά ⇄ (bsSwapPair). */
+  var BASESHIFT = {dx:0, dy:0, dz:0, set:false, on:false, layers:{}, volLayers:{}, volPairs:{}, refA:null, refB:null};
+
+  function bsPointLabel(p){
+    if(!p) return '—';
+    var id=(p.id!=null?p.id:p.__id)||'';
+    var x=(p.x!=null)?p.x.toFixed(3):'—', y=(p.y!=null)?p.y.toFixed(3):'—', z=(p.z!=null)?p.z.toFixed(3):'—';
+    return id+' ('+x+', '+y+', '+z+')';
+  }
+  function renderBsPair(){
+    var a=document.getElementById('bsPLbl'), b=document.getElementById('bsQLbl');
+    if(a) a.textContent=bsPointLabel(BASESHIFT.refA);
+    if(b) b.textContent=bsPointLabel(BASESHIFT.refB);
+  }
+  /*  Παίρνει ΤΑ ΙΔΙΑ αντικείμενα σημείου που επεξεργάζονται τα exports
+   *  (`r.pt`/`r.cp`, ίδια αναφορά με ό,τι κάνει iterate το `f.pts.forEach`/
+   *  `computed.forEach`) — ΟΧΙ το ptObj wrapper της γραμμής του πίνακα, ώστε
+   *  το `p === BASESHIFT.refB` στο `bsApply` να πιάνει σωστά. */
+  window.bsSetPairFromTable = function(){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(checks.length!==2){ alert('Τσέκαρε ΑΚΡΙΒΩΣ 2 σημεία στον πίνακα (τώρα: '+checks.length+').'); return; }
+    var pts=[]; checks.forEach(function(ch){ var r=ch.__ref; pts.push(r.kind==='computed'?r.cp:r.pt); });
+    BASESHIFT.refA=pts[0]; BASESHIFT.refB=pts[1]; BASESHIFT.set=false;
+    document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+    setStatus('ζεύγος shift ορίστηκε — πάτα «Υπολογισμός μετατόπισης»', 'ok');
+  };
+  window.bsSwapPair = function(){
+    var t=BASESHIFT.refA; BASESHIFT.refA=BASESHIFT.refB; BASESHIFT.refB=t;
+    BASESHIFT.set=false; document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+  };
+  window.bsClearPair = function(){
+    BASESHIFT.refA=null; BASESHIFT.refB=null;
+    BASESHIFT.dx=BASESHIFT.dy=BASESHIFT.dz=0; BASESHIFT.set=false;
+    document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+    setStatus('ζεύγος shift καθαρίστηκε', 'ok');
+  };
+  window.bsCompute = function(){
+    if(!BASESHIFT.refA || !BASESHIFT.refB){
+      alert('Πρώτα διάλεξε ζεύγος σημείων στον πίνακα Σημείων (☑ 2 σημεία → «Ζεύγος shift»).');
+      return;
+    }
+    var a=BASESHIFT.refA, b=BASESHIFT.refB;
+    BASESHIFT.dx=b.x-a.x; BASESHIFT.dy=b.y-a.y; BASESHIFT.dz=(b.z||0)-(a.z||0); BASESHIFT.set=true;
+    document.getElementById('bsInfo').textContent =
+      'Δ = (' + BASESHIFT.dx.toFixed(3) + ', ' + BASESHIFT.dy.toFixed(3) + ', ' + BASESHIFT.dz.toFixed(3) + ') m';
+    setStatus('μετατόπιση υπολογίστηκε ✓', 'ok');
+  };
+
+  /*  Εφαρμόζεται ΠΡΩΤΑ στις ΕΓΣΑ87 συντεταγμένες, πριν από οποιοδήποτε
+   *  μετασχηματισμό (π.χ. HEPOS→WGS84 για το CSV) — έτσι ζητήθηκε ρητά. Το
+   *  ίδιο το σημείο Β ΔΕΝ μετατοπίζεται ΠΟΤΕ (ο χρήστης: είναι ήδη ο
+   *  στόχος/σωστή θέση, δεν πρέπει να ξαναμετατοπιστεί) — μόνο ό,τι άλλο
+   *  βρίσκεται στα ticked layers, μαζί με το ίδιο το Α. */
+  function bsApply(p, layer){
+    if (!BASESHIFT.set || !BASESHIFT.on || !BASESHIFT.layers[layer]) return p;
+    if (p === BASESHIFT.refB) return p;
+    return {x: p.x + BASESHIFT.dx, y: p.y + BASESHIFT.dy,
+            z: (p.z != null ? p.z + BASESHIFT.dz : p.z)};
+  }
 
   function setStatus(t,cls){ var s=document.getElementById('status'); s.textContent=t; s.style.color = cls==='err'?'#ff9ea0':(cls==='ok'?'#8ff0b6':'#93a3bd'); }
   function openAbout(){ document.getElementById('aboutModal').classList.add('show'); }
@@ -755,6 +858,50 @@
     });
     if(!rows) host.innerHTML='<div class="empty">Άνοιξε αρχείο SW Maps ή ανέβασε TXT για να δεις τα layers.</div>';
     fillVertexLayers();
+    renderBsLayers();
+    bsPruneDeadPair();
+  }
+
+  /*  Αν διαγράφηκε (ή έφυγε με New file/Καθαρισμός όλων) το ίδιο το σημείο Α
+   *  ή Β, το ζεύγος shift παύει να έχει νόημα — ο χρήστης το ζήτησε ρητά:
+   *  «όταν φεύγουν τα σημεία να φεύγουν και οι μετατοπίσεις». Τρέχει σε
+   *  ΚΑΘΕ renderLayers() (μετά από κάθε delete/clear που ήδη το καλεί) αντί
+   *  να χρειάζεται νέος έλεγχος σε κάθε ξεχωριστή delete-συνάρτηση. */
+  function bsPointStillExists(p){
+    if(!p) return false;
+    if(computed.indexOf(p)>=0) return true;
+    if(model) for(var i=0;i<model.features.length;i++){ if(model.features[i].pts.indexOf(p)>=0) return true; }
+    return false;
+  }
+  function bsPruneDeadPair(){
+    if(BASESHIFT.refA || BASESHIFT.refB){
+      if(!bsPointStillExists(BASESHIFT.refA) || !bsPointStillExists(BASESHIFT.refB)) bsClearPair();
+    }
+    Object.keys(BASESHIFT.volPairs).forEach(function(key){
+      var vp=BASESHIFT.volPairs[key];
+      if(!vp || (!vp.refA && !vp.refB)) return;
+      if(!bsPointStillExists(vp.refA) || !bsPointStillExists(vp.refB)) vlClearPair(key);
+    });
+  }
+
+  /*  Λίστα layers μέσα στην κάρτα Base shift (Εξαγωγές) — ίδιο σύνολο ονομάτων
+   *  με το renderLayers(), αλλά εδώ ζωντανεύει ΜΟΝΟ το τικ «παίρνει το shift»,
+   *  ώστε ο χρήστης να το βρίσκει δίπλα στο Α/Β/⇄ αντί να ψάχνει στα Δεδομένα. */
+  function renderBsLayers(){
+    var host=document.getElementById('bsLayerList'); if(!host) return;
+    var names={};
+    if(model) model.features.forEach(function(f){ names[f.layer]=1; });
+    genLines.forEach(function(g){ names[g.layer]=1; });
+    computed.forEach(function(cp){ names[cp.layer||'StakeOut']=1; });
+    var list=Object.keys(names).sort();
+    if(!list.length){ host.innerHTML='<div class="empty">Άνοιξε αρχείο για να δεις τα layers.</div>'; return; }
+    host.innerHTML=list.map(function(name){
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">'+
+        '<input type="checkbox" class="bschk" data-name="'+esc(name)+'" '+(BASESHIFT.layers[name]?'checked':'')+'> '+esc(name)+'</label>';
+    }).join('');
+    host.querySelectorAll('.bschk').forEach(function(chk){
+      chk.addEventListener('change', function(){ BASESHIFT.layers[this.getAttribute('data-name')]=this.checked; });
+    });
   }
 
   /** Στο dropdown μπαίνουν μόνο layers που ΕΧΟΥΝ κορυφές — όχι σημειακά. */
@@ -1006,8 +1153,13 @@
     if(!computed.length){ alert('Δεν υπάρχουν σημεία χάραξης.'); return; }
     var withDesc=document.getElementById('chkStakeDesc').checked;
     var out=computed.map(function(c){
-      var h=(c.h!=null)?c.h:(gridsOK?HEPOS.toWGS84(c.x,c.y,c.z||0).h:(c.z||0));
-      var b=c.id+','+c.lat.toFixed(8)+','+c.lon.toFixed(8)+','+(+h).toFixed(3);
+      // Πρώτα το shift στις ΕΓΣΑ87 συντεταγμένες, ΜΕΤΑ ο μετασχηματισμός σε WGS84.
+      // Περνάει το ΙΔΙΟ αντικείμενο c (όχι wrapper) — αλλιώς το p===BASESHIFT.refB
+      // στο bsApply δεν πιάνει ποτέ ταυτότητα, και το Β ξαναμετατοπίζεται εδώ.
+      var p=bsApply(c, c.layer||'StakeOut');
+      var w=gridsOK?HEPOS.toWGS84(p.x,p.y,p.z||0):{lat:c.lat,lon:c.lon,h:c.h};
+      var h=(w.h!=null)?w.h:(p.z||0);
+      var b=c.id+','+w.lat.toFixed(8)+','+w.lon.toFixed(8)+','+(+h).toFixed(3);
       return withDesc?(b+','+(c.remarks||'')):b;
     });
     download(out.join('\n'),'stakeout_WGS84.csv');
@@ -2367,20 +2519,20 @@
     if(model && !onlyStake) model.features.forEach(function(f){
       var base=dxfName(f.layer), col=aci(f.color);
       if(f.geomType==='POINT'){
-        f.pts.forEach(function(p){ emitPoint(base,col,(p.__id||f.name),p.x,p.y,p.z,f.remarks); });
+        f.pts.forEach(function(p){ var q=bsApply(p,f.layer); emitPoint(base,col,(p.__id||f.name),q.x,q.y,q.z,f.remarks); });
       } else {
         var closed=f.geomType==='POLYGON';
         var pflag=(poly3d?8:0)|(closed?1:0);
         d+='0\nPOLYLINE\n8\n'+base+'\n62\n'+col+'\n66\n1\n70\n'+pflag+'\n';
-        f.pts.forEach(function(p){ d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(p.x)+'\n20\n'+num(p.y)+'\n30\n'+num(poly3d?p.z:0)+'\n'; });
+        f.pts.forEach(function(p){ var q=bsApply(p,f.layer); d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(q.x)+'\n20\n'+num(q.y)+'\n30\n'+num(poly3d?q.z:0)+'\n'; });
         d+='0\nSEQEND\n8\n'+base+'\n';
       }
     });
-    computed.forEach(function(c){ emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,c.x,c.y,c.z,c.remarks); });
+    computed.forEach(function(c){ var q=bsApply(c,c.layer||'StakeOut'); emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,q.x,q.y,q.z,c.remarks); });
     genLines.forEach(function(g){
       var base=dxfName(g.layer);
       d+='0\nPOLYLINE\n8\n'+base+'\n62\n3\n66\n1\n70\n'+(poly3d?8:0)+'\n';
-      g.pts.forEach(function(p){ d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(p.x)+'\n20\n'+num(p.y)+'\n30\n'+num(poly3d?(p.z||0):0)+'\n'; });
+      g.pts.forEach(function(p){ var q=bsApply(p,g.layer); d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(q.x)+'\n20\n'+num(q.y)+'\n30\n'+num(poly3d?(q.z||0):0)+'\n'; });
       d+='0\nSEQEND\n8\n'+base+'\n';
     });
     d+='0\nENDSEC\n0\nEOF\n';
@@ -2402,6 +2554,19 @@
    *  ήδη λύσει σε αριθμό) — heuristic: αν ΟΛΕΣ οι κορυφές είναι ουσιαστικά 0,
    *  θεωρείται 2D (καμία γραμμή μας δεν έχει σκόπιμα υψόμετρο ακριβώς 0.000). */
   function lineIsFlat(pts){ return pts.every(function(p){ return Math.abs(p.z || 0) < 0.001; }); }
+  /*  Shift πρώτα στις ΕΓΣΑ87 συντεταγμένες, ΜΕΤΑ ξαναϋπολογισμός lat/lon —
+   *  αλλιώς το KML/GeoJSON θα έδειχνε το shifted Z αλλά τη ΠΑΛΙΑ (αμετάβλητη)
+   *  θέση lat/lon, αφού αυτές έρχονται ήδη έτοιμες πάνω στο σημείο. */
+  function bsShiftPts(pts, layer){
+    return pts.map(function(p){
+      var q = bsApply(p, layer);
+      if (gridsOK && (q.x !== p.x || q.y !== p.y || q.z !== p.z)){
+        var w = HEPOS.toWGS84(q.x, q.y, q.z || 0);
+        return {x:q.x, y:q.y, z:q.z, lat:w.lat, lon:w.lon};
+      }
+      return {x:q.x, y:q.y, z:q.z, lat:p.lat, lon:p.lon};
+    });
+  }
   function exportKML(){
     if (!model && !genLines.length){ alert('Δεν υπάρχουν γραμμές.'); return; }
     var mode = 'clampToGround';   // absolute δεν φαινόταν αξιόπιστα — πάντα πάνω στο έδαφος
@@ -2409,13 +2574,13 @@
     var body = '';
     if (model) model.features.forEach(function(f){
       if (f.geomType === 'POINT') return;
-      var pts = f.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      var pts = bsShiftPts(f.pts.filter(function(p){ return p.lat != null && p.lon != null; }), f.layer);
       if (pts.length < 2) return;
       if (only2d && !lineIsFlat(pts)) return;
       body += kmlPlacemark(f.name || f.layer, pts, f.geomType === 'POLYGON', mode);
     });
     genLines.forEach(function(g){
-      var pts = g.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      var pts = bsShiftPts(g.pts.filter(function(p){ return p.lat != null && p.lon != null; }), g.layer);
       if (pts.length < 2) return;
       if (only2d && !lineIsFlat(pts)) return;
       body += kmlPlacemark(g.id, pts, false, mode);
@@ -2444,16 +2609,17 @@
     var feats = [];
     if (model) model.features.forEach(function(f){
       if (f.geomType === 'POINT') return;   // μόνο τα σημεία χάραξης (computed), όχι τα μετρημένα του μοντέλου
-      var pts = f.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      var pts = bsShiftPts(f.pts.filter(function(p){ return p.lat != null && p.lon != null; }), f.layer);
       if (pts.length < 2) return;
       feats.push(geojsonFeature(f.name || f.layer, pts, f.geomType === 'POLYGON'));
     });
     if (withPts) computed.forEach(function(c){
       if (c.lat == null || c.lon == null) return;
-      feats.push(geojsonPoint(c.id, c, c.remarks));
+      var q = bsShiftPts([c], c.layer||'StakeOut')[0];
+      feats.push(geojsonPoint(c.id, q, c.remarks));
     });
     genLines.forEach(function(g){
-      var pts = g.pts.filter(function(p){ return p.lat != null && p.lon != null; });
+      var pts = bsShiftPts(g.pts.filter(function(p){ return p.lat != null && p.lon != null; }), g.layer);
       if (pts.length < 2) return;
       feats.push(geojsonFeature(g.id, pts, false));
     });
@@ -2516,11 +2682,15 @@
         f.pts.forEach(function(p,i){
           if(p.x==null) return;
           var id = (f.geomType==='POINT') ? p.__id : ((f.name||f.layer)+'_'+(i+1));
-          out.push(id+','+p.x.toFixed(3)+','+p.y.toFixed(3)+','+p.z.toFixed(3)+','+(f.remarks||'')+','+(p.fix!=null?p.fix:'')+','+f.layer);
+          var q=bsApply(p, f.layer);
+          out.push(id+','+q.x.toFixed(3)+','+q.y.toFixed(3)+','+q.z.toFixed(3)+','+(f.remarks||'')+','+(p.fix!=null?p.fix:'')+','+f.layer);
         });
       });
     }
-    computed.forEach(function(c){ out.push(c.id+','+c.x.toFixed(3)+','+c.y.toFixed(3)+','+c.z.toFixed(3)+','+(c.remarks||'')+','+(c.fix!=null?c.fix:4)+','+(c.layer||'StakeOut')); });
+    computed.forEach(function(c){
+      var q=bsApply(c, c.layer||'StakeOut');
+      out.push(c.id+','+q.x.toFixed(3)+','+q.y.toFixed(3)+','+q.z.toFixed(3)+','+(c.remarks||'')+','+(c.fix!=null?c.fix:4)+','+(c.layer||'StakeOut'));
+    });
     if(!out.length){ alert('Δεν υπάρχουν σημεία.'); return; }
     download(out.join('\n'),'SW_Maps_EGSA87_points.txt');
   }
@@ -2685,6 +2855,55 @@
     }).join('');
   }
 
+  /*  Base shift ανά επιφάνεια — ξεχωριστό, ανεξάρτητο τικ ΚΑΙ ανεξάρτητο
+   *  ζεύγος Α/Β (δικό του, όχι το γενικό των Εξαγωγών) γιατί σε μια
+   *  σύγκριση συχνά η ΜΙΑ πλευρά (π.χ. η ξαναμετρημένη) χρειάζεται
+   *  διαφορετική μετακίνηση από την άλλη, όχι το ίδιο Δ παντού.
+   *  Δείχνει ΜΟΝΟ τις επιφάνειες που είναι ΤΩΡΑ επιλεγμένες στα «Επιφάνεια
+   *  εδάφους»/«Δεύτερη επιφάνεια» από πάνω (ο χρήστης το ζήτησε — λίστα με
+   *  ΟΛΑ τα layers γέμιζε την κάρτα άσκοπα). Το `BASESHIFT.volPairs[key]`
+   *  ΔΕΝ αδειάζει όταν μια επιφάνεια σταματά να είναι ενεργή — μόνο δεν
+   *  φαίνεται η σειρά της· ξαναδιαλέγοντάς την επιστρέφουν ΤΑ ΙΔΙΑ Α/Β/Δ. */
+  function renderVlShiftList(){
+    var vlHost = document.getElementById('vlShiftList');
+    var iA = +document.getElementById('vlSurf').value;
+    var two = document.getElementById('vlMode').value === 'surf2';
+    var iB = two ? +document.getElementById('vlSurf2').value : -1;
+    var active = [];
+    if (VOLSETS[iA]) active.push(VOLSETS[iA]);
+    if (two && VOLSETS[iB] && iB !== iA) active.push(VOLSETS[iB]);
+
+    vlHost.innerHTML = active.map(function(s){
+      var on = !!BASESHIFT.volLayers[s.key];
+      var vp = BASESHIFT.volPairs[s.key] || {refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+      var dInfo = vp.set
+        ? ('Δ = (' + vp.dx.toFixed(3) + ', ' + vp.dy.toFixed(3) + ', ' + vp.dz.toFixed(3) + ') m')
+        : '';
+      return '<div class="vlshiftrow" data-key="' + esc(s.key) + '" style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">' +
+        '<input type="checkbox" class="vlOnChk" ' + (on ? 'checked' : '') + '> ' + esc(s.label) + '</label>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--mut);flex-wrap:wrap">' +
+        '<span>Α: ' + esc(bsPointLabel(vp.refA)) + '</span>' +
+        '<button class="btn ghost small vlSwapBtn" type="button" title="Αντιστροφή Α ⇄ Β">⇄</button>' +
+        '<span>Β: ' + esc(bsPointLabel(vp.refB)) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">' +
+        '<button class="btn ghost small vlPairBtn" type="button">⚓ Ζεύγος shift</button>' +
+        '<button class="btn ghost small vlComputeBtn" type="button">Υπολογισμός μετατόπισης</button>' +
+        '<span style="font-size:11px;color:var(--mut)">' + esc(dInfo) + '</span>' +
+        '<button class="btn red small vlClearBtn" type="button" style="margin-left:auto" title="Καθαρισμός ζεύγους">🗑</button>' +
+        '</div></div>';
+    }).join('') || '<div class="hint">(διάλεξε επιφάνεια από πάνω)</div>';
+    vlHost.querySelectorAll('.vlshiftrow').forEach(function(row){
+      var key = row.getAttribute('data-key');
+      row.querySelector('.vlOnChk').addEventListener('change', function(){ BASESHIFT.volLayers[key]=this.checked; });
+      row.querySelector('.vlSwapBtn').addEventListener('click', function(){ vlSwapPair(key); });
+      row.querySelector('.vlPairBtn').addEventListener('click', function(){ vlSetPairFromTable(key); });
+      row.querySelector('.vlComputeBtn').addEventListener('click', function(){ vlComputePair(key); });
+      row.querySelector('.vlClearBtn').addEventListener('click', function(){ vlClearPair(key); });
+    });
+  }
+
   window.vlScan = function(){
     VOLSETS = vlPointSets();
     VOLRINGS = vlPolygons();
@@ -2699,6 +2918,8 @@
       vlOpts(VOLRINGS, function(p){ return p.name + ' · ' + p.area.toFixed(1) + ' m²'; })
       || '<option value="">(κανένα)</option>';
 
+    renderVlShiftList();
+
     var msg = '';
     if (!model && !computed.length){
       msg = '<div class="warnbox">Δεν υπάρχουν φορτωμένα δεδομένα. Άνοιξε πρώτα βάση ή Excel από τα <b>Δεδομένα</b>.</div>';
@@ -2711,6 +2932,66 @@
     info.innerHTML = msg;
     vlRender();
   };
+
+  window.vlShiftReset = function(){
+    BASESHIFT.volLayers = {};
+    BASESHIFT.volPairs = {};
+    vlScan();
+  };
+
+  /*  Base shift ανά επιφάνεια — ΕΝΤΕΛΩΣ ανεξάρτητο από το κύριο Α/Β της
+   *  κάρτας Base shift (Εξαγωγές): ο χρήστης το ζήτησε ρητά, γιατί
+   *  διαφορετικές επιφάνειες/layers μπορεί να χρειάζονται ΔΙΑΦΟΡΕΤΙΚΟ Δ η
+   *  καθεμία (π.χ. δύο ξαναμετρημένες περιοχές με άλλο λάθος στημένο base η
+   *  καθεμία). Κάθε VOLSET.key έχει το ΔΙΚΟ ΤΟΥ ζεύγος σε
+   *  `BASESHIFT.volPairs[key] = {refA,refB,dx,dy,dz,set}` — δικό του
+   *  «⚓ Ζεύγος shift» (`vlSetPairFromTable`), δικό του «Υπολογισμός»
+   *  (`vlComputePair`), δικό του ⇄ (`vlSwapPair`) και καθαρισμός
+   *  (`vlClearPair`). Το τικ on/off (`BASESHIFT.volLayers[key]`) μένει ίδιο
+   *  με πριν. */
+  function vlPairFor(key){
+    if(!BASESHIFT.volPairs[key]) BASESHIFT.volPairs[key]={refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+    return BASESHIFT.volPairs[key];
+  }
+  window.vlSetPairFromTable = function(key){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(checks.length!==2){ alert('Τσέκαρε ΑΚΡΙΒΩΣ 2 σημεία στον πίνακα Σημείων (τώρα: '+checks.length+').'); return; }
+    var pts=[]; checks.forEach(function(ch){ var r=ch.__ref; pts.push(r.kind==='computed'?r.cp:r.pt); });
+    var vp=vlPairFor(key);
+    vp.refA=pts[0]; vp.refB=pts[1]; vp.set=false;
+    vlScan();
+    setStatus('ζεύγος shift ορίστηκε για «'+key+'» — πάτα «Υπολογισμός μετατόπισης»', 'ok');
+  };
+  window.vlSwapPair = function(key){
+    var vp=vlPairFor(key), t=vp.refA; vp.refA=vp.refB; vp.refB=t; vp.set=false;
+    vlScan();
+  };
+  window.vlComputePair = function(key){
+    var vp=vlPairFor(key);
+    if(!vp.refA||!vp.refB){ alert('Πρώτα ⚓ Ζεύγος shift γι\' αυτή την επιφάνεια.'); return; }
+    vp.dx=vp.refB.x-vp.refA.x; vp.dy=vp.refB.y-vp.refA.y; vp.dz=(vp.refB.z||0)-(vp.refA.z||0); vp.set=true;
+    vlScan();
+    setStatus('μετατόπιση υπολογίστηκε ✓', 'ok');
+  };
+  window.vlClearPair = function(key){
+    BASESHIFT.volPairs[key]={refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+    vlScan();
+  };
+
+  /*  Μετακινεί ΟΛΗ την επιφάνεια πριν τον τριγωνισμό, με το ΔΙΚΟ ΤΗΣ Δ.
+   *  Το `vlPointSets()` φτιάχνει ΚΑΙΝΟΥΡΓΙΑ αντικείμενα σημείου (dedup/merge
+   *  από πολλά layers) — ΔΕΝ κρατάει την αναφορά του αρχικού σημείου, άρα
+   *  ταυτότητα (`===`) δεν πιάνει ποτέ εδώ (όπως θα έπιανε στο bsApply).
+   *  Σύγκριση με ΤΙΜΗ (x/y/z) για να μη ξαναμετατοπιστεί το ίδιο το Β. */
+  function vlShiftedPts(set){
+    var vp=BASESHIFT.volPairs[set.key];
+    if (!BASESHIFT.volLayers[set.key] || !vp || !vp.set) return set.pts;
+    var b=vp.refB;
+    return set.pts.map(function(p){
+      if (b && p.x===b.x && p.y===b.y && p.z===b.z) return p;
+      return {x:p.x+vp.dx, y:p.y+vp.dy, z:(p.z!=null?p.z+vp.dz:p.z)};
+    });
+  }
 
   window.vlRender = function(){
     var two = document.getElementById('vlMode').value === 'surf2';
@@ -2730,14 +3011,14 @@
     var sa = VOLSETS[+document.getElementById('vlSurf').value];
     if (!ring || !sa){ vlWarn('Διάλεξε περιοχή και επιφάνεια.'); return; }
 
-    var opts = { points: sa.pts, ring: ring.ring, spacing: numIn('vlStep') };
+    var opts = { points: vlShiftedPts(sa), ring: ring.ring, spacing: numIn('vlStep') };
     if (!(opts.spacing > 0)){ vlWarn('Δώσε βήμα κανάβου σε μέτρα.'); return; }
 
     var lbl2 = null;
     if (document.getElementById('vlMode').value === 'surf2'){
       var sb = VOLSETS[+document.getElementById('vlSurf2').value];
       if (!sb || sb.key === sa.key){ vlWarn('Διάλεξε <b>δύο διαφορετικές</b> επιφάνειες.'); return; }
-      opts.points2 = sb.pts; lbl2 = sb.label;
+      opts.points2 = vlShiftedPts(sb); lbl2 = sb.label;
     } else {
       opts.refZ = numIn('vlRef');
       if (!Number.isFinite(opts.refZ)){ vlWarn('Δώσε το τελικό υψόμετρο.'); return; }
@@ -2895,9 +3176,10 @@
     var lyr = {}, ents = '';
     function addLyr(n, c){ if (!(n in lyr)) lyr[n] = c; }
     var note = S.set.label + ': ';
+    var pts = vlShiftedPts(S.set);   // base shift ανά επιφάνεια, αν είναι τικαρισμένο
 
     if (wantDtm){
-      var m = Vol.mesh(S.set.pts, maxEdge);
+      var m = Vol.mesh(pts, maxEdge);
       if (m.err) return { err: m.err };
       addLyr('DTM', S.col);
       m.tris.forEach(function(t){
@@ -2910,13 +3192,13 @@
       });
       note += m.tris.length + ' triangles';
       addLyr('POINTS', S.col);
-      S.set.pts.forEach(function(p){
+      pts.forEach(function(p){
         ents += '0\nPOINT\n8\nPOINTS\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n' + num(p.z) + '\n';
       });
     }
 
     if (wantIso){
-      var c = Vol.contours(S.set.pts, { interval: step, maxEdge: maxEdge,
+      var c = Vol.contours(pts, { interval: step, maxEdge: maxEdge,
                                         ring: clip ? ring.ring : null });
       if (c.err) return { err: S.set.label + ': ' + c.err };
       // Κάθε πέμπτη σε δικό της layer: έτσι πάχυνε ο τοπογράφος τις κύριες.
@@ -3040,11 +3322,12 @@
     var reports = [];
     for (var s = 0; s < surfaces.length; s++){
       var S = surfaces[s];
-      var xml = vlLandXML(S.set.label.split(' —')[0], S.set.pts, maxEdge);
+      var pts = vlShiftedPts(S.set);
+      var xml = vlLandXML(S.set.label.split(' —')[0], pts, maxEdge);
       var tag = surfaces.length > 1 ? ('_' + S.tag) : '';
       var fname = 'Ogkoi_EGSA87' + tag + '.xml';
       download(xml, fname);
-      reports.push(esc(fname) + ' — ' + S.set.pts.length + ' points');
+      reports.push(esc(fname) + ' — ' + pts.length + ' points');
     }
     out.innerHTML = '<div class="okbox">' + reports.join('<br>') + '</div>';
     setStatus('LandXML ✓', 'ok');
