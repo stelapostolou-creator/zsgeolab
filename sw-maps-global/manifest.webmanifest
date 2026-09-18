@@ -1,8 +1,8 @@
 {
-  "name": "SWHepos — Στυλιανός Φ. Αποστόλου",
-  "short_name": "SWHepos",
-  "description": "SW Maps → ΕΓΣΑ87 (HEPOS). Χάρτης, σημεία/γραμμές/πολύγωνα, χάραξη, ιστορικό εργασιών, εξαγωγή DXF & CSV. Ζίτσα Ιωαννίνων.",
-  "lang": "el",
+  "name": "SW Global — Stylianos F. Apostolou",
+  "short_name": "SWGlobal",
+  "description": "SW Maps to any coordinate system worldwide. Map, points/lines/polygons, stakeout, job history, DXF & CSV export.",
+  "lang": "en",
   "dir": "ltr",
   "id": "./",
   "start_url": "./index.html",
