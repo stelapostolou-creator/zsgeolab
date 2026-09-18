@@ -19,8 +19,8 @@
 <script src="../lib/vendor/sql-wasm.js"></script>
 <script src="../lib/vendor/sql-wasm-binary.js"></script>
 <script src="../lib/vendor/proj4.js"></script>
-<script src="../lib/crs.js?v=20260918a"></script>
-<script src="swmaps.js?v=20260918a"></script>
+<script src="../lib/crs.js?v=20260918b"></script>
+<script src="swmaps.js?v=20260918b"></script>
 <script src="jobs.js?v=20260918a"></script>
 <script src="volume.js?v=20260918a"></script>
 <style>
@@ -187,12 +187,12 @@
     <section class="pane show" id="pane-data">
     <div class="card">
       <h2><span class="c"></span>Coordinate system</h2>
-      <div class="hint">A declared CRS in a loaded file is picked up automatically and used as-is (no reprojection). With no CRS declared, data is read straight as WGS84 lat/lon unless you set one here.</div>
+      <div class="hint">A declared CRS in a loaded file is picked up automatically and used as-is (no reprojection). Otherwise, <b>setting one here is required</b> before any X/Y is shown — coordinates are never silently shown as raw lat/lon.</div>
       <div class="row2" style="margin-top:10px">
-        <div class="fld"><label>EPSG code (empty = WGS84 lat/lon)</label><input id="crsCode" type="text" inputmode="numeric" placeholder="e.g. 32633"></div>
+        <div class="fld"><label>EPSG code (e.g. a UTM zone)</label><input id="crsCode" type="text" inputmode="numeric" placeholder="e.g. 32633"></div>
         <button class="btn" onclick="applyCrsInput()">Apply</button>
       </div>
-      <div class="hint" id="crsInfo" style="margin-top:8px">Current: WGS84 (lat/lon)</div>
+      <div class="hint" id="crsInfo" style="margin-top:8px">No coordinate system set yet — enter an EPSG code or pick UTM below.</div>
       <button class="btn ghost" style="width:100%;margin-top:10px" onclick="applyAutoUTM()">🧭 Use UTM zone for the loaded data</button>
       <div class="hint" style="margin-top:10px">This covers standard map-projection math for any EPSG code worldwide. It does not (yet) include your country's own official grid-based correction, where one exists and is needed for full accuracy. <b>Want your country's exact transformation built in?</b> Email <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a> — happy to collaborate and add it.</div>
     </div>
@@ -793,13 +793,36 @@
       f.color = colorByLayer[f.layer] || GEOM_DEFAULT[f.geomType] || '#e0353a';
       f.pts.forEach(function(p){
         var h = (useOrtho && p.ortho!=null) ? p.ortho : (p.elv!=null? p.elv : 0);
-        if(passthrough){ p.x=p.lon; p.y=p.lat; p.z=h; }
+        if(passthrough){
+          p.x=p.lon; p.y=p.lat; p.z=h;
+          // p.lat/p.lon above are really X/Y (per the passthrough rule) \u2014 back-fill
+          // the REAL WGS84 lat/lon here too, since the map/exports/every other
+          // CRS.toWGS84(p.x,p.y,...) call site downstream needs true degrees.
+          if(CRS.isReady()){ var w=CRS.toWGS84(p.x,p.y,p.z); p.lat=w.lat; p.lon=w.lon; }
+        }
         else if(CRS.isReady()){ var e=CRS.fromWGS84(p.lat,p.lon,h); p.x=e.x; p.y=e.y; p.z=e.z; }
         else { p.x=p.y=p.z=null; }
       });
     });
     var pc=0;
     model.features.forEach(function(f){ if(f.geomType==='POINT'){ f.pts.forEach(function(p){ pc++; p.__id=f.name||('p'+pc); }); } });
+  }
+  // DB/Excel data can carry TWO heights per point (ellipsoidal always, plus an
+  // orthometric/geoid one that SW Maps only fills in when it has a geoid
+  // loaded \u2014 otherwise it's simply absent). Never guess which one the user
+  // wants: ask, whenever the file actually has orthometric data for at least
+  // one point. TXT/DXF imports have only one Z per point, no such question \u2014
+  // that Z is used exactly as given, matching whatever the user declared.
+  function maybeAskHeightSource(m){
+    if(m.source!=='db' && m.source!=='excel') return;
+    var hasOrtho=false;
+    for(var i=0;i<m.features.length && !hasOrtho;i++){
+      var pts=m.features[i].pts;
+      for(var j=0;j<pts.length;j++){ if(pts[j].ortho!=null){ hasOrtho=true; break; } }
+    }
+    if(!hasOrtho) return;
+    var wantOrtho=confirm('This file has orthometric (geoid-corrected) height for at least some points, alongside the raw ellipsoidal (GPS) height.\n\nOK = use orthometric height\nCancel = use ellipsoidal height');
+    document.getElementById('chkOrtho').checked=wantOrtho;
   }
   function setModel(m,fname){
     if(window.jobOnNewFile) jobOnNewFile(fname);   // a different file = a new job
@@ -811,14 +834,31 @@
     if(fname) model.__fname=fname;
     document.getElementById('btnDxf').disabled=false;
     document.getElementById('btnCsv').disabled=false;
+    maybeAskHeightSource(m);
     // A declared CRS in the file becomes the active one (so the map/exports
-    // can convert back to WGS84 correctly); with none declared, whatever the
-    // user already had active (default: WGS84) is kept as-is.
+    // can convert back to WGS84 correctly). With none declared, the EPSG
+    // is mandatory: coordinates stay blank (never shown as raw lat/lon)
+    // until the user sets one below, unless they already set one earlier
+    // this session.
     if(m.crs && m.crs.code && m.crs.code!==4326){
       CRS.applyEPSG(m.crs.code, null, function(msg){ setStatus((model.__fname||'')+' \u00b7 '+msg,'err'); });
     } else {
       retransform();
+      if(nudgeIfNoCrs(model.__fname)){
+        alert('This file has no coordinate system declared.\n\nEnter an EPSG code (or click "Use UTM zone for the loaded data") in the Coordinate system card \u2014 coordinates stay blank until then.');
+        document.getElementById('crsCode').focus();
+      }
     }
+  }
+  // Shared "no CRS chosen yet" nudge (status line only) for both a fresh file
+  // load (setModel, which also pops an alert() on top of this) and a job
+  // auto-restore on a new page load (jobRestore, status only \u2014 CRS.js's
+  // "remembered for the session" state resets on reload, no alert needed
+  // for something that just happened automatically). Returns true if it fired.
+  function nudgeIfNoCrs(fname){
+    if(CRS.isReady()) return false;
+    setStatus((fname||'')+' \u2014 set a coordinate system below (EPSG code or UTM) to see X/Y','err');
+    return true;
   }
   function retransform(){
     transformModel();
@@ -828,7 +868,8 @@
   function renderCrsInfo(){
     var s=CRS.getState(), e=document.getElementById('crsInfo');
     if(!e) return;
-    e.textContent = CRS.isReady() ? ('Current: '+s.name+(s.isGeo?'':' (EPSG:'+s.epsg+')')) : 'Loading CRS definition\u2026';
+    e.textContent = CRS.isReady() ? ('Current: '+s.name+(s.isGeo?'':' (EPSG:'+s.epsg+')'))
+      : (CRS.isPending() ? 'Loading CRS definition\u2026' : 'No coordinate system set yet \u2014 enter an EPSG code or pick UTM below.');
     var inp=document.getElementById('crsCode'); if(inp && CRS.isReady()) inp.value = s.isGeo ? '' : s.epsg;
   }
   function applyCrsInput(){
@@ -1208,6 +1249,7 @@
     setStatus('cleared','ok');
   }
   function addManual(){
+    if(!CRS.isReady()){ alert('Set the coordinate system first (EPSG code or UTM, in the Coordinate system card).'); document.getElementById('crsCode').focus(); return; }
     var x=numIn('mX'), y=numIn('mY'), z=numIn('mZ')||0;
     if(isNaN(x)||isNaN(y)){ alert('Give X and Y (active CRS).'); return; }
     var id=document.getElementById('mID').value.trim()||('M'+(computed.length+1));
@@ -1218,6 +1260,7 @@
   }
   document.getElementById('fileEgsa').addEventListener('change',function(e){
     var file=e.target.files[0]; if(!file) return;
+    if(!CRS.isReady()){ e.target.value=''; alert('Set the coordinate system first (EPSG code or UTM, in the Coordinate system card) — this file is read as X/Y in that system.'); document.getElementById('crsCode').focus(); return; }
     var lyr=(file.name||'').replace(/\.[^.]+$/,'')||'TXT';
     var r=new FileReader();
     r.onload=function(ev){
@@ -2212,6 +2255,7 @@
   document.getElementById('fileDxf').addEventListener('change', function(ev){
     var file = ev.target.files[0]; ev.target.value = '';
     if (!file) return;
+    if(!CRS.isReady()){ alert('Set the coordinate system first (EPSG code or UTM, in the Coordinate system card) — this drawing is read as X/Y in that system.'); document.getElementById('crsCode').focus(); return; }
     var r = new FileReader();
     r.onload = function(e){
       var res = readDXF(e.target.result);
@@ -3391,7 +3435,7 @@
     genLines = s.genLines||[];
     layerState = s.layerState||{};
     model = s.model||null;
-    if(model) transformModel();
+    if(model){ transformModel(); nudgeIfNoCrs(model.__fname); }
     var any = !!model || computed.length>0;
     document.getElementById('btnDxf').disabled=!any;
     document.getElementById('btnCsv').disabled=!any;

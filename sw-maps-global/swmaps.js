@@ -1,11 +1,17 @@
 /*!
  * swmaps.js — Forked copy for SWHelper (sw-maps-global), NOT shared with the
- * GR tool. Only difference from lib/swmaps.js: preserves a missing/null
- * ortho height as null instead of coalescing it to 0 or to the ellipsoidal
- * value, so transformModel()'s "use ortho, fall back to ellipsoidal" toggle
- * can actually detect "no ortho available" and fall back correctly, instead
- * of silently showing 0m (or a mislabeled ortho) for the very common case of
- * a user with no geoid loaded in SW Maps. See HANDOFF.md, 18/9 entry.
+ * GR tool. Only difference from lib/swmaps.js: treats a missing orthometric
+ * height as null instead of coalescing it to 0 or to the ellipsoidal value,
+ * so transformModel()'s "use ortho, fall back to ellipsoidal" toggle can
+ * actually detect "no ortho available" and fall back correctly, instead of
+ * silently showing 0m (or a mislabeled ortho).
+ *
+ * IMPORTANT: SW Maps itself writes a literal 0 (not SQL NULL) into ortho_ht
+ * when the phone had no geoid loaded — confirmed against a real .swm2 file
+ * (sw-maps-gr/20260904-parakalamos/database.swm2: all 16 points have
+ * ortho_ht = 0 exactly, elv = real ~436m GPS heights). So "missing" here
+ * means falsy (null OR 0), not just null — a real 0.000m geoid separation
+ * is not a case worth losing this fallback over. See HANDOFF.md, 18/9 entry.
  *
  * Κοινός reader για δεδομένα SW Maps (.swm2 SQLite & Excel .xlsx).
  * Διαβάζει ΟΛΑ τα σχήματα (POINT / LINE / POLYGON) με σωστή γεωμετρία.
@@ -95,7 +101,7 @@
     rows("SELECT fid,seq,lat,lon,elv,ortho_ht,fix_quality FROM points WHERE lat IS NOT NULL AND lon IS NOT NULL ORDER BY fid,seq").forEach(function (p) {
       var F = featById[p.fid];
       if (!F) return;
-      F.pts.push({ lon: p.lon, lat: p.lat, elv: p.elv || 0, ortho: (p.ortho_ht != null ? p.ortho_ht : null), fix: (p.fix_quality != null ? p.fix_quality : '') });
+      F.pts.push({ lon: p.lon, lat: p.lat, elv: p.elv || 0, ortho: (p.ortho_ht ? p.ortho_ht : null), fix: (p.fix_quality != null ? p.fix_quality : '') });
     });
     var features = Object.keys(featById).map(function (k) { return featById[k]; }).filter(function (f) { return f.pts.length > 0; });
     // CRS του project (αν ο χρήστης το έχει ορίσει στο SW Maps· αλλιώς λείπει = auto/WGS84)
@@ -124,7 +130,7 @@
         var name = String(row.Name || row['Feature Name'] || row.ID || row.id || '').trim();
         var remarks = String(row.Remarks || row.remarks || '').trim();
         // «ύψος»: προτίμηση Ortho Height, αλλιώς Elevation, αλλιώς από WKT z
-        var ortho = row['Ortho Height']; if (ortho === '' || ortho == null) ortho = null;
+        var ortho = row['Ortho Height']; if (ortho === '' || ortho == null || +ortho === 0) ortho = null;
         var fixVal = (row['Fix ID'] !== '' && row['Fix ID'] != null) ? row['Fix ID'] : '';
         if (!layersMap[sheet]) layersMap[sheet] = { name: sheet, geomType: g.type, color: '#e0353a' };
         else if (layersMap[sheet].geomType === 'POINT' && g.type !== 'POINT') layersMap[sheet].geomType = g.type;
@@ -205,7 +211,7 @@
         var ortho = orthoIdx >= 0 ? csvNum(r[orthoIdx]) : NaN;
         var elev = elevIdx >= 0 ? csvNum(r[elevIdx]) : NaN;
         var pts = g.coords.map(function (cc) {
-          return { lon: cc.lon, lat: cc.lat, elv: (isFinite(elev) ? elev : (cc.elv || 0)), ortho: (isFinite(ortho) ? ortho : null), fix: '' };
+          return { lon: cc.lon, lat: cc.lat, elv: (isFinite(elev) ? elev : (cc.elv || 0)), ortho: (isFinite(ortho) && ortho !== 0 ? ortho : null), fix: '' };
         });
         gtypes[g.type] = 1;
         feats.push({ layer: lname, geomType: g.type, name: (nameIdx >= 0 ? String(r[nameIdx] || '') : '').trim(), remarks: (remIdx >= 0 ? String(r[remIdx] || '') : '').trim(), color: '#e0353a', pts: pts });
@@ -263,7 +269,7 @@
         name: (nameIdx >= 0 ? String(r[nameIdx] || '') : '').trim(),
         remarks: (remIdx >= 0 ? String(r[remIdx] || '') : '').trim(),
         color: '#e0353a',
-        pts: [{ lon: lon, lat: lat, elv: elv, ortho: (isFinite(ortho) ? ortho : null), fix: (fixIdx >= 0 ? String(r[fixIdx] || '').trim() : '') }]
+        pts: [{ lon: lon, lat: lat, elv: elv, ortho: (isFinite(ortho) && ortho !== 0 ? ortho : null), fix: (fixIdx >= 0 ? String(r[fixIdx] || '').trim() : '') }]
       });
     });
     return { source: 'csv', crs: (egsa ? { code: 2100, name: 'EGSA87 (από CSV)' } : null), layers: [{ name: lname, geomType: 'POINT', color: '#e0353a' }], features: features2 };
