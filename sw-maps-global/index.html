@@ -1,0 +1,3577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>SW Maps Global Helper — ZS-Top</title>
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SWGlobal">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="../lib/vendor/leaflet.css" />
+<script src="../lib/vendor/leaflet.js"></script>
+<script src="../lib/vendor/xlsx.full.min.js"></script>
+<script src="../lib/vendor/sql-wasm.js"></script>
+<script src="../lib/vendor/sql-wasm-binary.js"></script>
+<script src="../lib/vendor/proj4.js"></script>
+<script src="../lib/crs.js?v=20260918a"></script>
+<script src="../lib/swmaps.js?v=20260906i"></script>
+<script src="jobs.js?v=20260918a"></script>
+<script src="volume.js?v=20260918a"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--red2:#c62027;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  html,body{height:100%;height:100dvh;margin:0;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;overflow:hidden;}
+  header{background:linear-gradient(135deg,#16233f,#0f1830);display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.4);flex-shrink:0;}
+  header .logo-img{height:38px;border-radius:8px;background:#fff;padding:3px 7px;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  header .status{margin-left:auto;font-size:12px;color:var(--mut);}
+  header .abtn{flex-shrink:0;background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;width:34px;height:34px;font-size:15px;line-height:1;cursor:pointer;padding:0;}
+  header .abtn:active{background:var(--bg2);}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:3000;padding:16px;}
+  .modal.show{display:flex;}
+  .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:430px;width:100%;max-height:86vh;overflow:auto;padding:22px 20px;position:relative;box-shadow:0 12px 45px rgba(0,0,0,.6);}
+  .modal-card h2{font-size:23px;font-weight:800;margin:0 0 6px;} .modal-card h2 span{color:var(--red);}
+  .modal-card h3{font-size:12px;color:var(--red);margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em;}
+  .modal-card p{margin:5px 0;font-size:14px;line-height:1.55;} .modal-card .amut{color:var(--mut);}
+  .modal-card a{color:var(--navy2);font-weight:600;text-decoration:none;}
+  .modal-x{position:absolute;top:8px;right:10px;background:transparent;border:0;color:var(--mut);font-size:22px;cursor:pointer;line-height:1;}
+  .modal-card .logos{background:#fff;border-radius:10px;padding:14px 16px;margin:12px 0;display:flex;flex-direction:column;gap:12px;align-items:center;}
+  .modal-card .logos img{max-width:100%;max-height:74px;height:auto;object-fit:contain;}
+  .modal-card .em{color:var(--ink);font-weight:600;}
+  .langtabs{display:flex;gap:6px;margin-bottom:8px;}
+  .langbtn{background:var(--bg2);border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer;}
+  .langbtn.active{background:var(--navy2);color:#fff;border-color:var(--navy2);}
+  .modal-card .acc{background:rgba(46,204,113,.10);border:1px solid rgba(46,204,113,.38);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.5;color:#cdeede;margin:10px 0;}
+  .modal-card .acc b{color:#8ff0b6;}
+  .modal-card .foot2{text-align:center;line-height:1.7;font-size:11px;}
+  main{flex:1;overflow-y:auto;padding:14px;}
+  .map-wrap{height:44vh;min-height:260px;position:relative;margin-bottom:14px;}
+  #map{width:100%;height:100%;border-radius:10px;border:1px solid var(--line);}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .card h2{font-size:14px;color:#f0f6ff;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .card h2 .c{width:4px;height:16px;background:var(--red);border-radius:2px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn{padding:11px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:var(--navy2);transition:.15s;}
+  .btn:active{background:var(--navy);} .btn.red{background:var(--red);} .btn.red:active{background:var(--red2);}
+  .btn.green{background:var(--ok);color:#08210f;} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .layer{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:13px;}
+  .layer:last-child{border-bottom:0;}
+  .layer input{width:18px;height:18px;accent-color:var(--red);}
+  .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.25);flex-shrink:0;}
+  .layer .nm{font-weight:700;color:#f0f6ff;} .layer .ty{font-size:11px;color:var(--mut);text-transform:uppercase;}
+  .layer .ct{margin-left:auto;font-size:12px;color:var(--mut);}
+  .layer .shiftlbl{display:flex;align-items:center;gap:2px;font-size:11px;color:var(--mut);cursor:pointer;white-space:nowrap;}
+  .lyrdel{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;margin-left:8px;}
+  .lyrdel:hover{border-color:var(--red);color:var(--red);}
+  .empty{color:var(--mut);font-size:13px;text-align:center;padding:14px;}
+  .sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .pill{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:12px;}
+  .pill b{color:var(--red);}
+  .hint{font-size:11.5px;color:var(--mut);margin-top:8px;}
+  .opt{display:flex;align-items:center;gap:7px;font-size:13px;margin:8px 0;}
+  .opt input{width:auto;accent-color:var(--red);}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0f1830;color:var(--ink);}
+  .leaflet-container{background:#0a1020;}
+  .leaflet-control-layers{background:#0f1830;color:var(--ink);border:1px solid var(--line);border-radius:8px;}
+  .leaflet-control-layers-toggle{width:40px;height:40px;background-color:#0f1830;border:1px solid var(--line);border-radius:8px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23e6ecf5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>");background-size:22px 22px;background-position:center;background-repeat:no-repeat;}
+  .leaflet-control-layers-expanded{padding:8px 12px;}
+  .leaflet-control-layers label{color:var(--ink);font-size:13px;margin:3px 0;}
+  /* Horizontal scrolling of the table didn't register with a finger: without
+     declaring touch-action, Android gave the whole gesture to vertical scroll. */
+  .tblwrap{max-height:34vh;overflow:auto;border:1px solid var(--line);border-radius:8px;
+           -webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:var(--bg2);color:#f0f6ff;position:sticky;top:0;}
+  tr:hover td{background:rgba(224,53,58,.06);}
+  #ptsTbl tr.selp1 td{background:rgba(255,61,240,.13);} #ptsTbl tr.selp1 td:first-child{box-shadow:inset 3px 0 0 #ff3df0;}
+  #ptsTbl tr.selp2 td{background:rgba(255,204,0,.13);}  #ptsTbl tr.selp2 td:first-child{box-shadow:inset 3px 0 0 #ffcc00;}
+  @media (max-width:560px){
+    table{font-size:11.5px;}
+    th,td{padding:6px 7px;}
+  }
+  .pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+  .pk{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;}
+  .pk.p1{border-color:#ff3df0;} .pk.p2{border-color:#ffcc00;}
+  .btn.small{padding:8px 12px;font-size:13px;}
+  .row2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;}
+  .fld label{display:block;font-size:12px;color:var(--mut);font-weight:700;margin-bottom:4px;}
+  .fld input,.fld select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:15px;}
+  .fld input:focus,.fld select:focus{outline:none;border-color:var(--red);}
+  .compbar{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  footer{flex-shrink:0;text-align:center;font-size:11px;color:var(--mut);padding:8px;border-top:1px solid var(--line);background:var(--bg2);}
+  footer a{color:var(--navy2);text-decoration:none;}
+  .tabbar{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:3px;-webkit-overflow-scrolling:touch;}
+  .tabbar::-webkit-scrollbar{height:0;}
+  .tabbar .tb{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s;}
+  .tabbar .tb.active{background:var(--navy2);border-color:var(--navy2);color:#fff;}
+  .tabbar .tb-clear{flex:0 0 auto;background:var(--card);border:1px solid var(--red);color:var(--red);border-radius:9px;padding:9px 12px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .tabbar .tb-clear:active{background:var(--red);color:#fff;}
+  .pane{display:none;} .pane.show{display:block;}
+  .lnpick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+  .lp{flex:1;min-width:130px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--mut);background:var(--bg2);}
+  .lp.l1{border-color:#ff3df0;} .lp.l2{border-color:#ffcc00;}
+  .lp b{display:block;color:#f0f6ff;font-size:13px;}
+  .resline{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;}
+  .resline .big{font-family:ui-monospace,Consolas,monospace;font-size:16px;color:#8ff0b6;}
+  .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.5;}
+  .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.5;}
+  .vbig{font-family:ui-monospace,Consolas,monospace;font-size:19px;margin:3px 0;}
+</style>
+</head>
+<body>
+  <header>
+    <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center"><img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+    <div class="htitle">SW<span>Global</span></div>
+    <div class="status" id="status"></div>
+    <button class="abtn" onclick="openAbout()" title="About" aria-label="About">ℹ️</button>
+  </header>
+
+  <div id="aboutModal" class="modal" onclick="if(event.target===this)closeAbout()">
+    <div class="modal-card">
+      <button class="modal-x" onclick="closeAbout()" aria-label="Close">✕</button>
+      <h2>SW<span>Global</span></h2>
+
+      <div class="alang" data-lang="en">
+        <p class="amut">SW Maps → any coordinate system: map, points / lines / polygons, stakeout, DXF &amp; CSV export. Free for everyone.</p>
+        <p class="acc">✔ Works with <b>any EPSG code</b> worldwide — enter it once, it's remembered for the session.</p>
+        <h3>Developer &amp; contact</h3>
+        <p><b>Stylianos F. Apostolou</b> — Surveying Engineer<br>
+           Zitsa, Ioannina, Greece<br>
+           Tel: <a href="tel:+306948938654">+30 694 893 8654</a><br>
+           Email: <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a><br>Web: <a href="https://zsgeolab.com/">zsgeolab.com</a> &middot; <a href="https://zstop.gr/">zstop.gr</a></p>
+        <h3>Works with SW Maps</h3>
+        <p>A specialized surveying assistant, designed to work in perfect harmony with <b>SW Maps</b> — one of the best entirely free field data collectors available.</p>
+        <p class="amut">Many thanks to developer <span class="em">Avinab Malla</span> of <span class="em">Aviyaan Tech (P) Ltd.</span>, and to <span class="em">Softwel (P) Ltd.</span> for publishing it.</p>
+      </div>
+
+      <div class="logos">
+        <img src="../assets/aviyaan-logo.png" alt="Aviyaan Tech (P) Ltd.">
+        <img src="../assets/softwel-logo.png" alt="Softwel (P) Ltd.">
+      </div>
+      <p class="amut" style="font-size:12.5px;line-height:1.65">254 Shree Ekata Marga, New Baneshwor<br>Kathmandu, Nepal<br>Phone: +977-01-4566627, 4566629<br>Email: <a href="mailto:support@aviyaantech.com">support@aviyaantech.com</a></p>
+      <p style="font-size:13px">Web: <a href="https://aviyaantech.com/swmaps/" target="_blank" rel="noopener">aviyaantech.com/swmaps</a> · <a href="http://softwel.com.np/" target="_blank" rel="noopener">softwel.com.np</a></p>
+      <p style="font-size:13px">Download SW Maps: <a href="https://play.google.com/store/apps/details?id=np.com.softwel.swmaps" target="_blank" rel="noopener">Google Play</a> · <a href="https://apps.apple.com/us/app/sw-maps/id6444248083" target="_blank" rel="noopener">App Store</a></p>
+      <p class="amut foot2">
+        © ZS-Top<br>
+        Built with Leaflet · proj4 · sql.js · SheetJS
+      </p>
+    </div>
+  </div>
+
+  <input type="file" id="fileDb" accept=".swm2,.swm,.db,.sqlite" style="display:none">
+  <input type="file" id="fileXls" accept=".xlsx,.xls" style="display:none">
+  <input type="file" id="fileEgsa" accept=".txt,.csv" style="display:none">
+  <input type="file" id="fileJob" accept=".zsj,.json" style="display:none">
+  <input type="file" id="fileDxf" accept=".dxf" style="display:none">
+
+  <main>
+    <div class="map-wrap"><div id="map"></div></div>
+
+    <div class="tabbar">
+      <button class="tb-clear" onclick="clearAllSelection()" title="Clears every selection (P1/P2, Line 1/2)">✕ Selection</button>
+      <button class="tb active" data-pane="data" onclick="showPane('data')">📂 Data</button>
+      <button class="tb" data-pane="stake" onclick="showPane('stake')">🎯 Stakeout</button>
+      <button class="tb" data-pane="calc" onclick="showPane('calc')">📐 Calculations</button>
+      <button class="tb" data-pane="vol" onclick="showPane('vol')">⛰ Volumes</button>
+      <button class="tb" data-pane="out" onclick="showPane('out')">📤 Exports</button>
+    </div>
+    <section class="pane show" id="pane-data">
+    <div class="card">
+      <h2><span class="c"></span>Coordinate system</h2>
+      <div class="hint">A declared CRS in a loaded file is picked up automatically and used as-is (no reprojection). With no CRS declared, data is read straight as WGS84 lat/lon unless you set one here.</div>
+      <div class="row2" style="margin-top:10px">
+        <div class="fld"><label>EPSG code (empty = WGS84 lat/lon)</label><input id="crsCode" type="text" inputmode="numeric" placeholder="e.g. 32633"></div>
+        <button class="btn" onclick="applyCrsInput()">Apply</button>
+      </div>
+      <div class="hint" id="crsInfo" style="margin-top:8px">Current: WGS84 (lat/lon)</div>
+      <button class="btn ghost" style="width:100%;margin-top:10px" onclick="applyAutoUTM()">🧭 Use UTM zone for the loaded data</button>
+      <div class="hint" style="margin-top:10px">This covers standard map-projection math for any EPSG code worldwide. It does not (yet) include your country's own official grid-based correction, where one exists and is needed for full accuracy. <b>Want your country's exact transformation built in?</b> Email <a href="mailto:supportlab@zstop.gr">supportlab@zstop.gr</a> — happy to collaborate and add it.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Open data</h2>
+      <div class="btns">
+        <button class="btn" onclick="document.getElementById('fileDb').click()">📊 SW Maps DB (.swm2)</button>
+        <button class="btn ghost" onclick="document.getElementById('fileXls').click()">📥 Excel (SW Maps)</button>
+      </div>
+      <div class="hint">Reads every shape type: points, lines, polygons — with correct geometry.</div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;color:var(--mut);font-size:12px">Where are SW Maps files on the phone?</summary>
+        <div class="hint" style="margin-top:6px">
+          From Android 11 onward, everything lives under<br>
+          <code style="color:#8ff0b6;font-size:11px;word-break:break-all">Android/media/np.com.softwel.swmaps/files/SW_Maps/</code><br>
+          <b>Projects</b> — the <code>.swm2</code> databases<br>
+          <b>Export</b> — whatever SW Maps exports (Excel)<br>
+          <b>Imports</b> — copy a CSV here for SW Maps to see it<br>
+          <span style="color:var(--warn)">The browser isn't allowed to open a specific folder on its own.</span>
+          Navigate there once — Android remembers and takes you back next time.
+        </div>
+      </details>
+      <div style="margin-top:10px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileEgsa').click()">📄 Upload points (txt: pt,x,y[,z][,desc]) — already in the active CRS</button></div>
+      <div style="margin-top:8px"><button class="btn ghost" style="width:100%" onclick="document.getElementById('fileDxf').click()">📐 Import DXF drawing (already in the active CRS)</button></div>
+      <div id="dxfPanel"></div>
+
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Jobs <span style="color:var(--mut);font-weight:400">(on this device)</span></h2>
+      <div id="jobAuto"></div>
+      <div class="btns" style="margin-top:10px">
+        <button class="btn" onclick="jobSaveAs()">💾 Save as…</button>
+        <button class="btn ghost" onclick="document.getElementById('fileJob').click()">📂 Import .zsj</button>
+      </div>
+      <div class="hint">The current job is kept automatically on this device — a refresh loses nothing. Saved jobs stay until you delete them.</div>
+      <div id="jobList" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Layers</h2>
+      <div class="sum" id="summary"></div>
+      <div id="layers"><div class="empty">Open an SW Maps file to see its layers.</div></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="fld" style="flex:1;min-width:150px"><label>Line &amp; polygon vertices</label>
+          <select id="vxLayer"><option value="*">All layers</option></select></div>
+        <button class="btn" onclick="makeVertexPoints()">📍 Points at vertices</button>
+      </div>
+      <div class="hint">Creates a stakeout point at every vertex. Originals are untouched — the copies are what you edit.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Points <span style="color:var(--mut);font-weight:400">(active CRS)</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn ghost small" onclick="toggleAllSel(this)">☑ All/none</button>
+        <button class="btn small" onclick="sendToTools()">➜ To tools (P1/P2)</button>
+        <button class="btn ghost small" onclick="copySelectedToStake()">📋 Copy to stakeout</button>
+        <button class="btn ghost small" onclick="bsSetPairFromTable()" title="Check exactly 2 points first">⚓ Shift pair</button>
+        <button class="btn red small" onclick="deleteSelected()">🗑 Delete selected</button>
+      </div>
+      <div class="tblwrap"><table id="ptsTbl"><thead><tr><th></th><th>pt</th><th>X (E)</th><th>Y (N)</th><th>Z</th><th>Description</th><th>layer</th></tr></thead><tbody><tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">—</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Clear</h2>
+      <div class="hint">Each layer can also be deleted on its own, from the 🗑 next to it in the Layers list.</div>
+      <div class="btns" style="margin-top:12px">
+        <button class="btn ghost" onclick="clearComputed()">🗑 Stakeout points (<span id="cntComp">0</span>)</button>
+        <button class="btn ghost" onclick="clearGenLines()">🗑 Lines (<span id="cntGen">0</span>)</button>
+      </div>
+      <button class="btn ghost" style="width:100%;margin-top:8px" onclick="clearModelOnly()">🗑 Loaded data only (<span id="cntFeat">0</span> features)</button>
+      <button class="btn red" style="width:100%;margin-top:10px" onclick="clearAllData()">🧹 Clear everything</button>
+    </div>
+    </section>
+
+    <section class="pane" id="pane-stake">
+    <div class="card">
+      <h2><span class="c"></span>Add point <span style="color:var(--mut);font-weight:400">(active CRS)</span></h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fld"><label>ID</label><input id="mID" placeholder="e.g. A1"></div>
+        <div class="fld"><label>Description</label><input id="mDesc" placeholder="optional"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+        <div class="fld"><label>X (E)</label><input id="mX" type="text" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Y (N)</label><input id="mY" type="text" step="0.001" inputmode="decimal"></div>
+        <div class="fld"><label>Z</label><input id="mZ" type="text" step="0.001" inputmode="decimal"></div>
+      </div>
+      <button class="btn" style="width:100%;margin-top:12px" onclick="addManual()">➕ Add point</button>
+    </div>
+
+    <div class="card">
+      <h2><span class="c"></span>Stakeout</h2>
+      <div class="pick">
+        <div class="pk p1" id="pk1">P1: —</div>
+        <div class="pk p2" id="pk2">P2: —</div>
+        <button class="btn ghost small" onclick="swapPick()">⇄</button>
+        <button class="btn ghost small" onclick="clearPick()">✕</button>
+      </div>
+      <div class="hint">Pick two points (on the map or the table): <b style="color:#ff3df0">P1</b> & <b style="color:#ffcc00">P2</b>.</div>
+      <div class="fld" style="margin:12px 0"><label>Elevation of new points (Z)</label>
+        <select id="stZ"><option value="interp">Linear interpolation</option><option value="copy">Same as P1</option><option value="zero">Zero (0)</option></select></div>
+      <div class="row2"><div class="fld"><label>Extend — distance past P2 (m)</label><input id="stDist" type="text" step="0.01" inputmode="decimal" placeholder="e.g. 5.00"></div><button class="btn" onclick="stExtend()">📏 Extend</button></div>
+      <div class="row2" style="margin-top:10px"><div class="fld"><label>Densify — step (m)</label><input id="stStep" type="text" step="0.01" inputmode="decimal" placeholder="e.g. 2.50"></div><button class="btn" onclick="stDivide()">📍 Densify</button></div>
+      <div class="compbar" style="margin-top:16px">
+        <span class="pill">Stakeout points: <b id="compN">0</b></span>
+        <button class="btn red small" onclick="clearComputed()">🗑 Clear</button>
+      </div>
+    </div>
+    </section>
+
+    <section class="pane" id="pane-calc">
+      <div class="card">
+        <h2><span class="c"></span>Distance intersection</h2>
+        <div class="pick">
+          <div class="pk p1" id="pk1b">P1: —</div>
+          <div class="pk p2" id="pk2b">P2: —</div>
+        </div>
+        <div class="hint">Give a distance from <b style="color:#ff3df0">P1</b> and <b style="color:#ffcc00">P2</b> → 2 circle intersections (A/B), pick one.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          <div class="fld"><label>Distance from P1 (m)</label><input id="isD1" type="text" step="0.001" inputmode="decimal"></div>
+          <div class="fld"><label>Distance from P2 (m)</label><input id="isD2" type="text" step="0.001" inputmode="decimal"></div>
+        </div>
+        <button class="btn" style="width:100%;margin-top:12px" onclick="calcIntersect()">🎯 Compute intersections</button>
+        <div id="isResult"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Line intersection</h2>
+        <div class="hint">Tap two lines (or polygon sides) on the map. <b>The segment closest to your tap</b> is picked. The intersection is also computed on the extension.</div>
+        <div class="lnpick" style="margin-top:12px">
+          <div class="lp l1" id="lp1">Line 1<b>—</b></div>
+          <div class="lp l2" id="lp2">Line 2<b>—</b></div>
+          <button class="btn ghost small" onclick="swapLines()">⇄</button>
+          <button class="btn ghost small" onclick="clearLines()">✕</button>
+        </div>
+        <div class="btns" style="margin-bottom:4px">
+          <button class="btn ghost" onclick="segEndPoints()">📍 Points at the ends of the selection</button>
+        </div>
+        <div id="ixResult"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Polar — angle &amp; distance</h2>
+        <div class="hint">Pick points on the map or the table. <b style="color:#ff3df0">P1</b> is always the <b>station</b>; in the second method, <b style="color:#ffcc00">P2</b> is the <b>backsight</b>.</div>
+        <div class="pick" style="margin-top:10px">
+          <div class="pk p1" id="pk1c">P1: —</div>
+          <div class="pk p2" id="pk2c">P2: —</div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Method</label>
+          <select id="poMode" onchange="poRender()">
+            <option value="az">Azimuth &amp; distance (from P1)</option>
+            <option value="ang">Clockwise angle from backsight (P1→P2)</option>
+          </select></div>
+
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label id="poAngLbl">Azimuth</label><input id="poAng" type="text" inputmode="decimal" placeholder="e.g. 141.6270"></div>
+          <div class="fld"><label>Unit</label>
+            <select id="poUnit" onchange="poRender()">
+              <option value="gon" selected>Gon (400)</option>
+              <option value="deg">Decimal degrees</option>
+              <option value="dms">DDD.MMSS</option>
+            </select></div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Distance</label>
+          <select id="poDistKind" onchange="poRender()">
+            <option value="hor">Horizontal</option>
+            <option value="slope">Slope + zenith angle</option>
+          </select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label id="poDLbl">Distance (m)</label><input id="poD" type="text" inputmode="decimal" placeholder="e.g. 24.75"></div>
+          <div class="fld" id="poZenWrap" hidden><label>Zenith angle</label><input id="poZen" type="text" inputmode="decimal" placeholder="100 = horizontal"></div>
+        </div>
+
+        <div class="fld" style="margin-top:10px"><label>Elevation of the new point</label>
+          <select id="poZMode" onchange="poRender()">
+            <option value="same">Same as station P1</option>
+            <option value="dz">Station + ΔZ difference</option>
+            <option value="abs">Absolute value</option>
+            <option value="zero">Zero</option>
+          </select></div>
+        <div class="fld" id="poZWrap" hidden style="margin-top:10px"><label id="poZLbl">Value (m)</label><input id="poZ" type="text" inputmode="decimal"></div>
+
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Point name</label><input id="poName" type="text" placeholder="automatic"></div>
+          <button class="btn" onclick="poCompute()">🎯 Compute</button>
+        </div>
+        <div id="poResult"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Profile</h2>
+        <div class="hint">Elevations and slopes along a line. You give the elevation at <b>as many vertices as you want</b> — the rest come from linear interpolation <b>along the chainage</b>, i.e. along the line, not in a straight line.</div>
+        <div class="fld" style="margin-top:12px"><label>Source</label>
+          <select id="pfSrc">
+            <option value="feat">All of Line 1</option>
+            <option value="pick">P1 → P2</option>
+          </select></div>
+        <button class="btn ghost" style="width:100%;margin-top:10px" onclick="pfLoad()">📥 Load vertices</button>
+        <div id="pfTable"></div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Fill in from points within radius (m)</label><input id="pfNear" type="text" step="0.1" value="2" inputmode="decimal"></div>
+          <button class="btn ghost" onclick="pfFromPoints()">⛏ From points</button>
+        </div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Add a node at chainage (m)</label><input id="pfAddCh" type="text" inputmode="decimal" placeholder="e.g. 15.00"></div>
+          <button class="btn ghost" onclick="pfAddNode()">➕ Add node</button>
+        </div>
+        <div class="hint" style="margin-top:10px">Slope between two vertices: the "from" vertex must already have a known elevation — it computes the "to" vertex's elevation from the slope. E.g. 1→15 by slope, then write the elevation of 30 directly — each segment interpolates on its own.</div>
+        <div class="row2" style="margin-top:6px">
+          <div class="fld"><label>From vertex # → To vertex #</label>
+            <div style="display:flex;gap:6px">
+              <input id="pfSlopeFrom" type="text" inputmode="numeric" style="width:100%" placeholder="from #">
+              <input id="pfSlopeTo" type="text" inputmode="numeric" style="width:100%" placeholder="to #">
+            </div></div>
+          <div class="fld"><label>Slope % (e.g. -2.5)</label><input id="pfSlopePct" type="text" inputmode="decimal" placeholder="%"></div>
+        </div>
+        <button class="btn ghost" style="width:100%;margin-top:8px" onclick="pfApplySlope()">📏 Apply slope</button>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Densify step (m)</label><input id="pfStep" type="text" step="0.01" inputmode="decimal" placeholder="e.g. 5.00"></div>
+          <button class="btn" onclick="pfCompute()">📐 Compute</button>
+        </div>
+        <div id="pfResult"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Offset</h2>
+        <div class="hint">Source: the <b>Line 1</b> you picked above, or <b>P1–P2</b>. Same sign convention as SW Maps: <b>negative = left</b>, positive = right.</div>
+        <div class="fld" style="margin-top:12px"><label>Source</label>
+          <select id="ofSrc">
+            <option value="feat">All of Line 1</option>
+            <option value="seg">Only the selected segment</option>
+            <option value="pick">P1 → P2</option>
+          </select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Distance (m)</label><input id="ofDist" type="text" step="0.01" inputmode="decimal" placeholder="e.g. 2.50 or -2.50"></div>
+          <button class="btn" onclick="makeOffset()">↔ Offset</button>
+        </div>
+        <div class="fld" style="margin-top:10px"><label>Vertical offset</label>
+          <select id="ofZMode" onchange="ofZRender()">
+            <option value="none">None — same elevation as the source</option>
+            <option value="dz">Fixed Δz (±m)</option>
+            <option value="slope">Slope % from the start of the line</option>
+          </select></div>
+        <div class="fld" id="ofZValWrap" hidden style="margin-top:8px"><label id="ofZValLbl">Δz (m)</label>
+          <input id="ofZVal" type="text" inputmode="decimal" placeholder="e.g. -1.50 or 2.5"></div>
+        <div id="ofResult"></div>
+        <div class="compbar" style="margin-top:14px">
+          <span class="pill">Lines created: <b id="genN">0</b></span>
+          <button class="btn red small" onclick="clearGenLines()">🗑 Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-vol">
+      <div class="card">
+        <h2><span class="c"></span>Area &amp; surface</h2>
+        <div class="hint">The volume comes from points that are <b>already loaded</b> — no other file needed. It does need a <b>closed polygon</b> though, to know which area to measure.</div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Area (polygon)</label><select id="vlRing"></select></div>
+          <button class="btn ghost" onclick="vlScan()">🔄 Refresh</button>
+        </div>
+        <div class="fld" style="margin-top:10px"><label>Ground surface</label><select id="vlSurf" onchange="renderVlShiftList()"></select></div>
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Final surface from LandXML — comparison only</label>
+            <div class="hint" style="margin:0">Takes only the points, not a ready triangulation — it's re-triangulated here, same logic as any other surface.</div></div>
+          <button class="btn ghost" onclick="document.getElementById('fileLandxml').click()">📥 LandXML</button>
+        </div>
+        <input type="file" id="fileLandxml" accept=".xml,.landxml" style="display:none">
+        <div class="row2" style="margin-top:10px">
+          <div class="fld"><label>Boundary tightness — empty = convex (safe)</label>
+            <input id="vlTight" type="text" inputmode="decimal" placeholder="empty"></div>
+          <button class="btn ghost" onclick="vlMakeHull()">▣ Boundary from the points</button>
+        </div>
+        <div class="hint">Builds a polygon from the <b>outer points</b> of the surface you picked, and shows it on the map. Empty tightness = convex hull, never fails. With tightness (try 2 to 3) it follows shapes like a Γ — but on irregular points it can fragment, and it will tell you.</div>
+
+        <div class="fld" style="margin-top:10px"><label>Compare with</label>
+          <select id="vlMode" onchange="vlRender();renderVlShiftList()">
+            <option value="ref">Fixed final elevation</option>
+            <option value="surf2">Second surface</option>
+          </select></div>
+        <div class="fld" id="vlRefWrap" style="margin-top:10px"><label>Final elevation (m)</label>
+          <input id="vlRef" type="text" inputmode="decimal" placeholder="e.g. 797.500"></div>
+        <div class="fld" id="vlSurf2Wrap" hidden style="margin-top:10px"><label>Second surface</label>
+          <select id="vlSurf2" onchange="renderVlShiftList()"></select></div>
+        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;color:var(--mut);flex:1">Base shift per surface — check 2 points in the Points table, then ⚓ Shift pair here.</label>
+            <button class="btn ghost small" onclick="vlShiftReset()">🗑 Clear all</button>
+          </div>
+          <div id="vlShiftList" style="margin-top:6px"></div>
+        </div>
+        <div id="vlInfo"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Compute</h2>
+        <div class="row2">
+          <div class="fld"><label>Grid step (m) — smaller = more precise, slower</label>
+            <input id="vlStep" type="text" inputmode="decimal" value="0.50"></div>
+          <button class="btn" id="vlGo" onclick="vlCompute()">📊 Compute</button>
+        </div>
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;color:var(--mut);font-size:12px">Advanced: triangle edge limit</summary>
+          <div class="fld" style="margin-top:8px"><label>Max triangle edge (m) — empty = no limit</label>
+            <input id="vlMaxEdge" type="text" inputmode="decimal" placeholder="no limit"></div>
+          <div class="hint">The area is defined by the <b>polygon</b>, and anything outside it isn't measured — so normally nothing is needed here. Only needed when the polygon is <b>larger</b> than the survey, e.g. a parcel that was only partly measured: then triangles with a larger edge are treated as unmeasured.</div>
+        </details>
+        <div id="vlOut"></div>
+      </div>
+
+      <div class="card">
+        <h2><span class="c"></span>Export DXF</h2>
+        <div class="hint">Contours and digital terrain model in the <b>active CRS</b>, for each surface you selected. Contours come straight from the triangles, so they pass <b>exactly</b> through the measured elevations — no smoothing.</div>
+        <div class="row2" style="margin-top:12px">
+          <div class="fld"><label>Contour interval (m)</label>
+            <input id="vlIso" type="text" inputmode="decimal" value="0.25"></div>
+          <button class="btn green" onclick="vlExportDxf()">📐 DXF</button>
+        </div>
+        <div class="opt" style="margin-top:10px"><input type="checkbox" id="vlDxfIso" checked><label for="vlDxfIso">Contours (every 5th on its own layer, with elevation)</label></div>
+        <div class="opt"><input type="checkbox" id="vlDxfDtm" checked><label for="vlDxfDtm">Digital terrain model — 3DFACE triangles + points</label></div>
+        <div class="opt"><input type="checkbox" id="vlDxfClip" checked><label for="vlDxfClip">Clip contours to the polygon</label></div>
+        <div class="fld" id="vlDxfWhichWrap" hidden style="margin-top:10px"><label>You have a second surface — which one in the DXF?</label>
+          <select id="vlDxfWhich">
+            <option value="both">Both (2 separate files)</option>
+            <option value="A">First only (A)</option>
+            <option value="B">Second only (B)</option>
+          </select></div>
+        <div class="hint">Each surface is exported to <b>its own file</b> — layers are always fixed English names (POINTS, DTM, CONTOURS, CONTOURS_INDEX, BOUNDARY), not the surface's own name, so non-English names can't break the DXF.</div>
+        <button class="btn ghost" style="width:100%;margin-top:10px" onclick="vlExportLandXML()">🏗 LandXML (the surface, no contours)</button>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-out">
+    <div class="card">
+      <h2><span class="c"></span>Base shift</h2>
+      <div class="hint">Pick 2 points in the table — the shift always applies from A to B; to reverse it, click ⇄.</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:10px">
+        <div style="text-align:center;flex:1"><div style="font-size:12px;color:var(--mut)">A</div>
+          <div id="bsPLbl" style="font-weight:700;font-size:13px">—</div></div>
+        <button class="btn ghost small" onclick="bsSwapPair()" title="Swap A ⇄ B">⇄</button>
+        <div style="text-align:center;flex:1"><div style="font-size:12px;color:var(--mut)">B</div>
+          <div id="bsQLbl" style="font-weight:700;font-size:13px">—</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn ghost small" onclick="bsCompute()">Compute shift</button>
+        <span id="bsInfo" style="font-size:12px;color:var(--mut)"></span>
+        <button class="btn red small" style="margin-left:auto" onclick="bsClearPair()" title="Clear the shift pair">🗑 Clear</button>
+      </div>
+      <div class="opt" style="margin-top:10px">
+        <input type="checkbox" id="bsOn" onchange="BASESHIFT.on=this.checked">
+        <label for="bsOn">Active in exports (A → B)</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <div class="hint" style="flex:1;margin:0">Which layers get the shift:</div>
+        <button class="btn ghost small" onclick="bsToggleAllLayers()">☑ All/none</button>
+      </div>
+      <div id="bsLayerList" style="margin-top:6px"></div>
+    </div>
+    <div class="card">
+      <h2><span class="c"></span>Exports</h2>
+      <div class="opt"><input type="checkbox" id="chkOrtho" checked><label for="chkOrtho">Use orthometric height when SW Maps already computed it (falls back to ellipsoidal otherwise)</label></div>
+      <div class="opt"><input type="checkbox" id="dxf3d"><label for="dxf3d">DXF: 3D polylines (lines/polygons with elevation)</label></div>
+      <div class="opt"><input type="checkbox" id="dxfFlat"><label for="dxfFlat">DXF: flat points Z=0 (elevation shown as a label)</label></div>
+      <div class="opt"><input type="checkbox" id="dxfOnlyStake"><label for="dxfOnlyStake">DXF: stakeout points/lines only (not the loaded model)</label></div>
+      <div class="opt"><input type="checkbox" id="txtOnlyStake"><label for="txtOnlyStake">TXT: stakeout points only (not the measured model points)</label></div>
+      <div class="btns">
+        <button class="btn green" id="btnDxf" onclick="exportDXF()" disabled>📐 DXF (active CRS)</button>
+        <button class="btn" id="btnCsv" onclick="exportTXT()" disabled>📄 TXT points (per layer)</button>
+      </div>
+      <div class="opt"><input type="checkbox" id="kmlOnly2d"><label for="kmlOnly2d">KML: lines without elevation only (2D) — empty = all</label></div>
+      <div class="opt"><input type="checkbox" id="geojsonPts"><label for="geojsonPts">GeoJSON: include points too (not just lines)</label></div>
+      <div class="row2" style="margin-top:8px">
+        <button class="btn ghost" onclick="exportKML()">🌍 KML lines</button>
+        <button class="btn ghost" onclick="exportGeoJSON()">🗺 GeoJSON lines</button>
+      </div>
+      <div class="hint" style="margin-top:6px">All lines — from the model, offsets, boundary, DXF imports, profile — with real elevation where available, for Import → Layer in SW Maps (or another app). Try both — different apps read one or the other better.</div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:18px 0 12px">
+      <div class="opt"><input type="checkbox" id="chkStakeDesc"><label for="chkStakeDesc">CSV: include description too (4th column → SW "name:description")</label></div>
+      <button class="btn green" style="width:100%;margin-top:8px" onclick="exportStakeCSV()">📤 Stakeout CSV (for SW Maps)</button>
+    </div>
+    </section>
+
+  </main>
+  <footer>SW Maps Global Helper · ZS-Top — Stylianos F. Apostolou · <a href="../index.html">GeoLab</a> · <a href="mailto:supportlab@zstop.gr" style="color:inherit">supportlab@zstop.gr</a></footer>
+
+<script>
+  var map, drawnLayer, model=null, layerState={};
+  var GEOM_DEFAULT={POINT:'#e0353a',LINE:'#2f6bbd',POLYGON:'#00c2c2'};
+
+  /*  Base shift — A/B are TWO SPECIFIC points (BASESHIFT.refA/refB), picked
+   *  by checking rows in the Points table + "Shift pair" (bsSetPairFromTable)
+   *  — NOT the shared pick.p1/p2 used by Stakeout/Polar/etc, so the pair
+   *  never changes when the user picks points elsewhere, and survives every
+   *  general clear (clearAllSelection/clearAllData touch neither) — cleared
+   *  only by its own button (bsClearPair). One master switch (BASESHIFT.on)
+   *  decides whether it applies at all; per layer (BASESHIFT.layers[name])
+   *  which one takes part. Always A→B — to reverse, the user clicks ⇄
+   *  (bsSwapPair). */
+  var BASESHIFT = {dx:0, dy:0, dz:0, set:false, on:false, layers:{}, volLayers:{}, volPairs:{}, refA:null, refB:null};
+
+  function bsPointLabel(p){
+    if(!p) return '—';
+    var id=(p.id!=null?p.id:p.__id)||'';
+    var x=(p.x!=null)?p.x.toFixed(3):'—', y=(p.y!=null)?p.y.toFixed(3):'—', z=(p.z!=null)?p.z.toFixed(3):'—';
+    return id+' ('+x+', '+y+', '+z+')';
+  }
+  function renderBsPair(){
+    var a=document.getElementById('bsPLbl'), b=document.getElementById('bsQLbl');
+    if(a) a.textContent=bsPointLabel(BASESHIFT.refA);
+    if(b) b.textContent=bsPointLabel(BASESHIFT.refB);
+  }
+  /*  Takes the SAME point objects the exports iterate (`r.pt`/`r.cp`, same
+   *  reference as `f.pts.forEach`/`computed.forEach`) — NOT the table row's
+   *  ptObj wrapper, so `p === BASESHIFT.refB` in `bsApply` matches correctly. */
+  window.bsSetPairFromTable = function(){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(checks.length!==2){ alert('Check EXACTLY 2 points in the table (now: '+checks.length+').'); return; }
+    var pts=[]; checks.forEach(function(ch){ var r=ch.__ref; pts.push(r.kind==='computed'?r.cp:r.pt); });
+    BASESHIFT.refA=pts[0]; BASESHIFT.refB=pts[1]; BASESHIFT.set=false;
+    document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+    setStatus('shift pair set — press "Compute shift"', 'ok');
+  };
+  window.bsSwapPair = function(){
+    var t=BASESHIFT.refA; BASESHIFT.refA=BASESHIFT.refB; BASESHIFT.refB=t;
+    BASESHIFT.set=false; document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+  };
+  window.bsClearPair = function(){
+    BASESHIFT.refA=null; BASESHIFT.refB=null;
+    BASESHIFT.dx=BASESHIFT.dy=BASESHIFT.dz=0; BASESHIFT.set=false;
+    document.getElementById('bsInfo').textContent='';
+    renderBsPair();
+    setStatus('shift pair cleared', 'ok');
+  };
+  window.bsCompute = function(){
+    if(!BASESHIFT.refA || !BASESHIFT.refB){
+      alert('First pick a point pair in the Points table (☑ 2 points → "Shift pair").');
+      return;
+    }
+    var a=BASESHIFT.refA, b=BASESHIFT.refB;
+    BASESHIFT.dx=b.x-a.x; BASESHIFT.dy=b.y-a.y; BASESHIFT.dz=(b.z||0)-(a.z||0); BASESHIFT.set=true;
+    document.getElementById('bsInfo').textContent =
+      'Δ = (' + BASESHIFT.dx.toFixed(3) + ', ' + BASESHIFT.dy.toFixed(3) + ', ' + BASESHIFT.dz.toFixed(3) + ') m';
+    setStatus('shift computed ✓', 'ok');
+  };
+
+  /*  Applied FIRST to the active-CRS coordinates, before any transform to
+   *  WGS84 (e.g. for CSV) — requested explicitly this way. Point B itself is
+   *  NEVER shifted (it's already the target/correct position and must not be
+   *  shifted again) — only whatever else is on ticked layers, along with A
+   *  itself. */
+  function bsApply(p, layer){
+    if (!BASESHIFT.set || !BASESHIFT.on || !BASESHIFT.layers[layer]) return p;
+    if (p === BASESHIFT.refB) return p;
+    return {x: p.x + BASESHIFT.dx, y: p.y + BASESHIFT.dy,
+            z: (p.z != null ? p.z + BASESHIFT.dz : p.z)};
+  }
+
+  /*  Green ("ok") confirmations top-right were removed per user request —
+   *  felt like constant noise on every action. Warnings/errors (err/warn) and
+   *  neutral indicators (file name, CRS) stay; only the green "all good" is gone. */
+  function setStatus(t,cls){
+    if(cls==='ok') return;
+    var s=document.getElementById('status'); s.textContent=t; s.style.color = cls==='err'?'#ff9ea0':'#93a3bd';
+  }
+  function openAbout(){ document.getElementById('aboutModal').classList.add('show'); }
+  function closeAbout(){ document.getElementById('aboutModal').classList.remove('show'); }
+
+  /*  Esri World Imagery: some spots have no real image at deep zoom — the
+   *  server returns a fixed, small (~2.5 KB) gray "nothing here yet" tile
+   *  instead of an error (a real image is always many KB). Without a check,
+   *  Leaflet would show that gray square. Same mechanism as ZSGround
+   *  (`isoypseis`): fetch() to read Content-Length (a CORS-safe header;
+   *  ETag was tried there and isn't readable cross-origin), and if "empty"
+   *  retries at the parent tile (smaller z), cropped to the right piece —
+   *  recursively, as many levels as needed, until a real image is found.
+   *  That way zoom goes as deep as possible without ever showing the gray
+   *  square — just the best image available there. */
+  var ESRI_TILE_CACHE = {};
+  function esriFetchTile(z, x, y){
+    var key = z + '/' + x + '/' + y;
+    var ent = ESRI_TILE_CACHE[key];
+    if (ent) return ent;
+    ent = ESRI_TILE_CACHE[key] = {};
+    var url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
+    ent.ready = fetch(url).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      ent.flat = +(r.headers.get('content-length') || 0) < 5000;
+      return r.blob();
+    }).then(function(blob){
+      return new Promise(function(res){
+        var img = new Image();
+        img.onload = function(){ ent.img = img; res(ent); };
+        img.onerror = function(){ ent.failed = true; res(ent); };
+        img.src = URL.createObjectURL(blob);
+      });
+    }).catch(function(){ ent.failed = true; return ent; });
+    return ent;
+  }
+  var EsriOverzoomLayer = L.GridLayer.extend({
+    createTile: function(coords, done){
+      var tile = document.createElement('canvas');
+      tile.width = 256; tile.height = 256;
+      var ctx = tile.getContext('2d');
+      function attempt(z, x, y, qx, qy, qs){
+        esriFetchTile(z, x, y).ready.then(function(ent){
+          if (!ent.failed && !ent.flat){
+            try { ctx.drawImage(ent.img, qx, qy, qs, qs, 0, 0, 256, 256); } catch(e){}
+            done(null, tile);
+            return;
+          }
+          if (ent.failed || z <= 0 || qs < 2){ done(null, tile); return; }
+          attempt(z - 1, Math.floor(x / 2), Math.floor(y / 2),
+                  (x % 2) * 128 + qx / 2, (y % 2) * 128 + qy / 2, qs / 2);
+        });
+      }
+      attempt(coords.z, coords.x, coords.y, 0, 0, 256);
+      return tile;
+    }
+  });
+
+  // --- Map ---
+  map=L.map('map',{zoomControl:true,maxZoom:24}).setView([39.68,20.85],13);
+  var streets=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:24,maxNativeZoom:19,attribution:'© OSM'});
+  var imagery=new EsriOverzoomLayer({maxZoom:24,attribution:'© Esri, Maxar'});
+  var esriLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:24,maxNativeZoom:19});
+  var satLabeled=L.layerGroup([imagery,esriLabels]).addTo(map);
+  L.control.layers({'🛰️ Satellite':satLabeled,'🗺️ Map (OSM)':streets},{},{collapsed:true,position:'topright'}).addTo(map);
+  drawnLayer=L.featureGroup().addTo(map);
+  setTimeout(function(){ map.invalidateSize(); },300);
+  window.addEventListener('resize',function(){ map.invalidateSize(); });
+
+  // --- Coordinate system ---
+  // Ready synchronously at WGS84 by default; only switches to an async state
+  // briefly if the user enters a custom EPSG that needs an epsg.io lookup.
+  CRS.onChange(function(){ if(model){ retransform(); } renderCrsInfo(); });
+  renderCrsInfo();
+
+  // --- File handlers ---
+  document.getElementById('fileDb').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadDb(f); e.target.value=''; });
+  document.getElementById('fileXls').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadXls(f); e.target.value=''; });
+  document.getElementById('fileLandxml').addEventListener('change',function(e){ var f=e.target.files[0]; if(f) loadLandXML(f); e.target.value=''; });
+
+  function readBuf(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(ev){res(ev.target.result);}; r.onerror=rej; r.readAsArrayBuffer(file); }); }
+
+  function b64ToBytes(b64){
+    var bin=atob(b64), n=bin.length, bytes=new Uint8Array(n);
+    for(var i=0;i<n;i++) bytes[i]=bin.charCodeAt(i);
+    return bytes;
+  }
+  async function loadDb(file){
+    try{
+      setStatus('loading DB\u2026');
+      // Without wasmBinary, sql.js does a fetch() of the .wasm — blocked by
+      // CORS when the page is opened by double-click (file://), so it "does
+      // nothing" silently.
+      var opts={locateFile:f=>'../lib/vendor/'+f};
+      if(window.SQL_WASM_BASE64) opts.wasmBinary=b64ToBytes(window.SQL_WASM_BASE64);
+      var SQL=await initSqlJs(opts);
+      var buf=await readBuf(file);
+      var db=new SQL.Database(new Uint8Array(buf));
+      var m=SWMaps.fromDb(db); db.close();
+      setModel(m,file.name);
+    }catch(err){ setStatus('DB error','err'); alert('Error reading .swm2:\n'+err.message); }
+  }
+  async function loadXls(file){
+    try{
+      setStatus('loading Excel\u2026');
+      var buf=await readBuf(file);
+      var wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+      var m=SWMaps.fromWorkbook(wb);
+      setModel(m,file.name);
+    }catch(err){ setStatus('Excel error','err'); alert('Error reading Excel:\n'+err.message); }
+  }
+
+  // --- Model -> transform + render ---
+  // Forward transform (lon/lat -> the active working X/Y/Z) happens here,
+  // in ONE place, for every point. Two source cases:
+  //  - Excel export with a DECLARED non-WGS84 CRS: SW Maps wrote its own
+  //    projected X/Y directly into the file, so p.lon/p.lat are really
+  //    already X/Y in that CRS - read as-is, no reprojection of our own
+  //    (this is the locked project rule: never re-derive numbers SW Maps
+  //    already computed).
+  //  - Everything else (.swm2 always, Excel/CSV with no declared CRS):
+  //    p.lon/p.lat are true WGS84 - reproject to whatever CRS is active
+  //    (default WGS84 passthrough, or a UTM/EPSG the user picked).
+  function transformModel(){
+    if(!model) return;
+    var colorByLayer={};
+    model.layers.forEach(function(l){ colorByLayer[l.name]=(l.color && l.color!=='#e0353a')?l.color:GEOM_DEFAULT[l.geomType]||'#e0353a'; });
+    var useOrtho=document.getElementById('chkOrtho').checked;
+    var passthrough = (model.source==='excel' && model.crs && model.crs.code && model.crs.code!==4326);
+    model.features.forEach(function(f){
+      f.color = colorByLayer[f.layer] || GEOM_DEFAULT[f.geomType] || '#e0353a';
+      f.pts.forEach(function(p){
+        var h = (useOrtho && p.ortho!=null) ? p.ortho : (p.elv!=null? p.elv : 0);
+        if(passthrough){ p.x=p.lon; p.y=p.lat; p.z=h; }
+        else if(CRS.isReady()){ var e=CRS.fromWGS84(p.lat,p.lon,h); p.x=e.x; p.y=e.y; p.z=e.z; }
+        else { p.x=p.y=p.z=null; }
+      });
+    });
+    var pc=0;
+    model.features.forEach(function(f){ if(f.geomType==='POINT'){ f.pts.forEach(function(p){ pc++; p.__id=f.name||('p'+pc); }); } });
+  }
+  function setModel(m,fname){
+    if(window.jobOnNewFile) jobOnNewFile(fname);   // a different file = a new job
+    // Without this, a selection (P1/P2, Line 1/2) from the PREVIOUS job stayed
+    // highlighted on the map until the user picked something new.
+    pick.p1=pick.p2=null; LSEL.a=LSEL.b=null;
+    model=m; layerState={};
+    m.layers.forEach(function(l){ layerState[l.name]=true; });
+    if(fname) model.__fname=fname;
+    document.getElementById('btnDxf').disabled=false;
+    document.getElementById('btnCsv').disabled=false;
+    // A declared CRS in the file becomes the active one (so the map/exports
+    // can convert back to WGS84 correctly); with none declared, whatever the
+    // user already had active (default: WGS84) is kept as-is.
+    if(m.crs && m.crs.code && m.crs.code!==4326){
+      CRS.applyEPSG(m.crs.code, null, function(msg){ setStatus((model.__fname||'')+' \u00b7 '+msg,'err'); });
+    } else {
+      retransform();
+    }
+  }
+  function retransform(){
+    transformModel();
+    renderSummary(); renderLayers(); renderMap(); renderLines();
+    if(model) setStatus(model.__fname||'','');
+  }
+  function renderCrsInfo(){
+    var s=CRS.getState(), e=document.getElementById('crsInfo');
+    if(!e) return;
+    e.textContent = CRS.isReady() ? ('Current: '+s.name+(s.isGeo?'':' (EPSG:'+s.epsg+')')) : 'Loading CRS definition\u2026';
+    var inp=document.getElementById('crsCode'); if(inp && CRS.isReady()) inp.value = s.isGeo ? '' : s.epsg;
+  }
+  function applyCrsInput(){
+    var v=document.getElementById('crsCode').value.trim();
+    if(!v){ CRS.applyEPSG(4326); return; }
+    CRS.applyEPSG(v, null, function(msg){ alert(msg); renderCrsInfo(); });
+  }
+  function applyAutoUTM(){
+    var lon=null, lat=null;
+    if(model) for(var i=0;i<model.features.length && lon==null;i++){
+      var f=model.features[i]; if(f.pts.length){ lon=f.pts[0].lon; lat=f.pts[0].lat; }
+    }
+    if(lon==null){ alert('Load some data first so a UTM zone can be picked for it.'); return; }
+    var u=CRS.autoUTM(lon,lat);
+    CRS.applyEPSG(u.code, null, function(msg){ alert(msg); renderCrsInfo(); });
+  }
+
+  function renderSummary(){
+    if(!model){ document.getElementById('summary').innerHTML='<span class="pill">nothing loaded</span>'+(computed.length?('<span class="pill"><b>'+computed.length+'</b> stakeout points</span>'):''); return; }
+    var s=SWMaps.summarize(model);
+    document.getElementById('summary').innerHTML=
+      '<span class="pill"><b>'+s.features+'</b> features</span>'+
+      '<span class="pill">'+s.byType.POINT+' points</span>'+
+      '<span class="pill">'+s.byType.LINE+' lines</span>'+
+      '<span class="pill">'+s.byType.POLYGON+' polygons</span>'+
+      '<span class="pill">'+Object.keys(model.features.reduce(function(a,f){a[f.layer]=1;return a;},{})).length+' layers</span>';
+  }
+
+  function addLayerRow(host,name,type,color,n,isModel){
+    var row=document.createElement('div'); row.className='layer';
+    var checked=(layerState[name]!==false);
+    row.innerHTML='<input type="checkbox" '+(checked?'checked':'')+'>'+
+      '<span class="sw" style="background:'+color+'"></span>'+
+      '<span class="nm">'+esc(name)+'</span><span class="ty">'+type+'</span>'+
+      '<span class="ct">'+n+'</span>'+
+      '<button class="lyrdel" title="Delete layer">\U0001f5d1</button>';
+    row.querySelector('input').addEventListener('change',function(){ layerState[name]=this.checked; renderMap(); });
+    row.querySelector('.lyrdel').addEventListener('click',function(e){ e.stopPropagation(); isModel?deleteLayer(name):deleteComputedLayer(name); });
+    host.appendChild(row);
+  }
+  function renderLayers(){
+    var host=document.getElementById('layers'); host.innerHTML=''; var rows=0;
+    if(model){
+      var byLayer={};
+      model.features.forEach(function(f){ (byLayer[f.layer]=byLayer[f.layer]||{type:f.geomType,color:f.color,n:0}).n++; });
+      Object.keys(byLayer).forEach(function(name){ addLayerRow(host,name,byLayer[name].type,byLayer[name].color,byLayer[name].n,true); rows++; });
+    }
+    // One row per layer, not per line: a DXF layer with 1000 lines is ONE row.
+    var grp={}, order=[];
+    function g_(n){ if(!grp[n]){ grp[n]={lines:0,pts:0}; order.push(n); } return grp[n]; }
+    genLines.forEach(function(g){ g_(g.layer).lines++; });
+    computed.forEach(function(cp){ g_(cp.layer||'StakeOut').pts++; });
+    order.forEach(function(name){
+      var s=grp[name];
+      var type = s.lines && s.pts ? 'LINE+POINT' : (s.lines ? 'LINE' : 'POINT');
+      addLayerRow(host,name,type,s.lines?'#00e5a0':'#ff8a8a',s.lines+s.pts,false); rows++;
+    });
+    if(!rows) host.innerHTML='<div class="empty">Open an SW Maps file or upload a TXT to see the layers.</div>';
+    fillVertexLayers();
+    renderBsLayers();
+    bsPruneDeadPair();
+  }
+
+  /*  If the point A or B itself was deleted (or left with New file/Clear
+   *  all), the shift pair no longer makes sense \u2014 requested explicitly:
+   *  "when the points go, the shifts should go too". Runs on EVERY
+   *  renderLayers() (after every delete/clear that already calls it)
+   *  instead of needing a fresh check in each separate delete function. */
+  function bsPointStillExists(p){
+    if(!p) return false;
+    if(computed.indexOf(p)>=0) return true;
+    if(model) for(var i=0;i<model.features.length;i++){ if(model.features[i].pts.indexOf(p)>=0) return true; }
+    return false;
+  }
+  function bsPruneDeadPair(){
+    if(BASESHIFT.refA || BASESHIFT.refB){
+      if(!bsPointStillExists(BASESHIFT.refA) || !bsPointStillExists(BASESHIFT.refB)) bsClearPair();
+    }
+    Object.keys(BASESHIFT.volPairs).forEach(function(key){
+      var vp=BASESHIFT.volPairs[key];
+      if(!vp || (!vp.refA && !vp.refB)) return;
+      if(!bsPointStillExists(vp.refA) || !bsPointStillExists(vp.refB)) vlClearPair(key);
+    });
+  }
+
+  /*  Layer list inside the Base shift card (Exports) \u2014 same set of names
+   *  as renderLayers(), but here only the "takes the shift" checkbox comes
+   *  alive, so the user finds it next to A/B/\u21c4 instead of hunting in Data. */
+  function renderBsLayers(){
+    var host=document.getElementById('bsLayerList'); if(!host) return;
+    var names={};
+    if(model) model.features.forEach(function(f){ names[f.layer]=1; });
+    genLines.forEach(function(g){ names[g.layer]=1; });
+    computed.forEach(function(cp){ names[cp.layer||'StakeOut']=1; });
+    var list=Object.keys(names).sort();
+    if(!list.length){ host.innerHTML='<div class="empty">Open a file to see the layers.</div>'; return; }
+    host.innerHTML=list.map(function(name){
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">'+
+        '<input type="checkbox" class="bschk" data-name="'+esc(name)+'" '+(BASESHIFT.layers[name]?'checked':'')+'> '+esc(name)+'</label>';
+    }).join('');
+    host.querySelectorAll('.bschk').forEach(function(chk){
+      chk.addEventListener('change', function(){ BASESHIFT.layers[this.getAttribute('data-name')]=this.checked; });
+    });
+  }
+  window.bsToggleAllLayers = function(){
+    var boxes=document.querySelectorAll('#bsLayerList input.bschk'); if(!boxes.length) return;
+    var anyOff=false; boxes.forEach(function(b){ if(!b.checked) anyOff=true; });
+    boxes.forEach(function(b){ b.checked=anyOff; BASESHIFT.layers[b.getAttribute('data-name')]=anyOff; });
+  };
+
+  /** Only layers that HAVE vertices go into the dropdown \u2014 not point layers. */
+  function fillVertexLayers(){
+    var sel=document.getElementById('vxLayer'); if(!sel) return;
+    var keep=sel.value, names={};
+    if(model) model.features.forEach(function(f){
+      if(f.geomType==='LINE'||f.geomType==='POLYGON') names[f.layer]=1;
+    });
+    // Lines from DXF import/offset/etc (genLines) too \u2014 otherwise the list
+    // stayed empty/disabled when the only lines didn't come from an SW Maps DB/Excel.
+    genLines.forEach(function(g){ names[g.layer]=1; });
+    var list=Object.keys(names).sort();
+    sel.innerHTML='<option value="*">All layers</option>'+
+      list.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join('');
+    if(keep && (keep==='*' || names[keep])) sel.value=keep;
+    sel.disabled = !list.length;
+  }
+  function deleteComputedLayer(name){
+    // Lines that were built also go into the layer list. Without this, the
+    // the trash icon on such a line deleted nothing.
+    var n=computed.filter(function(c){ return (c.layer||'StakeOut')===name; }).length;
+    var g=genLines.filter(function(x){ return x.layer===name; }).length;
+    var what = g ? (g===1 ? 'one line' : g+' lines') : (n+' points');
+    if(!confirm('Delete layer "'+name+'" ('+what+')?')) return;
+    genLines=genLines.filter(function(x){ return x.layer!==name; });
+    computed=computed.filter(function(c){ return (c.layer||'StakeOut')!==name; });
+    delete layerState[name]; renderSummary(); renderLayers(); renderMap();
+  }
+
+  /*  Touch target.
+   *
+   *  The map's dots are 10 pixels: a mouse hits them exactly, a finger
+   *  doesn't \u2014 that's why "points weren't selectable on the phone".
+   *  Every point gets an invisible selection disc, big enough for a finger.
+   */
+  var COARSE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  var HIT_R = COARSE ? 22 : 10;
+  function hitHalo(lat, lon, layer){
+    return L.circleMarker([lat, lon], {radius:HIT_R, weight:0, opacity:0,
+                                       fillOpacity:0, interactive:true}).addTo(layer);
+  }
+
+  function renderMap(){
+    map.invalidateSize();
+    drawnLayer.clearLayers();
+    if(model) model.features.forEach(function(f){
+      if(!layerState[f.layer]) return;
+      var latlngs=f.pts.map(function(p){ return [p.lat,p.lon]; });
+      var lbl=(f.name||f.layer)+(f.remarks?(' \u2014 '+f.remarks):'');
+      if(f.geomType==='POINT'){
+        f.pts.forEach(function(p){
+          var coords=(p.x!=null)?('<br>X: '+p.x.toFixed(3)+'<br>Y: '+p.y.toFixed(3)+'<br>Z: '+p.z.toFixed(3)):'';
+          var popup='<b>'+(p.__id||f.name||f.layer)+'</b><br>'+f.layer+(f.remarks?('<br>'+f.remarks):'')+coords;
+          L.circleMarker([p.lat,p.lon],{radius:COARSE?7:5,color:f.color,weight:2,fillColor:f.color,fillOpacity:.85})
+            .addTo(drawnLayer);
+          var hit=hitHalo(p.lat,p.lon,drawnLayer).bindPopup(popup);
+          (function(pt){ hit.on('click',function(){ setPick(pt); }); })({id:p.__id,x:p.x,y:p.y,z:p.z,elv:p.elv,lat:p.lat,lon:p.lon});
+        });
+      } else if(f.geomType==='LINE'){
+        L.polyline(latlngs,{color:f.color,weight:3}).addTo(drawnLayer);
+        addLineHit(latlngs, f, lbl);
+      } else {
+        L.polygon(latlngs,{color:f.color,weight:2,fillColor:f.color,fillOpacity:.18}).bindPopup(lbl).addTo(drawnLayer);
+        addLineHit(latlngs, f, lbl);          // the perimeter is tappable like a line
+      }
+    });
+    computed.forEach(function(cp){
+      if(layerState[cp.layer||'StakeOut']===false) return;
+      var popup='<b>'+cp.id+'</b> <span style="color:#ff8a8a">('+cp.remarks+')</span><br>X: '+cp.x.toFixed(3)+'<br>Y: '+cp.y.toFixed(3)+'<br>Z: '+cp.z.toFixed(3);
+      L.circleMarker([cp.lat,cp.lon],{radius:COARSE?8:6,color:'#ff2d2d',weight:2,fillColor:'#ff8a8a',fillOpacity:.9})
+        .addTo(drawnLayer);
+      var hit=hitHalo(cp.lat,cp.lon,drawnLayer).bindPopup(popup);
+      (function(pt){ hit.on('click',function(){ setPick(pt); }); })(cp);
+    });
+    genLines.forEach(function(g){
+      if(layerState[g.layer]===false) return;
+      var ll=g.pts.map(function(p){ return [p.lat,p.lon]; });
+      L.polyline(ll,{color:'#00e5a0',weight:3,dashArray:'7,5'})
+        .bindPopup('<b>'+esc(g.id)+'</b><br>'+esc(g.remarks||'')).addTo(drawnLayer);
+      addLineHit(ll, {pts:g.pts, name:g.id, layer:g.layer, color:'#00e5a0'}, g.id);
+    });
+    var b=drawnLayer.getBounds();
+    if(b.isValid()) map.fitBounds(b,{padding:[30,30],maxZoom:18});
+    renderPointsTable();
+    renderLayers();
+    updatePick();
+    document.getElementById('compN').textContent=computed.length;
+    var gn=document.getElementById('genN'); if(gn) gn.textContent=genLines.length;
+    [['cntComp',computed.length],['cntGen',genLines.length],
+     ['cntFeat',(model&&model.features)?model.features.length:0]].forEach(function(p){
+      var e=document.getElementById(p[0]); if(e) e.textContent=p[1];
+    });
+    if(window.Jobs) Jobs.touch();          // autosave after every change
+  }
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function renderPointsTable(){
+    var tb=document.querySelector('#ptsTbl tbody'); tb.innerHTML=''; var rows=0;
+    function addRow(id,x,y,z,rem,layer,ptObj,comp,ref){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><input type="checkbox" class="selchk"></td>'+
+        '<td'+(comp?' style="color:#ff8a8a"':'')+'>'+esc(id)+'</td><td>'+x+'</td><td>'+y+'</td><td>'+z+'</td><td>'+esc(rem)+'</td><td style="color:var(--mut)">'+esc(layer)+'</td>';
+      var cb=tr.querySelector('.selchk'); cb.__ref=ref; cb.__pt=ptObj;
+      // The P1/P2 selection needs to show in the table too, not only the map.
+      if(ptObj && samePt(pick.p1, ptObj)) tr.className='selp1';
+      else if(ptObj && samePt(pick.p2, ptObj)) tr.className='selp2';
+      cb.addEventListener('click',function(e){ e.stopPropagation(); });
+      tr.style.cursor='pointer';
+      tr.addEventListener('click',function(){ if(ptObj&&ptObj.x!=null){ setPick(ptObj); map.setView([ptObj.lat,ptObj.lon],Math.max(map.getZoom(),18)); } });
+      tb.appendChild(tr); rows++;
+    }
+    if(model){
+      model.features.forEach(function(f){
+        if(f.geomType!=='POINT' || !layerState[f.layer]) return;
+        f.pts.forEach(function(p){
+          addRow(p.__id, (p.x!=null)?p.x.toFixed(3):'\u2014', (p.y!=null)?p.y.toFixed(3):'\u2014', (p.z!=null)?p.z.toFixed(3):'\u2014',
+            f.remarks, f.layer, {id:p.__id,x:p.x,y:p.y,z:p.z,elv:p.elv,lat:p.lat,lon:p.lon}, false, {kind:'model',feature:f,pt:p});
+        });
+      });
+    }
+    computed.forEach(function(cp){
+      if(layerState[cp.layer||'StakeOut']===false) return;
+      addRow(cp.id, cp.x.toFixed(3), cp.y.toFixed(3), cp.z.toFixed(3), cp.remarks, (cp.layer||'StakeOut'), {id:cp.id,x:cp.x,y:cp.y,z:cp.z,zReal:true,lat:cp.lat,lon:cp.lon}, true, {kind:'computed',cp:cp});
+    });
+    if(!rows) tb.innerHTML='<tr><td colspan="7" style="color:var(--mut);text-align:center;padding:14px">No points</td></tr>';
+  }
+  function toggleAllSel(btn){
+    var boxes=document.querySelectorAll('#ptsTbl tbody input.selchk'); if(!boxes.length) return;
+    var anyOff=false; boxes.forEach(function(b){ if(!b.checked) anyOff=true; });
+    boxes.forEach(function(b){ b.checked=anyOff; });
+  }
+  function deleteSelected(){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(!checks.length){ alert('No points selected (check the boxes).'); return; }
+    if(!confirm('Delete '+checks.length+' points?')) return;
+    var compDel=[], modelDel=[];
+    checks.forEach(function(ch){ var r=ch.__ref; if(!r) return; if(r.kind==='computed') compDel.push(r.cp); else modelDel.push(r); });
+    if(compDel.length) computed=computed.filter(function(c){ return compDel.indexOf(c)<0; });
+    modelDel.forEach(function(r){ var i=r.feature.pts.indexOf(r.pt); if(i>=0) r.feature.pts.splice(i,1); });
+    if(model){ model.features=model.features.filter(function(f){ return f.pts.length>0; }); }
+    renderSummary(); renderLayers(); renderMap();
+  }
+  function deleteLayer(name){
+    if(!model) return;
+    var cnt=model.features.filter(function(f){ return f.layer===name; }).length;
+    if(!confirm('Delete layer "'+name+'" ('+cnt+' shapes)?')) return;
+    model.features=model.features.filter(function(f){ return f.layer!==name; });
+    delete layerState[name];
+    renderSummary(); renderLayers(); renderMap();
+  }
+
+  // ---- STAKEOUT ----
+  var pick={p1:null,p2:null}, pickHL=L.layerGroup().addTo(map), computed=[];
+  function setPick(pt){
+    if(!pt||pt.x==null) return;
+    if(!pick.p1) pick.p1=pt;
+    else if(!pick.p2){ if(pt.lat===pick.p1.lat&&pt.lon===pick.p1.lon) return; pick.p2=pt; }
+    else { pick.p1=pt; pick.p2=null; }
+    updatePick();
+  }
+  function updatePick(){
+    pickHL.clearLayers();
+    var f=function(p){ return p?(p.id+'  ('+p.x.toFixed(2)+', '+p.y.toFixed(2)+')'):'\u2014'; };
+    ['pk1','pk1b','pk1c'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P1: '+f(pick.p1); });
+    ['pk2','pk2b','pk2c'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent='P2: '+f(pick.p2); });
+    if(pick.p1) L.circleMarker([pick.p1.lat,pick.p1.lon],{radius:11,color:'#ff3df0',weight:3,fill:false}).addTo(pickHL);
+    if(pick.p2) L.circleMarker([pick.p2.lat,pick.p2.lon],{radius:11,color:'#ffcc00',weight:3,fill:false}).addTo(pickHL);
+  }
+  function swapPick(){ var t=pick.p1; pick.p1=pick.p2; pick.p2=t; updatePick(); }
+  function clearPick(){ pick.p1=pick.p2=null; updatePick(); }
+  function zVal(a,b,d,L){ var m=document.getElementById('stZ').value; if(m==='copy')return a.z||0; if(m==='zero')return 0; return (a.z||0)+((b.z||0)-(a.z||0))*(d/L); }
+  function stExtend(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2 (on the map or the table).'); return; }
+    var d=numIn('stDist');
+    if(isNaN(d)){ alert('Give an extend distance.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('The points coincide.'); return; }
+    addComputed('E_'+a.id+'_'+b.id, b.x+d*(b.x-a.x)/L, b.y+d*(b.y-a.y)/L, zVal(a,b,L+d,L), 'Extend');
+    document.getElementById('stDist').value='';
+  }
+  function stDivide(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2.'); return; }
+    var s=numIn('stStep');
+    if(isNaN(s)||s<=0){ alert('Give a step > 0.'); return; }
+    var a=pick.p1,b=pick.p2,L=Math.hypot(b.x-a.x,b.y-a.y); if(!L){ alert('The points coincide.'); return; }
+    var ux=(b.x-a.x)/L, uy=(b.y-a.y)/L, c=0;
+    for(var d=s; d<L-1e-9; d+=s){ c++; addComputedSilent('D_'+a.id+'_'+c, a.x+d*ux, a.y+d*uy, zVal(a,b,d,L), 'Divide'); }
+    renderMap(); document.getElementById('stStep').value='';
+    if(!c) alert('The step is larger than the segment\'s length.');
+  }
+  function addComputedSilent(id,x,y,z,rem,lyr){ var w=CRS.isReady()?CRS.toWGS84(x,y,z):{lat:0,lon:0,h:z}; computed.push({id:id,x:x,y:y,z:z,lat:w.lat,lon:w.lon,h:w.h,remarks:rem,fix:4,layer:lyr||'StakeOut'}); document.getElementById('btnCsv').disabled=false; document.getElementById('btnDxf').disabled=false; }
+  function addComputed(id,x,y,z,rem){ addComputedSilent(id,x,y,z,rem); renderMap(); }
+  function clearComputed(){
+    if(!computed.length){ setStatus('There are no stakeout points.','warn'); return; }
+    if(confirm('Delete '+computed.length+' stakeout points?')){
+      computed=[]; pick={p1:null,p2:null}; renderSummary(); renderLayers(); renderMap();
+    }
+  }
+
+  /*  Clears ONLY the loaded database. Stakeout points and lines the user
+   *  built are their own work and don't get lost along with it. */
+  function clearModelOnly(){
+    if(!model){ setStatus('No data loaded.','warn'); return; }
+    if(!confirm('Remove the loaded data? Stakeout points and lines stay.')) return;
+    model=null; LSEL={a:null,b:null};
+    if(window.lineHL) lineHL.clearLayers();
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('data removed','ok');
+  }
+
+  // ---- DISTANCE-DISTANCE INTERSECTION ----
+  var isCandidates=L.layerGroup().addTo(map), isCand=[];
+  function clearCand(){ isCandidates.clearLayers(); isCand=[]; document.getElementById('isResult').innerHTML=''; }
+  function calcIntersect(){
+    if(!pick.p1||!pick.p2){ alert('Pick P1 and P2 (on the map or the table).'); return; }
+    var r1=numIn('isD1'), r2=numIn('isD2');
+    if(isNaN(r1)||isNaN(r2)||r1<=0||r2<=0){ alert('Give distances > 0.'); return; }
+    var a=pick.p1, b=pick.p2, dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+    if(d===0){ alert('Points P1/P2 coincide.'); return; }
+    if(d>r1+r2+1e-6){ clearCand(); alert('No intersection: the P1\u2013P2 distance ('+d.toFixed(3)+' m) is larger than the sum of the distances ('+(r1+r2).toFixed(3)+' m).'); return; }
+    if(d<Math.abs(r1-r2)-1e-6){ clearCand(); alert('No intersection: one circle is inside the other.'); return; }
+    var aa=(r1*r1-r2*r2+d*d)/(2*d), h=Math.sqrt(Math.max(0,r1*r1-aa*aa));
+    var mx=a.x+aa*dx/d, my=a.y+aa*dy/d, ox=h*dy/d, oy=h*dx/d;
+    var zMode=document.getElementById('stZ').value;
+    var z=zMode==='zero'?0:(zMode==='copy'?(a.z||0):(((a.z||0)+(b.z||0))/2));
+    var I1={x:mx+ox,y:my-oy,z:z}, I2={x:mx-ox,y:my+oy,z:z};
+    [I1,I2].forEach(function(p){ p.wgs=CRS.isReady()?CRS.toWGS84(p.x,p.y,p.z):{lat:0,lon:0,h:z}; });
+    isCand=[I1,I2];
+    isCandidates.clearLayers();
+    ['A','B'].forEach(function(lb,i){ var p=isCand[i];
+      L.circleMarker([p.wgs.lat,p.wgs.lon],{radius:9,color:'#ff9800',weight:3,fillColor:'#ffb74d',fillOpacity:.95})
+        .bindTooltip(lb,{permanent:true,direction:'right'}).addTo(isCandidates);
+    });
+    document.getElementById('isResult').innerHTML=
+      '<div class="hint" style="margin-top:12px">Found 2 intersections (A, B) \u2014 pick one:</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'+
+      '<button class="btn green" onclick="keepIntersect(0)">\u2713 Intersection A</button>'+
+      '<button class="btn green" onclick="keepIntersect(1)">\u2713 Intersection B</button></div>'+
+      '<div class="hint" style="margin-top:8px;font-family:ui-monospace,Consolas,monospace">A: '+I1.x.toFixed(3)+', '+I1.y.toFixed(3)+'<br>B: '+I2.x.toFixed(3)+', '+I2.y.toFixed(3)+'</div>';
+    map.fitBounds(L.latLngBounds([[a.lat,a.lon],[b.lat,b.lon],[I1.wgs.lat,I1.wgs.lon],[I2.wgs.lat,I2.wgs.lon]]),{padding:[45,45],maxZoom:19});
+  }
+  function keepIntersect(i){
+    var p=isCand[i]; if(!p) return;
+    addComputed('T_'+pick.p1.id+'_'+pick.p2.id, p.x, p.y, p.z, 'Intersect '+(i===0?'A':'B'));
+    clearCand();
+    document.getElementById('isD1').value=''; document.getElementById('isD2').value='';
+  }
+  function exportStakeCSV(){
+    if(!computed.length){ alert('There are no stakeout points.'); return; }
+    var withDesc=document.getElementById('chkStakeDesc').checked;
+    var out=computed.map(function(c){
+      // Shift first in the active-CRS coordinates, THEN transform to WGS84.
+      // Passes the SAME object c (not a wrapper) \u2014 otherwise p===BASESHIFT.refB
+      // in bsApply never matches identity, and B gets shifted again here.
+      var p=bsApply(c, c.layer||'StakeOut');
+      var w=CRS.isReady()?CRS.toWGS84(p.x,p.y,p.z||0):{lat:c.lat,lon:c.lon,h:c.h};
+      var h=(w.h!=null)?w.h:(p.z||0);
+      var b=c.id+','+w.lat.toFixed(8)+','+w.lon.toFixed(8)+','+(+h).toFixed(3);
+      return withDesc?(b+','+(c.remarks||'')):b;
+    });
+    download(out.join('\n'),'stakeout_WGS84.csv');
+  }
+  function clearAllData(){
+    if(!model && !computed.length) return;
+    if(!confirm('Clear EVERYTHING (loaded data + stakeout points)?')) return;
+    model=null; computed=[]; genLines=[]; pick={p1:null,p2:null};
+    document.getElementById('btnDxf').disabled=true; document.getElementById('btnCsv').disabled=true;
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('cleared','ok');
+  }
+  function addManual(){
+    var x=numIn('mX'), y=numIn('mY'), z=numIn('mZ')||0;
+    if(isNaN(x)||isNaN(y)){ alert('Give X and Y (active CRS).'); return; }
+    var id=document.getElementById('mID').value.trim()||('M'+(computed.length+1));
+    var desc=document.getElementById('mDesc').value.trim()||'Manual';
+    addComputedSilent(id,x,y,z,desc,'Manual'); renderMap();
+    ['mID','mDesc','mX','mY','mZ'].forEach(function(k){ document.getElementById(k).value=''; });
+    setStatus('added '+id,'ok');
+  }
+  document.getElementById('fileEgsa').addEventListener('change',function(e){
+    var file=e.target.files[0]; if(!file) return;
+    var lyr=(file.name||'').replace(/\.[^.]+$/,'')||'TXT';
+    var r=new FileReader();
+    r.onload=function(ev){
+      var lines=ev.target.result.split(/\r?\n/), n=0, i=0;
+      lines.forEach(function(ln){ ln=ln.trim(); if(!ln) return; var p=ln.split(/[,\t;]/); if(p.length<3) return;
+        var x=parseFloat(p[1]), y=parseFloat(p[2]), z=parseFloat(p[3])||0; if(isNaN(x)||isNaN(y)) return;
+        var disc=(p[4]!==undefined && p[4].trim()!=='')?p[4].trim():'point';   // 5th column = description, anything past it is ignored
+        i++; addComputedSilent((p[0].trim()||('E'+i)), x,y,z,disc,lyr); n++;
+      });
+      renderMap();
+      if(!n) alert('No valid lines found (pt,x,y[,z]).'); else setStatus('loaded '+n+' points ✓','ok');
+    };
+    r.readAsText(file); e.target.value='';
+  });
+
+
+  /*  Tabs. The map is OUTSIDE them and always stays visible: point selection
+   *  happens on it and would be useless hidden. The selection is remembered,
+   *  so a refresh in the field doesn't reset you to the start. */
+  var PANES = ['data','stake','calc','vol','out'];
+  function showPane(name){
+    if(PANES.indexOf(name) < 0) name = 'data';
+    PANES.forEach(function(p){
+      var el = document.getElementById('pane-'+p);
+      if(el) el.classList.toggle('show', p === name);
+    });
+    [].slice.call(document.querySelectorAll('.tabbar .tb')).forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-pane') === name);
+    });
+    // The tab is NOT remembered: opening always starts at Data, since that's
+    // where the file gets loaded — the first move every time.
+    // The map needs to re-measure: the page height may have changed.
+    if(window.map) setTimeout(function(){ map.invalidateSize(); }, 60);
+    if(name === 'vol' && window.vlScan) vlScan();
+  }
+  showPane('data');
+  try{ localStorage.removeItem('zs_pane:sw-maps-gr'); }catch(e){}   // old setting
+
+
+  /* ==================== LINE INTERSECTION ====================
+   *
+   *  A SEGMENT is picked, not a whole polyline: a polyline with ten segments
+   *  doesn't have one "line", and which segment gets extended would be a
+   *  guess. Whichever segment is closest to the tap is picked.
+   *
+   *  Calculations are done in the active CRS (planar), not in degrees.
+   */
+  var LSEL = {a:null, b:null};
+  var lineHL = L.layerGroup().addTo(map);
+
+  function addLineHit(latlngs, f, lbl){
+    // Invisible, thick line on top: 3 pixels aren't tappable with a finger.
+    var hit = L.polyline(latlngs, {color:f.color, weight: COARSE?26:14,
+                                   opacity:0, interactive:true}).addTo(drawnLayer);
+    hit.bindPopup(lbl);
+    hit.on('click', function(ev){ pickSegment(f, ev.latlng); });
+  }
+
+  /** The segment of the geometry closest to the tapped point. */
+  function nearestSegment(f, latlng){
+    var pts = f.pts, best = null, bd = Infinity;
+    var c = map.latLngToLayerPoint(latlng);
+    for (var i = 0; i < pts.length - 1; i++){
+      var A = map.latLngToLayerPoint([pts[i].lat, pts[i].lon]);
+      var B = map.latLngToLayerPoint([pts[i+1].lat, pts[i+1].lon]);
+      var d = L.LineUtil.pointToSegmentDistance(c, A, B);
+      if (d < bd){ bd = d; best = i; }
+    }
+    if (best === null) return null;
+    var p = pts[best], q = pts[best+1];
+    if (p.x == null || q.x == null) return null;
+    return {name:(f.name||f.layer||'line'), layer:f.layer, i:best, f:f,
+            p:{x:p.x, y:p.y, z:p.z}, q:{x:q.x, y:q.y, z:q.z}};
+  }
+
+  function pickSegment(f, latlng){
+    var seg = nearestSegment(f, latlng);
+    if (!seg){ setStatus('The segment has no coordinates in the active CRS.','err'); return; }
+    if (!LSEL.a) LSEL.a = seg;
+    else if (!LSEL.b) LSEL.b = seg;
+    else { LSEL.a = seg; LSEL.b = null; }
+    renderLines();
+  }
+
+  window.swapLines = function(){ var t=LSEL.a; LSEL.a=LSEL.b; LSEL.b=t; renderLines(); };
+  window.clearLines = function(){ LSEL.a=LSEL.b=null; renderLines(); };
+
+  /*  A button, always visible (tabbar, not inside a specific tool), that
+   *  clears EVERY selection at once — P1/P2, Line 1/2, and the checked boxes
+   *  in the points table (Data). Requested explicitly so no selection "trace"
+   *  stays visible while working in another tool. */
+  window.clearAllSelection = function(){
+    pick.p1 = pick.p2 = null;
+    LSEL.a = LSEL.b = null;
+    renderLines();
+    renderMap();
+    setStatus('selection cleared', 'ok');
+  };
+
+  function segLabel(s){
+    if (!s) return '—';
+    var d = Math.hypot(s.q.x - s.p.x, s.q.y - s.p.y);
+    return s.name + ' · segment ' + (s.i+1) + ' · ' + d.toFixed(2) + ' m';
+  }
+
+  function renderLines(){
+    document.getElementById('lp1').innerHTML = 'Line 1<b>' + esc(segLabel(LSEL.a)) + '</b>';
+    document.getElementById('lp2').innerHTML = 'Line 2<b>' + esc(segLabel(LSEL.b)) + '</b>';
+    lineHL.clearLayers();
+    [[LSEL.a,'#ff3df0'],[LSEL.b,'#ffcc00']].forEach(function(pair){
+      var s = pair[0]; if (!s) return;
+      var w1 = CRS.isReady() ?CRS.toWGS84(s.p.x, s.p.y, s.p.z||0) : null;
+      var w2 = CRS.isReady() ?CRS.toWGS84(s.q.x, s.q.y, s.q.z||0) : null;
+      if (w1 && w2) L.polyline([[w1.lat,w1.lon],[w2.lat,w2.lon]],
+                               {color:pair[1], weight:5, opacity:.95}).addTo(lineHL);
+    });
+    computeIntersection();
+  }
+
+  /** Intersection of the LINES the two segments define (extended if needed). */
+  function intersectSegments(A, B){
+    var d1 = {x:A.q.x - A.p.x, y:A.q.y - A.p.y};
+    var d2 = {x:B.q.x - B.p.x, y:B.q.y - B.p.y};
+    var den = d1.x*d2.y - d1.y*d2.x;
+    var L1 = Math.hypot(d1.x, d1.y), L2 = Math.hypot(d2.x, d2.y);
+    if (!L1 || !L2) return {err:'Zero-length segment.'};
+    // Intersection angle: below a few degrees the intersection is practically useless.
+    var ang = Math.abs(Math.atan2(den, d1.x*d2.x + d1.y*d2.y)) * 180/Math.PI;
+    if (ang > 90) ang = 180 - ang;
+    if (Math.abs(den) < 1e-12 * L1 * L2) return {err:'The lines are parallel.', ang:ang};
+    var w = {x:B.p.x - A.p.x, y:B.p.y - A.p.y};
+    var t = (w.x*d2.y - w.y*d2.x) / den;
+    var u = (w.x*d1.y - w.y*d1.x) / den;
+    return {
+      x: A.p.x + t*d1.x, y: A.p.y + t*d1.y,
+      z1: (A.p.z||0) + t*((A.q.z||0) - (A.p.z||0)),
+      z2: (B.p.z||0) + u*((B.q.z||0) - (B.p.z||0)),
+      t:t, u:u, L1:L1, L2:L2, ang:ang
+    };
+  }
+
+  function whereOn(t, len){
+    if (t >= 0 && t <= 1) return {ok:true, txt:'on the segment'};
+    if (t < 0)  return {ok:false, txt:'on the extension, ' + (-t*len).toFixed(2) + ' m before the start'};
+    return {ok:false, txt:'on the extension, ' + ((t-1)*len).toFixed(2) + ' m past the end'};
+  }
+
+  var lastIx = null;
+  function computeIntersection(){
+    var host = document.getElementById('ixResult');
+    lastIx = null;
+    if (!LSEL.a || !LSEL.b){ host.innerHTML=''; return; }
+    var r = intersectSegments(LSEL.a, LSEL.b);
+    if (r.err){
+      host.innerHTML = '<div class="warnbox"><b>No intersection.</b><br>' + esc(r.err) +
+        (r.ang!=null ? ('<br>Angle between them: ' + r.ang.toFixed(3) + '°') : '') + '</div>';
+      return;
+    }
+    lastIx = r;
+    var w1 = whereOn(r.t, r.L1), w2 = whereOn(r.u, r.L2);
+    var dz = Math.abs(r.z1 - r.z2);
+    var html = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">Intersection (active CRS)</div>' +
+      '<div class="big">X = ' + r.x.toFixed(3) + '</div>' +
+      '<div class="big">Y = ' + r.y.toFixed(3) + '</div>' +
+      '<div style="color:var(--mut);font-size:12px;margin-top:8px">' +
+        'Intersection angle <b style="color:#f0f6ff">' + r.ang.toFixed(3) + '°</b><br>' +
+        'Line 1: ' + esc(w1.txt) + '<br>' +
+        'Line 2: ' + esc(w2.txt) + '</div>';
+
+    if (r.ang < 15){
+      html += '<div class="warnbox"><b>⚠ Very shallow intersection angle (' + r.ang.toFixed(2) + '°).</b><br>' +
+        'At such a shallow angle, a few centimeters of error in the points shift ' +
+        'the intersection by meters. The result is mathematically correct but practically unreliable.</div>';
+    }
+    if (dz > 0.02){
+      html += '<div class="warnbox">The two lines do not intersect in space: ' +
+        'Z from line 1 = ' + r.z1.toFixed(3) + ' m, from line 2 = ' + r.z2.toFixed(3) +
+        ' m, difference <b>' + dz.toFixed(3) + ' m</b>. This is a <b>plan-view</b> intersection.</div>';
+    }
+    html += '<div class="btns" style="margin-top:12px">' +
+      '<button class="btn green" onclick="keepIx()">➕ Add to stakeout points</button></div></div>';
+    host.innerHTML = html;
+  }
+
+  window.keepIx = function(){
+    if (!lastIx) return;
+    var z = (lastIx.z1 + lastIx.z2) / 2;
+    var id = 'INT_' + (computed.filter(function(c){ return c.layer==='Intersections'; }).length + 1);
+    addComputedSilent(id, lastIx.x, lastIx.y, z, 'intersection ' + lastIx.ang.toFixed(1) + '°', 'Intersections');
+    renderMap();
+    setStatus('added ' + id, 'ok');
+  };
+
+
+  /* ==================== POINTS AT VERTICES ====================
+   *
+   *  Measured points are never touched: COPIES are created as stakeout
+   *  points, and that's where elevations and names go. This keeps the
+   *  survey file intact.
+   */
+  var VXLAYER = 'Vertices';
+
+  /*  Z IS NOT ALWAYS AN ELEVATION.
+   *
+   *  SW Maps writes 0 when there is no height. After the transform, that 0
+   *  becomes the geoid reduction — tens of meters off in some regions. If
+   *  read as an elevation, the profile comes out with monster values.
+   *
+   *  The criterion is the SOURCE height (p.elv), not the transformed p.z.
+   *  A line with the SAME elevation at every vertex still measures fine:
+   *  every vertex has its own elv, just equal to the others.
+   */
+  function hasRealZ(p){
+    if (p == null) return false;
+    if (p.zReal) return true;                 // stakeout point: our own elevation
+    if (p.elv !== undefined) return p.elv != null && p.elv !== 0;
+    return p.z != null && p.z !== 0;
+  }
+  function realZ(p){ return hasRealZ(p) ? (p.z || 0) : 0; }
+
+  /** The same point isn't added a second time if the button is pressed again. */
+  function alreadyThere(x, y){
+    for (var i = 0; i < computed.length; i++){
+      if (Math.abs(computed[i].x - x) < 0.0005 && Math.abs(computed[i].y - y) < 0.0005) return true;
+    }
+    return false;
+  }
+
+  function addVertex(id, p, rem, layer){
+    if (p.x == null) return 0;
+    if (alreadyThere(p.x, p.y)) return 0;
+    var z = (p.zGiven != null) ? p.zGiven : realZ(p);
+    var w = CRS.isReady() ?CRS.toWGS84(p.x, p.y, z) : {lat:p.lat, lon:p.lon, h:z};
+    computed.push({id:id, x:p.x, y:p.y, z:z, zReal:true,
+                   lat:(p.lat != null ? p.lat : w.lat), lon:(p.lon != null ? p.lon : w.lon),
+                   h:w.h, remarks:rem, fix:4, layer:layer || VXLAYER});
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    return 1;
+  }
+
+  /*  Same as addVertex, WITHOUT the "already there" check: for when we
+   *  deliberately want EVERY vertex of every line to become a point, even if
+   *  it coincides with a vertex of another line (a shared point between two
+   *  lines) — same logic as the profile tool, which reads vertices straight
+   *  from the line, no dedup. */
+  function addVertexForce(id, p, rem, layer){
+    if (p.x == null) return 0;
+    var z = (p.zGiven != null) ? p.zGiven : realZ(p);
+    var w = CRS.isReady() ?CRS.toWGS84(p.x, p.y, z) : {lat:p.lat, lon:p.lon, h:z};
+    computed.push({id:id, x:p.x, y:p.y, z:z, zReal:true,
+                   lat:(p.lat != null ? p.lat : w.lat), lon:(p.lon != null ? p.lon : w.lon),
+                   h:w.h, remarks:rem, fix:4, layer:layer || VXLAYER});
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    return 1;
+  }
+
+  window.makeVertexPoints = function(){
+    if (!model && !genLines.length){ alert('No data loaded.'); return; }
+    var want = document.getElementById('vxLayer').value;
+    var made = 0, skipped = 0, feats = 0;
+    if (model) model.features.forEach(function(f){
+      if (f.geomType !== 'LINE' && f.geomType !== 'POLYGON') return;
+      if (want !== '*' && f.layer !== want) return;
+      if (layerState[f.layer] === false) return;     // a hidden layer produces no points
+      var pts = f.pts.slice();
+      // A polygon's closing edge repeats the first vertex; don't duplicate it.
+      if (f.geomType === 'POLYGON' && pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.lat-b.lat) < 1e-12 && Math.abs(a.lon-b.lon) < 1e-12) pts.pop();
+      }
+      feats++;
+      var base = (f.name || f.layer || 'V');
+      // Separate layer per SOURCE layer — otherwise the "per layer or all"
+      // choice appeared to do nothing: everything ended up in one "Vertices".
+      var outLyr = VXLAYER + '_' + f.layer;
+      pts.forEach(function(p, i){
+        if (p.x == null){ skipped++; return; }
+        made += addVertexForce(base + '_' + (i+1), p, 'vertex', outLyr);
+      });
+    });
+    // Lines from DXF import/offset/etc (genLines) too — they don't live in
+    // the model, otherwise this tool said "no data" while the lines showed
+    // fine on the map.
+    genLines.forEach(function(g){
+      if (want !== '*' && g.layer !== want) return;
+      if (layerState[g.layer] === false) return;
+      var pts = g.pts.slice();
+      if (pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001) pts.pop();
+      }
+      feats++;
+      var outLyr = VXLAYER + '_' + g.layer;
+      pts.forEach(function(p, i){
+        if (p.x == null){ skipped++; return; }
+        made += addVertexForce(g.id + '_' + (i+1), p, 'vertex', outLyr);
+      });
+    });
+    renderMap();
+    if (!feats){ setStatus('No lines or polygons found in this selection.','warn'); return; }
+    var msg = made + ' points made from ' + feats + ' objects';
+    if (skipped) msg += ' · ' + skipped + ' without coordinates';
+    setStatus(msg + ' \u2713', 'ok');
+  };
+
+  /** The two ends of the segments picked for intersection. */
+  window.segEndPoints = function(){
+    if (!LSEL.a && !LSEL.b){ alert('First pick a line on the map.'); return; }
+    var made = 0, dup = 0;
+    [LSEL.a, LSEL.b].forEach(function(sg){
+      if (!sg) return;
+      [[sg.p, sg.i + 1], [sg.q, sg.i + 2]].forEach(function(pair){
+        var n = addVertex(sg.name + '_' + pair[1], pair[0], 'segment end', VXLAYER);
+        if (n) made++; else dup++;
+      });
+    });
+    renderMap();
+    setStatus(made + ' points made' + (dup ? (' · ' + dup + ' already existed') : '') + ' ✓', 'ok');
+  };
+
+
+  /*  Some keyboards/locales give a COMMA for decimals. With <input type=number>
+   *  the browser rejected the value and returned empty — the number got lost
+   *  silently. Fields are text now and read from here instead. */
+  function numIn(id){
+    var el = document.getElementById(id);
+    if (!el) return NaN;
+    return parseFloat(String(el.value || '').trim().replace(',', '.'));
+  }
+
+  /** Two points are the same if they coincide to the millimeter. */
+  function samePt(a, b){
+    return !!(a && b && a.x != null && b.x != null &&
+              Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001);
+  }
+
+  function checkedPts(){
+    return [].slice.call(document.querySelectorAll('#ptsTbl tbody input.selchk:checked'))
+             .map(function(c){ return c.__pt; })
+             .filter(function(p){ return p && p.x != null; });
+  }
+
+  /** The checked points become P1/P2 and Stakeout opens. */
+  window.sendToTools = function(){
+    var pts = checkedPts();
+    if(!pts.length){ alert('Check one or two points in the table.'); return; }
+    if(pts.length > 2) setStatus(pts.length + ' checked — the first two were used.', 'warn');
+    pick = {p1: pts[0], p2: pts[1] || null};
+    updatePick();
+    renderPointsTable();
+    showPane('stake');
+  };
+
+  /*  Copies measured points into the stakeout points, so they can be edited
+   *  there. Originals are never touched. */
+  window.copySelectedToStake = function(){
+    var pts = checkedPts();
+    if(!pts.length){ alert('Check points in the table.'); return; }
+    var made = 0, dup = 0;
+    pts.forEach(function(p){
+      var n = addVertex(p.id || 'P', {x:p.x, y:p.y, z:p.z, lat:p.lat, lon:p.lon}, 'copy', 'Copies');
+      if(n) made++; else dup++;
+    });
+    renderMap();
+    setStatus('copied ' + made + (dup ? (' · ' + dup + ' already existed') : '') + ' ✓', 'ok');
+  };
+
+
+  /* ==================== OFFSET ====================
+   *
+   *  Produces a LINE that stays: shows on the map, saves with the job, and
+   *  exports to DXF. SW Maps only offsets as a stakeout target — it doesn't
+   *  create geometry you can keep.
+   *
+   *  Same sign convention as SW Maps: negative left, positive right.
+   */
+  var genLines = [];
+
+  /** Unit normal to the RIGHT of the p→q direction (x east, y north). */
+  function rightNormal(p, q){
+    var dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy);
+    if (!L) return null;
+    return {x: dy / L, y: -dx / L, L: L};
+  }
+
+  /** Intersection of two lines in parametric form; null if parallel. */
+  function lineCross(a1, a2, b1, b2){
+    var d1 = {x:a2.x - a1.x, y:a2.y - a1.y};
+    var d2 = {x:b2.x - b1.x, y:b2.y - b1.y};
+    var den = d1.x*d2.y - d1.y*d2.x;
+    if (Math.abs(den) < 1e-9) return null;
+    var w = {x:b1.x - a1.x, y:b1.y - a1.y};
+    var t = (w.x*d2.y - w.y*d2.x) / den;
+    return {x: a1.x + t*d1.x, y: a1.y + t*d1.y};
+  }
+
+  /**
+   *  Offsets a polyline. Each segment moves perpendicular and consecutive
+   *  ones are intersected, so corners stay sharp. At a very tight angle the
+   *  intersection point flies off and the line self-intersects — this is
+   *  NOT silently fixed, a warning is returned instead.
+   */
+  window.ofZRender = function(){
+    var mode = document.getElementById('ofZMode').value;
+    document.getElementById('ofZValWrap').hidden = (mode === 'none');
+    document.getElementById('ofZValLbl').textContent = (mode === 'slope') ? 'Slope % (e.g. -2.5)' : 'Δz (m)';
+  };
+
+  /**
+   *  Optional vertical offset on top of the elevation the source line
+   *  already has (not instead of it) — SAME Δz at EVERY node (e.g. node A
+   *  200 m → A' 201 m), not something that grows along the line:
+   *  - Fixed Δz: as given.
+   *  - Slope %: over the offset distance ITSELF — e.g. 0.20 m offset with
+   *    5% slope = 0.01 m Δz at every node, like a curb/shoulder slope.
+   */
+  function offsetPolyline(pts, d, zMode, zVal){
+    if (pts.length < 2) return {err:'At least 2 vertices are needed.'};
+    var dz = (zMode === 'dz') ? zVal : (zMode === 'slope') ? (zVal / 100 * d) : 0;
+    var segs = [];
+    for (var i = 0; i < pts.length - 1; i++){
+      var n = rightNormal(pts[i], pts[i+1]);
+      if (!n) continue;                       // duplicate vertex: skipped
+      segs.push({a:{x:pts[i].x + d*n.x,   y:pts[i].y + d*n.y},
+                 b:{x:pts[i+1].x + d*n.x, y:pts[i+1].y + d*n.y},
+                 z1:(pts[i].z||0) + dz, z2:(pts[i+1].z||0) + dz, L:n.L});
+    }
+    if (!segs.length) return {err:'Zero-length line.'};
+
+    var out = [{x:segs[0].a.x, y:segs[0].a.y, z:segs[0].z1}];
+    var warn = [];
+    for (var k = 0; k < segs.length - 1; k++){
+      var c = lineCross(segs[k].a, segs[k].b, segs[k+1].a, segs[k+1].b);
+      if (!c){ c = {x:segs[k].b.x, y:segs[k].b.y}; }      // collinear
+      // If the intersection flew off farther than the segments themselves, the corner "broke".
+      var far = Math.hypot(c.x - segs[k].b.x, c.y - segs[k].b.y);
+      if (far > Math.min(segs[k].L, segs[k+1].L)) warn.push(k + 2);
+      out.push({x:c.x, y:c.y, z:segs[k].z2});
+    }
+    var last = segs[segs.length - 1];
+    out.push({x:last.b.x, y:last.b.y, z:last.z2});
+    return {pts:out, warn:warn, dz:dz};
+  }
+
+  /** The source vertices, depending on the selection. */
+  function offsetSource(){
+    var mode = document.getElementById('ofSrc').value;
+    if (mode === 'pick'){
+      if (!pick.p1 || !pick.p2) return {err:'Pick P1 and P2.'};
+      return {name:'P1P2', pts:[{x:pick.p1.x, y:pick.p1.y, z:pick.p1.z||0},
+                                {x:pick.p2.x, y:pick.p2.y, z:pick.p2.z||0}]};
+    }
+    if (!LSEL.a) return {err:'First pick Line 1 by tapping it on the map.'};
+    if (mode === 'seg'){
+      return {name:LSEL.a.name + '_seg' + (LSEL.a.i + 1),
+              pts:[{x:LSEL.a.p.x, y:LSEL.a.p.y, z:LSEL.a.p.z||0},
+                   {x:LSEL.a.q.x, y:LSEL.a.q.y, z:LSEL.a.q.z||0}]};
+    }
+    var f = LSEL.a.f;
+    if (!f || !f.pts) return {err:'The line was not found.'};
+    var v = f.pts.filter(function(p){ return p.x != null; })
+                 .map(function(p){ return {x:p.x, y:p.y, z:realZ(p)}; });
+    if (v.length < 2) return {err:'The line has no coordinates in the active CRS.'};
+    return {name:LSEL.a.name, pts:v};
+  }
+
+  window.makeOffset = function(){
+    var host = document.getElementById('ofResult');
+    var d = numIn('ofDist');
+    if (!Number.isFinite(d) || d === 0){
+      host.innerHTML = '<div class="warnbox">Give a distance other than zero.</div>';
+      return;
+    }
+    var src = offsetSource();
+    if (src.err){ host.innerHTML = '<div class="warnbox">' + esc(src.err) + '</div>'; return; }
+
+    var zMode = document.getElementById('ofZMode').value;
+    var zVal = numIn('ofZVal');
+    if (zMode !== 'none' && !Number.isFinite(zVal)){
+      host.innerHTML = '<div class="warnbox">Give a ' + (zMode === 'slope' ? 'slope %' : 'Δz') + '.</div>';
+      return;
+    }
+    var res = offsetPolyline(src.pts, d, zMode, zVal);
+    if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
+
+    var id = src.name + '_off' + (d > 0 ? '+' : '') + d.toFixed(2);
+    var pts = res.pts.map(function(p){
+      var w = CRS.isReady() ?CRS.toWGS84(p.x, p.y, p.z || 0) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:p.z || 0, lat:w.lat, lon:w.lon};
+    });
+    genLines.push({id:id, layer:id, remarks:'offset ' + d.toFixed(2) + ' m from ' + src.name,
+                   pts:pts});
+    renderSummary(); renderLayers(); renderMap();
+
+    var len = 0;
+    for (var i = 0; i < pts.length - 1; i++) len += Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
+    var html = '<div class="resline"><div style="color:var(--mut);font-size:12px">Done</div>' +
+      '<div class="big">' + esc(id) + '</div>' +
+      '<div style="color:var(--mut);font-size:12px;margin-top:6px">' +
+        pts.length + ' vertices · length ' + len.toFixed(2) + ' m · ' +
+        (d < 0 ? 'left' : 'right') + ' ' + Math.abs(d).toFixed(2) + ' m' +
+        (zMode !== 'none' ? ' · Δz ' + (res.dz >= 0 ? '+' : '') + res.dz.toFixed(3) + ' m at every node' +
+          (zMode === 'slope' ? ' (' + zVal + '% slope × ' + d.toFixed(2) + ' m offset)' : '') : '') +
+        '</div>';
+    if (res.warn.length){
+      html += '<div class="warnbox"><b>⚠ The line may self-intersect</b> at vertices ' +
+        res.warn.join(', ') + '. The angle is too tight for this much offset — ' +
+        'check it on the map before using it.</div>';
+    }
+    html += '<div class="btns" style="margin-top:10px">' +
+      '<button class="btn ghost" onclick="genVertexPoints(\'' + id.replace(/'/g,"\\'") + '\')">📍 Points at its vertices</button>' +
+      '</div></div>';
+    host.innerHTML = html;
+    setStatus('created ' + id + ' ✓', 'ok');
+  };
+
+  window.genVertexPoints = function(id){
+    var g = genLines.filter(function(x){ return x.id === id; })[0];
+    if (!g) return;
+    var made = 0, dup = 0;
+    g.pts.forEach(function(p, i){
+      var n = addVertex(id + '_' + (i + 1), p, 'offset', 'Vertices');
+      if (n) made++; else dup++;
+    });
+    renderMap();
+    setStatus(made + ' points made' + (dup ? (' · ' + dup + ' already existed') : '') + ' ✓', 'ok');
+  };
+
+  window.clearGenLines = function(){
+    if (!genLines.length){ setStatus('There are no lines.','warn'); return; }
+    if (!confirm('Delete ' + genLines.length + ' lines that were created?')) return;
+    genLines.forEach(function(g){ delete layerState[g.layer]; });
+    genLines = [];
+    renderSummary(); renderLayers(); renderMap();
+  };
+
+
+  /* ==================== PROFILE ====================
+   *
+   *  Interpolation is done by chainage — length ALONG the line. On a line
+   *  that turns, straight-line distance gives a different percentage and a
+   *  different elevation; the slope exists on the road, not on its chord.
+   *
+   *  Vertices OUTSIDE the known elevations get no value. Extending a slope
+   *  past the survey is a guess dressed up as a measurement.
+   */
+  var pfV = [], pfName = '', pfLastOut = null;
+
+  function pfSource(){
+    var mode = document.getElementById('pfSrc').value;
+    if (mode === 'pick'){
+      if (!pick.p1 || !pick.p2) return {err:'Pick P1 and P2.'};
+      return {name:'P1P2', pts:[pick.p1, pick.p2]};
+    }
+    if (!LSEL.a || !LSEL.a.f) return {err:'First pick Line 1 by tapping it on the map.'};
+    var v = LSEL.a.f.pts.filter(function(p){ return p.x != null; });
+    if (v.length < 2) return {err:'The line has no coordinates in the active CRS.'};
+    return {name:LSEL.a.name, pts:v};
+  }
+
+  window.pfLoad = function(){
+    var src = pfSource();
+    if (src.err){ document.getElementById('pfTable').innerHTML =
+      '<div class="warnbox">' + esc(src.err) + '</div>'; return; }
+    pfName = src.name;
+    var ch = 0;
+    pfV = src.pts.map(function(p, i){
+      if (i > 0) ch += Math.hypot(p.x - src.pts[i-1].x, p.y - src.pts[i-1].y);
+      // Any vertex with a real elevation comes in on its own.
+      // "use" = used as KNOWN. Unchecking it keeps the value visible but the
+      // vertex is computed by interpolation from the rest instead.
+      var z = hasRealZ(p) ? p.z : null;
+      return {i:i+1, ch:ch, x:p.x, y:p.y, z:z, use:(z != null)};
+    });
+    pfRender();
+    var auto = pfV.filter(function(v){ return v.z != null; }).length;
+    document.getElementById('pfResult').innerHTML = auto
+      ? '<div class="hint">The line had elevations: <b>' + auto + '</b> vertices were filled in automatically.</div>'
+      : '';
+  };
+
+  function pfRender(){
+    var host = document.getElementById('pfTable');
+    if (!pfV.length){ host.innerHTML = ''; return; }
+    // The .tblwrap is rebuilt from scratch on every render — without this, a
+    // check/uncheck on a vertex far down a long line threw the view back to the top.
+    var oldWrap = host.querySelector('.tblwrap');
+    var savedScroll = oldWrap ? oldWrap.scrollTop : 0;
+    var h = '<div style="display:flex;gap:8px;margin:10px 0 4px">' +
+            '<button class="btn ghost small" type="button" onclick="pfSetAllUse(true)">☑ All known</button>' +
+            '<button class="btn ghost small" type="button" onclick="pfSetAllUse(false)">☐ None known</button></div>' +
+            '<div class="tblwrap"><table><thead><tr>' +
+            '<th>#</th><th>Chainage</th><th>X</th><th>Y</th><th>Elevation</th><th title="Use as known">use</th></tr></thead><tbody>';
+    pfV.forEach(function(v, k){
+      h += '<tr' + (v.z != null && !v.use ? ' style="opacity:.55"' : '') + '>' +
+           '<td>' + v.i + '</td><td>' + v.ch.toFixed(2) + '</td>' +
+           '<td>' + v.x.toFixed(2) + '</td><td>' + v.y.toFixed(2) + '</td>' +
+           '<td><input type="text" inputmode="decimal" style="width:92px" ' +
+           'value="' + (v.z == null ? '' : v.z.toFixed(3)) + '" ' +
+           'oninput="pfSetZ(' + k + ',this.value)"></td>' +
+           '<td><input type="checkbox" ' + (v.use ? 'checked ' : '') +
+           (v.z == null ? 'disabled ' : '') + 'onchange="pfSetUse(' + k + ',this.checked)"></td></tr>';
+    });
+    h += '</tbody></table></div>';
+    var nUse = pfV.filter(function(v){ return v.z != null && v.use; }).length;
+    var nOff = pfV.filter(function(v){ return v.z != null && !v.use; }).length;
+    h += '<div class="hint">Total length: <b>' + pfV[pfV.length-1].ch.toFixed(2) + ' m</b> · ' +
+         pfV.length + ' vertices · <b>' + nUse + '</b> known' +
+         (nOff ? (' · <b>' + nOff + '</b> unchecked, will be computed') : '') +
+         '<br>Uncheck a vertex so it doesn’t count as known: its elevation ' +
+         'will come from interpolating the rest. <b>No step is needed</b> — ' +
+         'the vertices always come out.</div>';
+    host.innerHTML = h;
+    var newWrap = host.querySelector('.tblwrap');
+    if (newWrap) newWrap.scrollTop = savedScroll;
+  }
+
+  window.pfSetAllUse = function(on){
+    pfV.forEach(function(v){ if (v.z != null) v.use = !!on; });
+    pfRender();
+  };
+
+  /** New node at a given chainage — X/Y position on the line (pfXYat), no elevation yet. */
+  window.pfAddNode = function(){
+    if (!pfV.length){ alert('Load the vertices first.'); return; }
+    var ch = parseFloat(String(document.getElementById('pfAddCh').value).replace(',', '.'));
+    var total = pfV[pfV.length - 1].ch;
+    if (!Number.isFinite(ch) || ch < 0 || ch > total){
+      alert('Give a chainage within 0 to ' + total.toFixed(2) + ' m.');
+      return;
+    }
+    if (pfV.some(function(v){ return Math.abs(v.ch - ch) < 0.005; })){
+      alert('There is already a vertex at this chainage.');
+      return;
+    }
+    var xy = pfXYat(ch);
+    pfV.push({i:0, ch:ch, x:xy.x, y:xy.y, z:null, use:false});
+    pfV.sort(function(a, b){ return a.ch - b.ch; });
+    pfV.forEach(function(v, k){ v.i = k + 1; });   // renumber # after inserting
+    document.getElementById('pfAddCh').value = '';
+    pfRender();
+    setStatus('node added at chainage ' + ch.toFixed(2) + ' m', 'ok');
+  };
+
+  /** Elevation at the "to" vertex from a % slope starting at the known value at the "from" vertex. */
+  window.pfApplySlope = function(){
+    if (!pfV.length){ alert('Load the vertices first.'); return; }
+    var fromI = parseInt(document.getElementById('pfSlopeFrom').value, 10);
+    var toI = parseInt(document.getElementById('pfSlopeTo').value, 10);
+    var pct = parseFloat(String(document.getElementById('pfSlopePct').value).replace(',', '.'));
+    var from = pfV[fromI - 1], to = pfV[toI - 1];
+    if (!from || !to){ alert('Give valid vertex numbers (1..' + pfV.length + ').'); return; }
+    if (from.z == null || !from.use){
+      alert('Vertex ' + fromI + ' needs a known elevation first (type a value or use "From points").');
+      return;
+    }
+    if (!Number.isFinite(pct)){ alert('Give a slope in % (e.g. -2.5).'); return; }
+    to.z = from.z + pct / 100 * (to.ch - from.ch);
+    to.use = true;
+    pfRender();
+    setStatus('vertex ' + toI + ': elevation ' + to.z.toFixed(3) + ' m from ' + pct + '% slope', 'ok');
+  };
+
+  window.pfSetZ = function(k, val){
+    var n = parseFloat(String(val).replace(',', '.'));
+    pfV[k].z = Number.isFinite(n) ? n : null;
+    // A value typed by hand is assumed to be known.
+    pfV[k].use = (pfV[k].z != null);
+  };
+
+  window.pfSetUse = function(k, on){
+    pfV[k].use = !!on;
+    pfRender();
+  };
+
+  /** Takes an elevation from the nearest existing point, within a radius. */
+  window.pfFromPoints = function(){
+    if (!pfV.length){ alert('Load the vertices first.'); return; }
+    var rad = numIn('pfNear');
+    if (!Number.isFinite(rad) || rad <= 0){ alert('Give a radius in meters.'); return; }
+    var pool = [];
+    if (model) model.features.forEach(function(f){
+      if (f.geomType !== 'POINT') return;
+      f.pts.forEach(function(p){ if (p.x != null && hasRealZ(p)) pool.push({id:p.__id||f.name, x:p.x, y:p.y, z:p.z}); });
+    });
+    computed.forEach(function(c){ pool.push({id:c.id, x:c.x, y:c.y, z:c.z}); });
+    if (!pool.length){ alert('There are no points with an elevation.'); return; }
+    var got = 0, names = [];
+    pfV.forEach(function(v){
+      var best = null, bd = Infinity;
+      pool.forEach(function(p){
+        var d = Math.hypot(p.x - v.x, p.y - v.y);
+        if (d < bd){ bd = d; best = p; }
+      });
+      if (best && bd <= rad){ v.z = best.z; got++; names.push(v.i + '←' + best.id); }
+    });
+    pfRender();
+    setStatus(got ? ('elevations on ' + got + ' vertices: ' + names.join(', ')) :
+                    'No point within the radius.', got ? 'ok' : 'warn');
+  };
+
+  /** Elevation at chainage c, interpolated between the KNOWN ones. null if outside. */
+  function pfZat(known, c){
+    if (known.length < 2) return null;
+    if (c < known[0].ch || c > known[known.length-1].ch) return null;
+    for (var i = 0; i < known.length - 1; i++){
+      var a = known[i], b = known[i+1];
+      if (c >= a.ch && c <= b.ch){
+        var span = b.ch - a.ch;
+        return span > 0 ? a.z + (b.z - a.z) * (c - a.ch) / span : a.z;
+      }
+    }
+    return null;
+  }
+
+  /** Point on the line at chainage c. */
+  function pfXYat(c){
+    for (var i = 0; i < pfV.length - 1; i++){
+      var a = pfV[i], b = pfV[i+1];
+      if (c >= a.ch && c <= b.ch){
+        var span = b.ch - a.ch;
+        var t = span > 0 ? (c - a.ch) / span : 0;
+        return {x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t};
+      }
+    }
+    var last = pfV[pfV.length-1];
+    return {x:last.x, y:last.y};
+  }
+
+  window.pfCompute = function(){
+    var host = document.getElementById('pfResult');
+    if (!pfV.length){ host.innerHTML = '<div class="warnbox">Load the vertices first.</div>'; return; }
+    var known = pfV.filter(function(v){ return v.z != null && v.use; })
+                   .map(function(v){ return {ch:v.ch, z:v.z, i:v.i}; });
+    if (known.length < 2){
+      host.innerHTML = '<div class="warnbox"><b>At least two elevations are needed.</b><br>' +
+        'With only one, there is no slope to interpolate.</div>';
+      return;
+    }
+    var step = numIn('pfStep');
+    var noStep = !Number.isFinite(step) || step <= 0;
+    var total = pfV[pfV.length-1].ch;
+
+    // Output chainages: always the vertices, plus the step from the start.
+    var chs = pfV.map(function(v){ return v.ch; });
+    if (!noStep){
+      for (var c = step; c < total; c += step) chs.push(c);
+    }
+    chs.sort(function(a, b){ return a - b; });
+    var uniq = [];
+    chs.forEach(function(c){
+      if (!uniq.length || Math.abs(c - uniq[uniq.length-1]) > 0.005) uniq.push(c);
+    });
+
+    var outside = 0, out = [];
+    uniq.forEach(function(c){
+      var z = pfZat(known, c);
+      if (z == null){ outside++; return; }
+      var xy = pfXYat(c);
+      var id = pfName + '_' + c.toFixed(2);
+      out.push({id:id, ch:c, x:xy.x, y:xy.y, z:z});
+    });
+    var made = out.length;
+    pfLastOut = out;   // Send reads from here — Compute doesn't send anything by itself
+
+    /*  Unchecked vertices: shows how much the measured value differs from
+     *  what the slope gives. That difference is the whole point. */
+    var redone = [];
+    pfV.forEach(function(v){
+      if (v.z == null || v.use) return;
+      var nz = pfZat(known, v.ch);
+      if (nz != null) redone.push({i:v.i, ch:v.ch, was:v.z, now:nz});
+    });
+
+    // ---- slope report per segment between KNOWN elevations ----
+    var rows = '';
+    for (var i = 0; i < known.length - 1; i++){
+      var a = known[i], b = known[i+1];
+      var dch = b.ch - a.ch, dz = b.z - a.z;
+      var pc = dch > 0 ? (dz / dch * 100) : 0;
+      var oneIn = (dz !== 0 && dch > 0) ? ('1:' + Math.abs(dch / dz).toFixed(1)) : '—';
+      rows += '<tr><td>' + a.i + ' → ' + b.i + '</td><td>' + a.ch.toFixed(2) + ' → ' + b.ch.toFixed(2) +
+              '</td><td>' + dch.toFixed(2) + '</td><td>' + (dz >= 0 ? '+' : '') + dz.toFixed(3) +
+              '</td><td style="color:' + (pc >= 0 ? '#8ff0b6' : '#ff9ea0') + '">' +
+              (pc >= 0 ? '+' : '') + pc.toFixed(2) + ' %</td><td>' + oneIn + '</td></tr>';
+    }
+
+    var html = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">Slope per segment</div>' +
+      '<div class="tblwrap" style="margin-top:8px"><table><thead><tr><th>Vertices</th><th>Chainage</th>' +
+      '<th>Length</th><th>ΔZ</th><th>Slope</th><th>1:n</th></tr></thead><tbody>' + rows +
+      '</tbody></table></div>' +
+      '<div class="hint" style="margin-top:10px">Computed <b>' + made + '</b> points · ' +
+      'total length ' + total.toFixed(2) + ' m — not sent yet.</div>' +
+      (made ? '<button class="btn green" style="width:100%;margin-top:8px" onclick="pfSend()">' +
+              '📤 Send to points (' + made + ')</button>' : '');
+    if (noStep){
+      // Information, not a warning: unchecking vertices works fine with no
+      // step, and it's a normal way to use this.
+      html += '<div class="hint">No densify step — points at the vertices only. ' +
+        'For in-between points, type a step and press Compute again.</div>';
+    }
+    if (outside){
+      html += '<div class="warnbox"><b>' + outside + ' positions were left without an elevation.</b><br>' +
+        'They are outside the known elevations (before the first or after the last vertex with a value). ' +
+        'They are not interpolated — that would be extending a slope, i.e. a guess.</div>';
+    }
+
+    if (redone.length){
+      html += '<div style="color:var(--mut);font-size:12px;margin-top:14px">Vertices recomputed</div>' +
+        '<div class="tblwrap" style="margin-top:6px"><table><thead><tr><th>#</th><th>Chainage</th>' +
+        '<th>Measured</th><th>From slope</th><th>Difference</th></tr></thead><tbody>' +
+        redone.map(function(r){
+          var d = r.now - r.was;
+          return '<tr><td>' + r.i + '</td><td>' + r.ch.toFixed(2) + '</td><td>' + r.was.toFixed(3) +
+                 '</td><td>' + r.now.toFixed(3) + '</td><td style="color:' +
+                 (Math.abs(d) < 0.05 ? '#8ff0b6' : '#ffcc00') + '">' +
+                 (d >= 0 ? '+' : '') + d.toFixed(3) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    /*  The points go into the stakeout points, but their table is on another
+     *  tab. Shown here too, so they can be checked on the spot. */
+    if (out.length){
+      var show = out.slice(0, 60);
+      html += '<div style="color:var(--mut);font-size:12px;margin-top:14px">Points created' +
+        (out.length > show.length ? (' — the first ' + show.length + ' of ' + out.length) : '') + '</div>' +
+        '<div class="tblwrap" style="margin-top:6px"><table><thead><tr><th>Chainage</th><th>X</th>' +
+        '<th>Y</th><th>Z</th></tr></thead><tbody>' +
+        show.map(function(o){
+          return '<tr><td>' + o.ch.toFixed(2) + '</td><td>' + o.x.toFixed(3) + '</td><td>' +
+                 o.y.toFixed(3) + '</td><td>' + o.z.toFixed(3) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    html += '</div>';
+    host.innerHTML = html;
+    setStatus('profile: computed ' + made + ' points — press Send', 'ok');
+  };
+
+  window.pfSend = function(){
+    if (!pfLastOut || !pfLastOut.length){
+      alert('Nothing computed to send. Press Compute first.');
+      return;
+    }
+    var n = 1;
+    while (computed.some(function(c){ return c.layer === ('Profile' + n); }) ||
+           genLines.some(function(g){ return g.layer === ('Profile' + n); })) n++;
+    var lyr = 'Profile' + n;
+    var linePts = [];
+    pfLastOut.forEach(function(o){
+      var w = CRS.isReady() ?CRS.toWGS84(o.x, o.y, o.z) : {lat:null, lon:null, h:o.z};
+      computed.push({id:lyr + '_' + o.ch.toFixed(2), x:o.x, y:o.y, z:o.z, zReal:true,
+                     lat:w.lat, lon:w.lon, h:w.h, remarks:'chainage ' + o.ch.toFixed(2), fix:4, layer:lyr});
+      linePts.push({x:o.x, y:o.y, z:o.z, lat:w.lat, lon:w.lon});
+    });
+    // Same layer name as the points: renderLayers() groups them into ONE
+    // "LINE+POINT" row — and the line goes into the DXF export as a 3D
+    // polyline (dxf3d). The same name twice would create a second line on top of the first.
+    genLines = genLines.filter(function(g){ return g.id !== lyr; });
+    if (linePts.length >= 2){
+      genLines.push({id:lyr, layer:lyr, remarks:'Profile — line with elevation per chainage', pts:linePts});
+    }
+    document.getElementById('btnCsv').disabled = false;
+    document.getElementById('btnDxf').disabled = false;
+    renderMap();
+    setStatus('profile: sent ' + pfLastOut.length + ' points + line to layer "' + lyr + '" ✓', 'ok');
+  };
+
+  /* ==================== DXF IMPORT ====================
+   *
+   *  DXF is (code, value) pairs on alternating lines. POINT, INSERT (a point
+   *  = the block's insertion point; many drawings put survey points in as a
+   *  block/symbol instead of POINT), LINE, LWPOLYLINE and POLYLINE/VERTEX are
+   *  read. Anything else (text, circles, hatches) is reported as skipped
+   *  instead of silently ignored.
+   *
+   *  ELEVATIONS: a 3D polyline has Z per vertex. A 2D one has ONE elevation
+   *  for all of them (code 38 on LWPOLYLINE) — which is just as valid an
+   *  elevation, simply the same everywhere.
+   */
+  var dxfPending = null;
+
+  function dxfPairs(text){
+    var L = text.split(/\r\n|\r|\n/);
+    var out = [];
+    for (var i = 0; i + 1 < L.length; i += 2){
+      var c = parseInt(L[i].trim(), 10);
+      if (isNaN(c)){
+        if (out.length < 4) return null;   // binary DXF or a broken file
+        break;
+      }
+      out.push([c, L[i+1]]);
+    }
+    return out;
+  }
+
+  function dxfGet(pairs, code, dflt){
+    for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === code) return pairs[i][1].trim();
+    return dflt;
+  }
+  function dxfNum(pairs, code, dflt){
+    var v = dxfGet(pairs, code, null);
+    var n = v == null ? NaN : parseFloat(v);
+    return Number.isFinite(n) ? n : dflt;
+  }
+
+  /** The vertices of an LWPOLYLINE: 10/20 pairs in the order they appear. */
+  function lwVerts(pairs, elev){
+    var out = [], cx = null;
+    pairs.forEach(function(pr){
+      if (pr[0] === 10) cx = parseFloat(pr[1]);
+      else if (pr[0] === 20 && cx !== null){
+        out.push({x:cx, y:parseFloat(pr[1]), z:elev});
+        cx = null;
+      }
+    });
+    return out;
+  }
+
+  var BINARY_MSG = 'Cannot read: the file is a binary DXF. '
+                 + 'Save it again as ASCII DXF and try again.';
+
+  function readDXF(text){
+    // A binary DXF starts with a specific signature.
+    if (text.slice(0, 18) === 'AutoCAD Binary DXF') return {err:BINARY_MSG};
+    var P = dxfPairs(text);
+    if (!P || P.length < 4) return {err:BINARY_MSG};
+
+    var i = 0;
+    while (i < P.length && !(P[i][0] === 2 && P[i][1].trim() === 'ENTITIES')) i++;
+    if (i >= P.length) return {err:'No ENTITIES section found in the file.'};
+
+    var ents = [], cur = null;
+    for (i++; i < P.length; i++){
+      var c = P[i][0], v = P[i][1];
+      if (c === 0){
+        var t = v.trim();
+        if (t === 'ENDSEC') break;
+        cur = {type:t, pairs:[]};
+        ents.push(cur);
+      } else if (cur) cur.pairs.push([c, v]);
+    }
+
+    var pts = [], lines = [], skipped = {}, k;
+    for (k = 0; k < ents.length; k++){
+      var e = ents[k], T = e.type, lyr = dxfGet(e.pairs, 8, '0');
+
+      if (T === 'POINT' || T === 'INSERT'){
+        // INSERT (block reference): the insertion point (10/20/30) is the
+        // position of the block/symbol in the drawing — same codes as POINT.
+        pts.push({id:'', layer:lyr, x:dxfNum(e.pairs,10,NaN), y:dxfNum(e.pairs,20,NaN), z:dxfNum(e.pairs,30,0)});
+
+      } else if (T === 'LINE'){
+        lines.push({layer:lyr, closed:false, pts:[
+          {x:dxfNum(e.pairs,10,NaN), y:dxfNum(e.pairs,20,NaN), z:dxfNum(e.pairs,30,0)},
+          {x:dxfNum(e.pairs,11,NaN), y:dxfNum(e.pairs,21,NaN), z:dxfNum(e.pairs,31,0)}]});
+
+      } else if (T === 'LWPOLYLINE'){
+        var fl = dxfNum(e.pairs,70,0);
+        var v2 = lwVerts(e.pairs, dxfNum(e.pairs,38,0));   // 38 = single elevation for all vertices
+        if (v2.length >= 2) lines.push({layer:lyr, closed:!!(fl & 1), pts:v2});
+
+      } else if (T === 'POLYLINE'){
+        var flags = dxfNum(e.pairs,70,0);
+        var vv = [];
+        while (k + 1 < ents.length && ents[k+1].type === 'VERTEX'){
+          k++;
+          vv.push({x:dxfNum(ents[k].pairs,10,NaN), y:dxfNum(ents[k].pairs,20,NaN),
+                   z:dxfNum(ents[k].pairs,30,0)});
+        }
+        if (k + 1 < ents.length && ents[k+1].type === 'SEQEND') k++;
+        if (vv.length >= 2) lines.push({layer:lyr, closed:!!(flags & 1), pts:vv});
+
+      } else if (T !== 'SEQEND' && T !== 'VERTEX'){
+        skipped[T] = (skipped[T] || 0) + 1;
+      }
+    }
+
+    // Clean out vertices with non-numeric coordinates.
+    pts = pts.filter(function(p){ return Number.isFinite(p.x) && Number.isFinite(p.y); });
+    lines = lines.map(function(l){
+      l.pts = l.pts.filter(function(p){ return Number.isFinite(p.x) && Number.isFinite(p.y); });
+      return l;
+    }).filter(function(l){ return l.pts.length >= 2; });
+
+    return {pts:pts, lines:lines, skipped:skipped};
+  }
+
+  document.getElementById('fileDxf').addEventListener('change', function(ev){
+    var file = ev.target.files[0]; ev.target.value = '';
+    if (!file) return;
+    var r = new FileReader();
+    r.onload = function(e){
+      var res = readDXF(e.target.result);
+      var host = document.getElementById('dxfPanel');
+      if (res.err){ host.innerHTML = '<div class="warnbox">' + esc(res.err) + '</div>'; return; }
+      if (!res.pts.length && !res.lines.length){
+        host.innerHTML = '<div class="warnbox">No points or lines found. Supported: POINT, INSERT, LINE, LWPOLYLINE, POLYLINE.</div>';
+        return;
+      }
+      var byLayer = {};
+      function lyStat(n){ return byLayer[n] = byLayer[n] || {pts:0, lines:0, polys:0}; }
+      res.pts.forEach(function(p){ lyStat(p.layer).pts++; });
+      res.lines.forEach(function(l){ if (l.closed) lyStat(l.layer).polys++; else lyStat(l.layer).lines++; });
+      var layerNames = Object.keys(byLayer).sort(function(a, b){ return a.localeCompare(b); });
+
+      dxfPending = {name:file.name.replace(/\.[^.]+$/, ''), res:res, layers:layerNames};
+
+      var all = res.pts.concat([]);
+      res.lines.forEach(function(l){ all = all.concat(l.pts); });
+      var withZ = all.filter(function(p){ return p.z !== 0; }).length;
+
+      var h = '<div class="resline" style="margin-top:12px">' +
+        '<div style="font-size:13px;color:#f0f6ff"><b>' + esc(file.name) + '</b></div>' +
+        '<div style="font-size:12px;color:var(--mut);margin:4px 0 10px">' +
+          res.pts.length + ' points · ' + res.lines.length + ' lines/polygons · ' +
+          withZ + ' of ' + all.length + ' vertices have elevation</div>';
+      var sk = Object.keys(res.skipped);
+      if (sk.length){
+        h += '<div class="hint">Not read: ' +
+             sk.map(function(t){ return esc(t) + ' ×' + res.skipped[t]; }).join(', ') + '</div>';
+      }
+      // Layers start UNCHECKED: a CAD drawing has dozens, and the user picks whatever is needed.
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">' +
+             '<b style="font-size:13px;color:#f0f6ff">Layers (' + layerNames.length + ')</b>' +
+             '<button class="btn ghost small" style="margin-left:auto" onclick="dxfPickAll(true)">☑ All</button>' +
+             '<button class="btn ghost small" onclick="dxfPickAll(false)">☐ None</button>' +
+           '</div>' +
+           '<div id="dxLayers" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:2px 8px;margin-top:8px">';
+      layerNames.forEach(function(n, idx){
+        var s = byLayer[n], parts = [];
+        if (s.pts)   parts.push(s.pts + ' pts');
+        if (s.lines) parts.push(s.lines + ' lines');
+        if (s.polys) parts.push(s.polys + ' polys');
+        h += '<label class="layer" style="cursor:pointer">' +
+               '<input type="checkbox" class="dxLy" value="' + idx + '" onchange="dxfPickCount()">' +
+               '<span class="nm">' + esc(n) + '</span>' +
+               '<span class="ct">' + parts.join(' · ') + '</span>' +
+             '</label>';
+      });
+      h += '</div><div class="hint" id="dxPickInfo">Selected: no layers</div>';
+      h += '<div class="opt" style="margin-top:10px"><input type="checkbox" id="dxVx" checked>' +
+           '<label for="dxVx">Stakeout point at every vertex</label></div>' +
+           '<div class="fld" style="margin-top:8px"><label>Point elevation</label>' +
+           '<select id="dxZ">' +
+             '<option value="dxf">From the DXF</option>' +
+             '<option value="zero">No elevation (0)</option>' +
+             '<option value="near">From nearby measured points (≤ 2 m)</option>' +
+           '</select></div>' +
+           '<div class="btns" style="margin-top:12px">' +
+             '<button class="btn green" onclick="dxfImport()">📥 Import</button>' +
+             '<button class="btn ghost" onclick="dxfPending=null;document.getElementById(\'dxfPanel\').innerHTML=\'\'">Cancel</button>' +
+           '</div></div>';
+      host.innerHTML = h;
+    };
+    r.onerror = function(){ alert('The file could not be read.'); };
+    r.readAsText(file);
+  });
+
+  function dxfPickedLayers(){
+    var on = {};
+    document.querySelectorAll('#dxLayers .dxLy:checked').forEach(function(c){
+      on[dxfPending.layers[+c.value]] = true;
+    });
+    return on;
+  }
+  window.dxfPickCount = function(){
+    if (!dxfPending) return;
+    var on = dxfPickedLayers(), res = dxfPending.res;
+    var nLy = Object.keys(on).length;
+    var np = res.pts.filter(function(p){ return on[p.layer]; }).length;
+    var nl = res.lines.filter(function(l){ return on[l.layer]; }).length;
+    document.getElementById('dxPickInfo').textContent = nLy
+      ? 'Selected: ' + nLy + ' layers → ' + nl + ' lines/polygons, ' + np + ' points'
+      : 'Selected: no layers';
+  };
+  window.dxfPickAll = function(v){
+    document.querySelectorAll('#dxLayers .dxLy').forEach(function(c){ c.checked = v; });
+    dxfPickCount();
+  };
+
+  window.dxfImport = function(){
+    if (!dxfPending) return;
+    var on = dxfPickedLayers();
+    if (!Object.keys(on).length){ alert('Pick at least one layer.'); return; }
+    var res = {
+      pts:   dxfPending.res.pts.filter(function(p){ return on[p.layer]; }),
+      lines: dxfPending.res.lines.filter(function(l){ return on[l.layer]; })
+    };
+    var base = dxfPending.name;
+    var wantVx = document.getElementById('dxVx').checked;
+    var zMode = document.getElementById('dxZ').value;
+
+    function zOf(p){
+      if (zMode === 'zero') return 0;
+      if (zMode === 'near'){
+        var best = null, bd = Infinity;
+        computed.forEach(function(c){
+          var d = Math.hypot(c.x - p.x, c.y - p.y);
+          if (d < bd){ bd = d; best = c; }
+        });
+        if (model) model.features.forEach(function(f){
+          if (f.geomType !== 'POINT') return;
+          f.pts.forEach(function(q){
+            if (q.x == null || !hasRealZ(q)) return;
+            var d = Math.hypot(q.x - p.x, q.y - p.y);
+            if (d < bd){ bd = d; best = q; }
+          });
+        });
+        return (best && bd <= 2) ? (best.z || 0) : 0;
+      }
+      return p.z || 0;
+    }
+
+    function toLL(p, z){
+      var w = CRS.isReady() ?CRS.toWGS84(p.x, p.y, z) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:z, lat:w.lat, lon:w.lon};
+    }
+
+    var nl = 0, np = 0;
+    res.lines.forEach(function(l, k){
+      var pts = l.pts.map(function(p){ return toLL(p, zOf(p)); });
+      if (l.closed && pts.length > 2){
+        var a = pts[0], b = pts[pts.length-1];
+        if (Math.abs(a.x-b.x) > 0.001 || Math.abs(a.y-b.y) > 0.001) pts.push(toLL(l.pts[0], zOf(l.pts[0])));
+      }
+      var grpName = base + '_' + l.layer;
+      var id = grpName + '_' + (k+1);
+      genLines.push({id:id, layer:grpName, remarks:'DXF · layer ' + l.layer, pts:pts});
+      nl++;
+      if (wantVx) pts.forEach(function(p, j){
+        if (addVertex(id + '_' + (j+1), {x:p.x, y:p.y, zGiven:p.z}, 'DXF vertex', grpName)) np++;
+      });
+    });
+    res.pts.forEach(function(p, k){
+      var z = zOf(p);
+      if (addVertex(base + '_P' + (k+1), {x:p.x, y:p.y, zGiven:z}, 'DXF point', base + '_' + p.layer)) np++;
+    });
+
+    dxfPending = null;
+    document.getElementById('dxfPanel').innerHTML = '';
+    renderSummary(); renderLayers(); renderMap();
+    setStatus('DXF: ' + nl + ' lines, ' + np + ' points \u2713', 'ok');
+  };
+
+
+  /* ==================== POLAR ====================
+   *
+   *  Azimuth is measured from NORTH, clockwise. With x east and y north:
+   *  east component = sin(α), north component = cos(α).
+   *
+   *  Units are an explicit choice. An instrument set to gon and a
+   *  computation in degrees put the point tens of meters elsewhere, with no
+   *  sign anything went wrong.
+   */
+  function poAngRad(v, unit){
+    if (!Number.isFinite(v)) return NaN;
+    if (unit === 'gon') return v * Math.PI / 200;
+    if (unit === 'dms'){
+      // DDD.MMSS format as instruments give it: 127.4530 = 127° 45' 30"
+      var sg = v < 0 ? -1 : 1, a = Math.abs(v);
+      var d = Math.floor(a + 1e-9);
+      var rest = (a - d) * 100;
+      var m = Math.floor(rest + 1e-6);
+      var sec = (rest - m) * 100;
+      if (m >= 60 || sec >= 60) return NaN;          // 127.7530 is not a valid angle
+      return sg * (d + m / 60 + sec / 3600) * Math.PI / 180;
+    }
+    return v * Math.PI / 180;
+  }
+
+  function poUnitName(u){
+    return u === 'gon' ? 'gon' : (u === 'dms' ? '° DDD.MMSS' : '°');
+  }
+
+  /** Azimuth from a to b, in radians, in [0, 2π). */
+  function azimuthOf(a, b){
+    var t = Math.atan2(b.x - a.x, b.y - a.y);
+    return t < 0 ? t + 2 * Math.PI : t;
+  }
+  function degOf(rad, unit){
+    var v = unit === 'gon' ? rad * 200 / Math.PI : rad * 180 / Math.PI;
+    return v.toFixed(4) + ' ' + (unit === 'gon' ? 'gon' : '°');
+  }
+
+  window.poRender = function(){
+    var mode = document.getElementById('poMode').value;
+    var unit = document.getElementById('poUnit').value;
+    document.getElementById('poAngLbl').textContent =
+      (mode === 'az' ? 'Azimuth' : 'Clockwise angle') + ' (' + poUnitName(unit) + ')';
+    var slope = document.getElementById('poDistKind').value === 'slope';
+    document.getElementById('poZenWrap').hidden = !slope;
+    document.getElementById('poDLbl').textContent = slope ? 'Slope (m)' : 'Horizontal (m)';
+    var zm = document.getElementById('poZMode').value;
+    // With a slope distance the ΔZ comes from the measurement, it isn't given.
+    document.getElementById('poZMode').disabled = slope;
+    var needZ = !slope && (zm === 'dz' || zm === 'abs');
+    document.getElementById('poZWrap').hidden = !needZ;
+    document.getElementById('poZLbl').textContent = zm === 'dz' ? 'ΔZ (m)' : 'Elevation (m)';
+  };
+
+  window.poCompute = function(){
+    var host = document.getElementById('poResult');
+    var fail = function(m){ host.innerHTML = '<div class="warnbox">' + esc(m) + '</div>'; };
+    var mode = document.getElementById('poMode').value;
+    var unit = document.getElementById('poUnit').value;
+
+    var A = pick.p1;
+    if (!A || A.x == null) return fail('Pick the station as P1.');
+
+    var ang = poAngRad(numIn('poAng'), unit);
+    if (!Number.isFinite(ang)) return fail('Give a valid angle in the unit you picked.');
+
+    var az;
+    if (mode === 'az') az = ang;
+    else {
+      var B = pick.p2;
+      if (!B || B.x == null) return fail('An angle from a backsight also needs P2.');
+      if (Math.hypot(B.x - A.x, B.y - A.y) < 0.001) return fail('The station and the backsight coincide.');
+      az = azimuthOf(A, B) + ang;
+    }
+    az = ((az % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
+    var dIn = numIn('poD');
+    if (!Number.isFinite(dIn) || dIn <= 0) return fail('Give a distance greater than zero.');
+
+    var slope = document.getElementById('poDistKind').value === 'slope';
+    var D, dz = null, zen = null;
+    if (slope){
+      zen = poAngRad(numIn('poZen'), unit);
+      if (!Number.isFinite(zen)) return fail('Give a zenith angle (90° or 100 gon = horizontal).');
+      D = dIn * Math.sin(zen);
+      dz = dIn * Math.cos(zen);
+      if (D <= 0) return fail('The zenith angle gives a zero horizontal distance.');
+    } else D = dIn;
+
+    var x = A.x + D * Math.sin(az);
+    var y = A.y + D * Math.cos(az);
+
+    var z, zm = document.getElementById('poZMode').value;
+    if (slope) z = realZ(A) + dz;
+    else if (zm === 'same') z = realZ(A);
+    else if (zm === 'zero') z = 0;
+    else {
+      var v = numIn('poZ');
+      if (!Number.isFinite(v)) return fail('Give the elevation value.');
+      z = (zm === 'dz') ? realZ(A) + v : v;
+    }
+
+    var nm = (document.getElementById('poName').value || '').trim() ||
+             ('P_' + (computed.filter(function(c){ return c.layer === 'Polar'; }).length + 1));
+    if (!addVertex(nm, {x:x, y:y, zGiven:z}, mode === 'az' ? 'polar' : 'angle/distance', 'Polar')){
+      return fail('There is already a point at this position.');
+    }
+    renderMap();
+
+    var rows = '<tr><td>Azimuth</td><td>' + degOf(az, unit === 'gon' ? 'gon' : 'deg') + '</td></tr>' +
+               '<tr><td>Horizontal</td><td>' + D.toFixed(3) + ' m</td></tr>';
+    if (slope) rows += '<tr><td>ΔZ from the measurement</td><td>' + (dz >= 0 ? '+' : '') + dz.toFixed(3) + ' m</td></tr>';
+    if (mode === 'ang') rows += '<tr><td>Azimuth P1→P2</td><td>' + degOf(azimuthOf(A, pick.p2), unit === 'gon' ? 'gon' : 'deg') + '</td></tr>';
+
+    host.innerHTML = '<div class="resline">' +
+      '<div style="color:var(--mut);font-size:12px">New point ' + esc(nm) + ' (active CRS)</div>' +
+      '<div class="big">X = ' + x.toFixed(3) + '</div>' +
+      '<div class="big">Y = ' + y.toFixed(3) + '</div>' +
+      '<div class="big">Z = ' + z.toFixed(3) + '</div>' +
+      '<div class="tblwrap" style="margin-top:10px"><table><tbody>' + rows + '</tbody></table></div>' +
+      (realZ(A) === 0 && !slope && (zm === 'same' || zm === 'dz')
+        ? '<div class="warnbox">The station <b>has no elevation</b> — the new point got 0.</div>' : '') +
+      '</div>';
+    setStatus('created ' + nm + ' \u2713', 'ok');
+  };
+
+  poRender();          // initial labels — AFTER its own definition
+
+  document.getElementById('chkOrtho').addEventListener('change',function(){ if(model) retransform(); });
+
+  // --- DXF export (active CRS) ---
+  function aci(hex){ // hex -> nearest AutoCAD color index (basic colors)
+    var pal={1:[255,0,0],2:[255,255,0],3:[0,255,0],4:[0,255,255],5:[0,0,255],6:[255,0,255],7:[255,255,255]};
+    var r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16),best=7,bd=1e9;
+    for(var k in pal){ var p=pal[k],d=(p[0]-r)*(p[0]-r)+(p[1]-g)*(p[1]-g)+(p[2]-b)*(p[2]-b); if(d<bd){bd=d;best=+k;} }
+    return best;
+  }
+  function exportDXF(){
+    if(!model && !computed.length && !genLines.length){ alert('No data.'); return; }
+    var onlyStake=document.getElementById('dxfOnlyStake').checked;
+    if(onlyStake && !computed.length && !genLines.length){ alert('No stakeout points/lines \u2014 only model data.'); return; }
+    if(!CRS.isReady()){ if(!confirm('The coordinate system is still loading \u2014 coordinates may be wrong. Continue anyway?')) return; }
+    var scale=0.5;
+    var poly3d=document.getElementById('dxf3d').checked, flat=document.getElementById('dxfFlat').checked;
+    // --- collect layers (geometry + text sub-layers for points) ---
+    var lyr={};
+    function addLyr(name,c){ if(!(name in lyr)) lyr[name]=c; }
+    function ptLayers(base,col){ addLyr(base,col); addLyr(base+'_ID',2); addLyr(base+'_Z',4); addLyr(base+'_Desc',3); }
+    if(model && !onlyStake) model.features.forEach(function(f){ var base=dxfName(f.layer), col=aci(f.color);
+      if(f.geomType==='POINT') ptLayers(base,col); else addLyr(base,col);
+    });
+    computed.forEach(function(c){ ptLayers(dxfName(c.layer||'StakeOut'),1); });
+    genLines.forEach(function(g){ addLyr(dxfName(g.layer),3); });
+    // --- HEADER + TABLES + BLOCKS (dxfPreamble) ---
+    var layerEnts='';
+    Object.keys(lyr).forEach(function(name){ layerEnts+='0\nLAYER\n2\n'+name+'\n70\n0\n62\n'+lyr[name]+'\n6\nCONTINUOUS\n'; });
+    var d=dxfPreamble(layerEnts)+'0\nSECTION\n2\nENTITIES\n';
+    // --- helper: point + little text labels (number/elevation/description on sub-layers) ---
+    function emitPoint(base,col,id,x,y,z,rem){
+      var pz=flat?0:z;
+      d+='0\nPOINT\n8\n'+base+'\n62\n'+col+'\n10\n'+num(x)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n';
+      if(id) d+='0\nTEXT\n8\n'+base+'_ID\n62\n2\n10\n'+num(x+scale)+'\n20\n'+num(y+scale)+'\n30\n'+num(pz)+'\n40\n'+scale+'\n1\n'+dxfText(id)+'\n';
+      d+='0\nTEXT\n8\n'+base+'_Z\n62\n4\n10\n'+num(x+scale)+'\n20\n'+num(y-scale)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+num(z)+'\n';
+      if(rem) d+='0\nTEXT\n8\n'+base+'_Desc\n62\n3\n10\n'+num(x+scale*1.7)+'\n20\n'+num(y)+'\n30\n'+num(pz)+'\n40\n'+(scale*0.8).toFixed(3)+'\n1\n'+dxfText(rem)+'\n';
+    }
+    // --- entities ---
+    if(model && !onlyStake) model.features.forEach(function(f){
+      var base=dxfName(f.layer), col=aci(f.color);
+      if(f.geomType==='POINT'){
+        f.pts.forEach(function(p){ var q=bsApply(p,f.layer); emitPoint(base,col,(p.__id||f.name),q.x,q.y,q.z,f.remarks); });
+      } else {
+        var closed=f.geomType==='POLYGON';
+        var pflag=(poly3d?8:0)|(closed?1:0);
+        d+='0\nPOLYLINE\n8\n'+base+'\n62\n'+col+'\n66\n1\n70\n'+pflag+'\n';
+        f.pts.forEach(function(p){ var q=bsApply(p,f.layer); d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(q.x)+'\n20\n'+num(q.y)+'\n30\n'+num(poly3d?q.z:0)+'\n'; });
+        d+='0\nSEQEND\n8\n'+base+'\n';
+      }
+    });
+    computed.forEach(function(c){ var q=bsApply(c,c.layer||'StakeOut'); emitPoint(dxfName(c.layer||'StakeOut'),1,c.id,q.x,q.y,q.z,c.remarks); });
+    genLines.forEach(function(g){
+      var base=dxfName(g.layer);
+      d+='0\nPOLYLINE\n8\n'+base+'\n62\n3\n66\n1\n70\n'+(poly3d?8:0)+'\n';
+      g.pts.forEach(function(p){ var q=bsApply(p,g.layer); d+='0\nVERTEX\n8\n'+base+(poly3d?'\n70\n32':'')+'\n10\n'+num(q.x)+'\n20\n'+num(q.y)+'\n30\n'+num(poly3d?(q.z||0):0)+'\n'; });
+      d+='0\nSEQEND\n8\n'+base+'\n';
+    });
+    d+='0\nENDSEC\n0\nEOF\n';
+    download(d,'SW_Maps_points.dxf');
+  }
+  // --- KML export: lines only (model + genLines — offset/hull/DXF-imported/profile) ---
+  function kmlEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function kmlCoords(pts){
+    return pts.map(function(p){ return p.lon.toFixed(8)+','+p.lat.toFixed(8)+','+(p.z||0).toFixed(3); }).join(' ');
+  }
+  function kmlPlacemark(name, pts, closed, mode){
+    var tag = closed ? 'Polygon' : 'LineString';
+    var body = closed
+      ? '<outerBoundaryIs><LinearRing><altitudeMode>' + mode + '</altitudeMode><coordinates>' + kmlCoords(pts) + '</coordinates></LinearRing></outerBoundaryIs>'
+      : '<altitudeMode>' + mode + '</altitudeMode><coordinates>' + kmlCoords(pts) + '</coordinates>';
+    return '<Placemark><name>' + kmlEsc(name) + '</name><styleUrl>#swline</styleUrl><' + tag + '>' + body + '</' + tag + '></Placemark>\n';
+  }
+  /** No reliable "was this a real Z" at this point (genLines has already
+   *  resolved it to a number) — heuristic: if ALL vertices are essentially
+   *  0, it's treated as 2D (none of our lines intentionally has an elevation
+   *  of exactly 0.000). */
+  function lineIsFlat(pts){ return pts.every(function(p){ return Math.abs(p.z || 0) < 0.001; }); }
+  /*  Shift first in the active-CRS coordinates, THEN recompute lat/lon —
+   *  otherwise KML/GeoJSON would show the shifted Z but the OLD (unchanged)
+   *  lat/lon position, since those already come ready-made on the point. */
+  function bsShiftPts(pts, layer){
+    return pts.map(function(p){
+      var q = bsApply(p, layer);
+      if (CRS.isReady() && (q.x !== p.x || q.y !== p.y || q.z !== p.z)){
+        var w = CRS.toWGS84(q.x, q.y, q.z || 0);
+        return {x:q.x, y:q.y, z:q.z, lat:w.lat, lon:w.lon};
+      }
+      return {x:q.x, y:q.y, z:q.z, lat:p.lat, lon:p.lon};
+    });
+  }
+  function exportKML(){
+    if (!model && !genLines.length){ alert('No lines.'); return; }
+    var mode = 'clampToGround';   // absolute wasn't reliable — always on the ground
+    var only2d = document.getElementById('kmlOnly2d').checked;
+    var body = '';
+    if (model) model.features.forEach(function(f){
+      if (f.geomType === 'POINT') return;
+      var pts = bsShiftPts(f.pts.filter(function(p){ return p.lat != null && p.lon != null; }), f.layer);
+      if (pts.length < 2) return;
+      if (only2d && !lineIsFlat(pts)) return;
+      body += kmlPlacemark(f.name || f.layer, pts, f.geomType === 'POLYGON', mode);
+    });
+    genLines.forEach(function(g){
+      var pts = bsShiftPts(g.pts.filter(function(p){ return p.lat != null && p.lon != null; }), g.layer);
+      if (pts.length < 2) return;
+      if (only2d && !lineIsFlat(pts)) return;
+      body += kmlPlacemark(g.id, pts, false, mode);
+    });
+    if (!body){ alert('No line has valid coordinates.'); return; }
+    var kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>\n' +
+      '<name>SW Maps — lines</name>\n' +
+      '<Style id="swline"><LineStyle><color>ffa0e500</color><width>3</width></LineStyle>' +
+      '<PolyStyle><fill>0</fill></PolyStyle></Style>\n' + body + '</Document></kml>\n';
+    download(kml, 'SW_Maps_lines.kml');
+  }
+  // --- GeoJSON export: same set of lines as the KML, without altitudeMode (raw 3D coords) ---
+  function geojsonFeature(name, pts, closed){
+    var coords = pts.map(function(p){ return [+p.lon.toFixed(8), +p.lat.toFixed(8), +(p.z||0).toFixed(3)]; });
+    var geom = closed ? {type:'Polygon', coordinates:[coords]} : {type:'LineString', coordinates:coords};
+    return {type:'Feature', properties:{name:name}, geometry:geom};
+  }
+  function geojsonPoint(name, p, remarks){
+    return {type:'Feature', properties:{name:name, remarks:remarks||''},
+            geometry:{type:'Point', coordinates:[+p.lon.toFixed(8), +p.lat.toFixed(8), +(p.z||0).toFixed(3)]}};
+  }
+  function exportGeoJSON(){
+    if (!model && !genLines.length && !computed.length){ alert('No data.'); return; }
+    var withPts = document.getElementById('geojsonPts').checked;
+    var feats = [];
+    if (model) model.features.forEach(function(f){
+      if (f.geomType === 'POINT') return;   // stakeout points (computed) only, not the model's measured points
+      var pts = bsShiftPts(f.pts.filter(function(p){ return p.lat != null && p.lon != null; }), f.layer);
+      if (pts.length < 2) return;
+      feats.push(geojsonFeature(f.name || f.layer, pts, f.geomType === 'POLYGON'));
+    });
+    if (withPts) computed.forEach(function(c){
+      if (c.lat == null || c.lon == null) return;
+      var q = bsShiftPts([c], c.layer||'StakeOut')[0];
+      feats.push(geojsonPoint(c.id, q, c.remarks));
+    });
+    genLines.forEach(function(g){
+      var pts = bsShiftPts(g.pts.filter(function(p){ return p.lat != null && p.lon != null; }), g.layer);
+      if (pts.length < 2) return;
+      feats.push(geojsonFeature(g.id, pts, false));
+    });
+    if (!feats.length){ alert('No valid geometry (points/lines) with coordinates.'); return; }
+    download(JSON.stringify({type:'FeatureCollection', features:feats}), 'SW_Maps_points_lines.geojson');
+  }
+  /*  ASCII DXF (no codepage declared) + a layer name with non-ASCII characters
+   *  is a known cause of "won't open" in strict readers (e.g. real AutoCAD)
+   *  — same issue as the Volumes layers, but here they CAN'T be made fixed
+   *  English names (they're the USER's OWN layer names) — transliterated to
+   *  Latin characters instead, so they stay recognizable. Currently handles
+   *  Greek specifically; anything else non-ASCII falls through to dxfName's
+   *  blunt strip below rather than corrupting the file. */
+  var GREEKLISH = {
+    'Α':'A','Β':'V','Γ':'G','Δ':'D','Ε':'E','Ζ':'Z','Η':'I','Θ':'TH','Ι':'I','Κ':'K','Λ':'L','Μ':'M',
+    'Ν':'N','Ξ':'X','Ο':'O','Π':'P','Ρ':'R','Σ':'S','Τ':'T','Υ':'Y','Φ':'F','Χ':'CH','Ψ':'PS','Ω':'O',
+    'Ά':'A','Έ':'E','Ή':'I','Ί':'I','Ό':'O','Ύ':'Y','Ώ':'O','Ϊ':'I','Ϋ':'Y',
+    'α':'a','β':'v','γ':'g','δ':'d','ε':'e','ζ':'z','η':'i','θ':'th','ι':'i','κ':'k','λ':'l','μ':'m',
+    'ν':'n','ξ':'x','ο':'o','π':'p','ρ':'r','σ':'s','ς':'s','τ':'t','υ':'y','φ':'f','χ':'ch','ψ':'ps','ω':'o',
+    'ά':'a','έ':'e','ή':'i','ί':'i','ό':'o','ύ':'y','ώ':'o','ϊ':'i','ϋ':'y','ΐ':'i','ΰ':'y'
+  };
+  function greeklish(s){
+    return s.replace(/[Α-Ωα-ωΆΈΉΊΌΎΏΪΫάέήίόύώϊϋΐΰ]/g, function(ch){ return GREEKLISH[ch] || ch; });
+  }
+  /*  Without $ACADVER, AutoCAD assumes R12 — a 31-character limit per layer
+   *  name, less with a bit more (e.g. layer_ID/_Desc). AC1015 (the modern
+   *  format, 255-character limit) was tried — it needs a WHOLE networked
+   *  handle/owner system (codes 5/330) on every table/entity, like a small
+   *  database; without it, "Bad handle 0" — too much risk for a hand-written
+   *  DXF with no real library behind it. Staying on R12 (tested, already
+   *  works for Volumes) and truncating names in dxfName instead. */
+  function dxfPreamble(layerEnts){
+    return '0\nSECTION\n2\nHEADER\n0\nENDSEC\n' +
+      '0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n0\n' + layerEnts + '0\nENDTAB\n0\nENDSEC\n';
+  }
+  function dxfName(s){
+    s = greeklish(String(s==null?'':s).trim());
+    s = s.replace(/[<>\/\\":;?*|,=]/g,'_').replace(/\s+/g,'_');
+    s = s.replace(/[^\x20-\x7E]/g,'');   // whatever non-ASCII remains (e.g. emoji) is dropped, not silently ignored
+    s = s||'0';
+    // R12: 31-character limit per layer name. Points add sub-layers
+    // (_ID/_Z/_Desc, up to 5 characters) on top of this — leave headroom.
+    if (s.length > 26) s = s.slice(0, 26);
+    return s;
+  }
+  /*  The same problem with layer names (non-ASCII in a hand-written ASCII
+   *  DXF) also applies to the CONTENT of a TEXT entity (e.g. a point's
+   *  description) — fixing only the layer names wasn't enough. */
+  function dxfText(s){
+    s = greeklish(String(s==null?'':s).replace(/[\r\n]+/g,' '));
+    return s.replace(/[^\x20-\x7E]/g,'');
+  }
+  function num(v){ return (v==null||isNaN(v))?'0.000':(+v).toFixed(3); }
+
+  // --- TXT export: all shape points -> active CRS, per layer (id,X,Y,Z,description,layer) ---
+  function exportTXT(){
+    if(!model && !computed.length){ alert('No data.'); return; }
+    var onlyStake = document.getElementById('txtOnlyStake').checked;
+    var out=[];
+    if(model && !onlyStake){
+      model.features.forEach(function(f){
+        f.pts.forEach(function(p,i){
+          if(p.x==null) return;
+          var id = (f.geomType==='POINT') ? p.__id : ((f.name||f.layer)+'_'+(i+1));
+          var q=bsApply(p, f.layer);
+          out.push(id+','+q.x.toFixed(3)+','+q.y.toFixed(3)+','+q.z.toFixed(3)+','+(f.remarks||'')+','+(p.fix!=null?p.fix:'')+','+f.layer);
+        });
+      });
+    }
+    computed.forEach(function(c){
+      var q=bsApply(c, c.layer||'StakeOut');
+      out.push(c.id+','+q.x.toFixed(3)+','+q.y.toFixed(3)+','+q.z.toFixed(3)+','+(c.remarks||'')+','+(c.fix!=null?c.fix:4)+','+(c.layer||'StakeOut'));
+    });
+    if(!out.length){ alert('No points.'); return; }
+    download(out.join('\n'),'SW_Maps_points.txt');
+  }
+
+  function download(text,name){
+    var mime = /\.dxf$/i.test(name) ? 'application/octet-stream'
+             : /\.csv$/i.test(name) ? 'text/csv'
+             : /\.kml$/i.test(name) ? 'application/vnd.google-earth.kml+xml'
+             : /\.geojson$/i.test(name) ? 'application/geo+json'
+             : /\.xml$/i.test(name) ? 'application/xml' : 'text/plain';
+    var blob=new Blob([text],{type:mime+';charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download=name; a.rel='noopener';
+    a.style.display='none'; document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ try{document.body.removeChild(a);}catch(e){} URL.revokeObjectURL(url); }, 2000);
+  }
+
+  /* ====================== EARTHWORK VOLUMES ==========================
+   *
+   *  The computation lives in lib/volume.js and knows nothing about the
+   *  screen. This part only translates: what the user has loaded -> points
+   *  and boundary, and then the result -> text.
+   *
+   *  WHY IN THE BROWSER, NOT ON A SERVER
+   *  There's no signal on site. The tool relies on data already on the
+   *  phone, so a round trip to a server would add nothing except a
+   *  dependency on a connection.
+   *
+   *  POINTS ARE NEVER TOUCHED. They are only read; nothing is written back.
+   */
+  var VOLSETS = [], VOLRINGS = [];
+
+  /*  LandXML — only as a COMPARISON surface (e.g. a final/design surface
+   *  from Civil3D). Only the points are read — not LandXML's own ready-made
+   *  Faces triangulation — because the Volumes tool here ALREADY does its
+   *  own simple (unconstrained) Delaunay for EVERY surface, so there's no
+   *  need for a second triangulation mechanism. Coordinate order inside
+   *  <P>: Northing Easting Elevation (LandXML's default without a
+   *  <CoordinateSystem>) — same convention as ZSGround/dtm_landxml.py,
+   *  which is the source of truth for this format. */
+  var LANDXML_SURF = [];
+  function parseLandXMLPoints(text){
+    var doc = new DOMParser().parseFromString(text, 'text/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('Invalid XML.');
+    var pEls = [], pntsList = doc.getElementsByTagName('Pnts');
+    for (var i = 0; i < pntsList.length; i++){
+      var ps = pntsList[i].getElementsByTagName('P');
+      for (var j = 0; j < ps.length; j++) pEls.push(ps[j]);
+    }
+    if (!pEls.length){
+      var all = doc.getElementsByTagName('P');
+      for (var k = 0; k < all.length; k++) pEls.push(all[k]);
+    }
+    if (!pEls.length) throw new Error('No points (<P>) found in the LandXML.');
+    var pts = [];
+    pEls.forEach(function(el){
+      var parts = (el.textContent || '').trim().split(/\s+/).map(Number);
+      if (parts.length < 3 || parts.some(isNaN)) return;
+      pts.push({ x: parts[1], y: parts[0], z: parts[2] });   // Easting, Northing, Elevation
+    });
+    if (pts.length < 3) throw new Error('Fewer than 3 valid points in the LandXML.');
+    return pts;
+  }
+  function loadLandXML(file){
+    var r = new FileReader();
+    r.onload = function(e){
+      try{
+        var pts = parseLandXMLPoints(e.target.result);
+        var name = file.name.replace(/\.[^.]+$/, '');
+        LANDXML_SURF.push({ name: name, pts: pts });
+        vlScan();
+        setStatus('LandXML "' + name + '": ' + pts.length + ' points', 'ok');
+      }catch(err){
+        setStatus('LandXML error', 'err');
+        alert('Error reading LandXML:\n' + err.message);
+      }
+    };
+    r.readAsText(file);
+  }
+
+  /** The available surfaces: which sets of points with elevation exist. */
+  function vlPointSets(){
+    var byPoint = {}, byVertex = {}, all = [], sets = [];
+
+    function take(dst, key, p){
+      // Criterion is the SOURCE elevation: SW Maps writes 0 when there's no
+      // measurement, and after the transform that 0 becomes -32 m (geoid).
+      if (p.x == null || !hasRealZ(p)) return;
+      var q = { x: p.x, y: p.y, z: p.z };
+      (dst[key] || (dst[key] = [])).push(q);
+      all.push(q);
+    }
+
+    if (model) model.features.forEach(function(f){
+      var dst = (f.geomType === 'POINT') ? byPoint : byVertex;
+      f.pts.forEach(function(p){ take(dst, f.layer, p); });
+    });
+
+    var mine = [];
+    computed.forEach(function(c){
+      if (c.x == null || !hasRealZ(c)) return;
+      var q = { x: c.x, y: c.y, z: c.z };
+      mine.push(q); all.push(q);
+    });
+
+    Object.keys(byPoint).sort().forEach(function(k){
+      sets.push({ key: 'L:' + k, label: k + ' — ' + byPoint[k].length + ' points', pts: byPoint[k] });
+    });
+    Object.keys(byVertex).sort().forEach(function(k){
+      sets.push({ key: 'V:' + k, label: k + ' (vertices) — ' + byVertex[k].length, pts: byVertex[k] });
+    });
+    if (mine.length) sets.push({ key: 'C', label: 'Computed points — ' + mine.length, pts: mine });
+    if (sets.length > 1) sets.push({ key: 'A', label: 'All together — ' + all.length + ' points', pts: all });
+    LANDXML_SURF.forEach(function(s, i){
+      sets.push({ key: 'X:' + i, label: '🏗 ' + s.name + ' (LandXML) — ' + s.pts.length + ' points', pts: s.pts });
+    });
+    return sets;
+  }
+
+  /** The closed polygons that can define the area. */
+  function vlPolygons(){
+    var out = [];
+
+    // Anything the app built that closes — e.g. a boundary from the points.
+    genLines.forEach(function(g){
+      var r = g.pts.filter(function(p){ return p.x != null; })
+                   .map(function(p){ return { x: p.x, y: p.y }; });
+      if (r.length > 3){
+        var a = r[0], b = r[r.length-1];
+        if (Math.abs(a.x-b.x) < 1e-9 && Math.abs(a.y-b.y) < 1e-9) r.pop(); else return;
+      } else return;
+      if (r.length >= 3)
+        out.push({ key: g.id, ring: r, name: g.id, area: Math.abs(Vol.ringArea(r)) });
+    });
+
+    if (!model) return out;
+    model.features.forEach(function(f, i){
+      if (f.geomType !== 'POLYGON') return;
+      var r = [];
+      f.pts.forEach(function(p){ if (p.x != null) r.push({ x: p.x, y: p.y }); });
+      // The closing edge repeats the first vertex; don't count it twice.
+      if (r.length > 2){
+        var a = r[0], b = r[r.length - 1];
+        if (Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9) r.pop();
+      }
+      if (r.length < 3) return;
+      out.push({ key: 'f' + i, ring: r,
+                 name: (f.name || f.layer || 'polygon') ,
+                 area: Math.abs(Vol.ringArea(r)) });
+    });
+    return out;
+  }
+
+  function vlOpts(list, textOf){
+    return list.map(function(o, i){
+      return '<option value="' + i + '">' + esc(textOf(o)) + '</option>';
+    }).join('');
+  }
+
+  /*  Base shift per surface — a separate, independent switch AND an
+   *  independent A/B pair (its own, not the shared one from Exports) because
+   *  in a comparison, often ONE side (e.g. the re-measured one) needs a
+   *  different shift than the other, not the same Δ everywhere.
+   *  Shows ONLY the surfaces that are CURRENTLY selected in the "Ground
+   *  surface"/"Second surface" pickers above (requested this way — a list
+   *  of ALL layers filled the card pointlessly). `BASESHIFT.volPairs[key]`
+   *  is NOT cleared when a surface stops being active — its row just isn't
+   *  shown; picking it again returns the SAME A/B/Δ. */
+  function renderVlShiftList(){
+    var vlHost = document.getElementById('vlShiftList');
+    var iA = +document.getElementById('vlSurf').value;
+    var two = document.getElementById('vlMode').value === 'surf2';
+    var iB = two ? +document.getElementById('vlSurf2').value : -1;
+    var active = [];
+    if (VOLSETS[iA]) active.push(VOLSETS[iA]);
+    if (two && VOLSETS[iB] && iB !== iA) active.push(VOLSETS[iB]);
+
+    vlHost.innerHTML = active.map(function(s){
+      var on = !!BASESHIFT.volLayers[s.key];
+      var vp = BASESHIFT.volPairs[s.key] || {refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+      var dInfo = vp.set
+        ? ('Δ = (' + vp.dx.toFixed(3) + ', ' + vp.dy.toFixed(3) + ', ' + vp.dz.toFixed(3) + ') m')
+        : '';
+      return '<div class="vlshiftrow" data-key="' + esc(s.key) + '" style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">' +
+        '<input type="checkbox" class="vlOnChk" ' + (on ? 'checked' : '') + '> ' + esc(s.label) + '</label>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--mut);flex-wrap:wrap">' +
+        '<span>A: ' + esc(bsPointLabel(vp.refA)) + '</span>' +
+        '<button class="btn ghost small vlSwapBtn" type="button" title="Swap A ⇄ B">⇄</button>' +
+        '<span>B: ' + esc(bsPointLabel(vp.refB)) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">' +
+        '<button class="btn ghost small vlPairBtn" type="button">⚓ Shift pair</button>' +
+        '<button class="btn ghost small vlComputeBtn" type="button">Compute shift</button>' +
+        '<span style="font-size:11px;color:var(--mut)">' + esc(dInfo) + '</span>' +
+        '<button class="btn red small vlClearBtn" type="button" style="margin-left:auto" title="Clear the pair">🗑</button>' +
+        '</div></div>';
+    }).join('') || '<div class="hint">(pick a surface above)</div>';
+    vlHost.querySelectorAll('.vlshiftrow').forEach(function(row){
+      var key = row.getAttribute('data-key');
+      row.querySelector('.vlOnChk').addEventListener('change', function(){ BASESHIFT.volLayers[key]=this.checked; });
+      row.querySelector('.vlSwapBtn').addEventListener('click', function(){ vlSwapPair(key); });
+      row.querySelector('.vlPairBtn').addEventListener('click', function(){ vlSetPairFromTable(key); });
+      row.querySelector('.vlComputeBtn').addEventListener('click', function(){ vlComputePair(key); });
+      row.querySelector('.vlClearBtn').addEventListener('click', function(){ vlClearPair(key); });
+    });
+  }
+
+  window.vlScan = function(){
+    VOLSETS = vlPointSets();
+    VOLRINGS = vlPolygons();
+    var info = document.getElementById('vlInfo');
+
+    document.getElementById('vlSurf').innerHTML =
+      vlOpts(VOLSETS, function(s){ return s.label; }) || '<option value="">(none)</option>';
+    document.getElementById('vlSurf2').innerHTML =
+      vlOpts(VOLSETS, function(s){ return s.label; }) || '<option value="">(none)</option>';
+    if (VOLSETS.length > 1) document.getElementById('vlSurf2').selectedIndex = 1;
+    document.getElementById('vlRing').innerHTML =
+      vlOpts(VOLRINGS, function(p){ return p.name + ' · ' + p.area.toFixed(1) + ' m²'; })
+      || '<option value="">(none)</option>';
+
+    renderVlShiftList();
+
+    var msg = '';
+    if (!model && !computed.length){
+      msg = '<div class="warnbox">No data loaded. Open a database or Excel file from <b>Data</b> first.</div>';
+    } else {
+      if (!VOLSETS.length)
+        msg += '<div class="warnbox">No points <b>with a real elevation</b>. SW Maps writes 0 where it measured no height, and those don\'t count as a surface.</div>';
+      if (!VOLRINGS.length)
+        msg += '<div class="warnbox">No <b>closed polygon</b> found. Press <b>"Boundary from the points"</b> to build one from your survey, or draw it in SW Maps.</div>';
+    }
+    info.innerHTML = msg;
+    vlRender();
+  };
+
+  window.vlShiftReset = function(){
+    BASESHIFT.volLayers = {};
+    BASESHIFT.volPairs = {};
+    vlScan();
+  };
+
+  /*  Base shift per surface — COMPLETELY independent from the main A/B on
+   *  the Base shift (Exports) card: requested explicitly, because different
+   *  surfaces/layers can each need a DIFFERENT Δ (e.g. two re-measured
+   *  areas, each with its own wrongly-set-up base). Every VOLSET.key has its
+   *  OWN pair in `BASESHIFT.volPairs[key] = {refA,refB,dx,dy,dz,set}` — its
+   *  own "⚓ Shift pair" (`vlSetPairFromTable`), its own "Compute"
+   *  (`vlComputePair`), its own ⇄ (`vlSwapPair`) and clear (`vlClearPair`).
+   *  The on/off switch (`BASESHIFT.volLayers[key]`) stays as before. */
+  function vlPairFor(key){
+    if(!BASESHIFT.volPairs[key]) BASESHIFT.volPairs[key]={refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+    return BASESHIFT.volPairs[key];
+  }
+  window.vlSetPairFromTable = function(key){
+    var checks=document.querySelectorAll('#ptsTbl tbody input.selchk:checked');
+    if(checks.length!==2){ alert('Check EXACTLY 2 points in the Points table (now: '+checks.length+').'); return; }
+    var pts=[]; checks.forEach(function(ch){ var r=ch.__ref; pts.push(r.kind==='computed'?r.cp:r.pt); });
+    var vp=vlPairFor(key);
+    vp.refA=pts[0]; vp.refB=pts[1]; vp.set=false;
+    vlScan();
+    setStatus('shift pair set for "'+key+'" — press "Compute shift"', 'ok');
+  };
+  window.vlSwapPair = function(key){
+    var vp=vlPairFor(key), t=vp.refA; vp.refA=vp.refB; vp.refB=t; vp.set=false;
+    vlScan();
+  };
+  window.vlComputePair = function(key){
+    var vp=vlPairFor(key);
+    if(!vp.refA||!vp.refB){ alert('First \u2693 Shift pair for this surface.'); return; }
+    vp.dx=vp.refB.x-vp.refA.x; vp.dy=vp.refB.y-vp.refA.y; vp.dz=(vp.refB.z||0)-(vp.refA.z||0); vp.set=true;
+    vlScan();
+    setStatus('shift computed ✓', 'ok');
+  };
+  window.vlClearPair = function(key){
+    BASESHIFT.volPairs[key]={refA:null,refB:null,dx:0,dy:0,dz:0,set:false};
+    vlScan();
+  };
+
+  /*  Shifts the WHOLE surface before triangulation, with its OWN Δ.
+   *  `vlPointSets()` builds NEW point objects (dedup/merge from several
+   *  layers) — it does NOT keep the original point's reference, so identity
+   *  (`===`) never matches here (unlike it would in bsApply). Compared by
+   *  VALUE (x/y/z) instead, so point B itself isn't shifted again. */
+  function vlShiftedPts(set){
+    var vp=BASESHIFT.volPairs[set.key];
+    if (!BASESHIFT.volLayers[set.key] || !vp || !vp.set) return set.pts;
+    var b=vp.refB;
+    return set.pts.map(function(p){
+      if (b && p.x===b.x && p.y===b.y && p.z===b.z) return p;
+      return {x:p.x+vp.dx, y:p.y+vp.dy, z:(p.z!=null?p.z+vp.dz:p.z)};
+    });
+  }
+
+  window.vlRender = function(){
+    var two = document.getElementById('vlMode').value === 'surf2';
+    document.getElementById('vlRefWrap').hidden = two;
+    document.getElementById('vlSurf2Wrap').hidden = !two;
+    document.getElementById('vlDxfWhichWrap').hidden = !two;
+  };
+
+  function vlNum(v){ return v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function vlWarn(html){ document.getElementById('vlOut').innerHTML = '<div class="warnbox">' + html + '</div>'; }
+
+  window.vlCompute = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length || !VOLRINGS.length){ vlScan(); vlWarn('Missing points or polygon.'); return; }
+
+    var ring = VOLRINGS[+document.getElementById('vlRing').value];
+    var sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (!ring || !sa){ vlWarn('Pick an area and a surface.'); return; }
+
+    var opts = { points: vlShiftedPts(sa), ring: ring.ring, spacing: numIn('vlStep') };
+    if (!(opts.spacing > 0)){ vlWarn('Give a grid step in meters.'); return; }
+
+    var lbl2 = null;
+    if (document.getElementById('vlMode').value === 'surf2'){
+      var sb = VOLSETS[+document.getElementById('vlSurf2').value];
+      if (!sb || sb.key === sa.key){ vlWarn('Pick <b>two different</b> surfaces.'); return; }
+      opts.points2 = vlShiftedPts(sb); lbl2 = sb.label;
+    } else {
+      opts.refZ = numIn('vlRef');
+      if (!Number.isFinite(opts.refZ)){ vlWarn('Give the final elevation.'); return; }
+    }
+    var me = numIn('vlMaxEdge');
+    if (Number.isFinite(me) && me > 0) opts.maxEdge = me;
+
+    var btn = document.getElementById('vlGo');
+    btn.disabled = true;
+    out.innerHTML = '<div class="hint" style="margin-top:12px">Computing…</div>';
+
+    /*  The computation keeps the thread busy, so without this wait
+     *  "Computing..." doesn't get a chance to paint and the screen looks
+     *  frozen. */
+    setTimeout(function(){
+      var t0 = Date.now();
+      var r;
+      try { r = Vol.computeChecked(opts); }
+      catch (ex){ r = { err: ex.message }; }
+      btn.disabled = false;
+      if (r.err){ vlWarn(esc(r.err)); return; }
+      r.__ms = Date.now() - t0;
+      vlShow(r, ring, sa, lbl2, opts);
+    }, 30);
+  };
+
+  function vlShow(r, ring, sa, lbl2, opts){
+    var strem = r.areaPolygon / 1000;
+    var h = '<div class="resline">' +
+      '<div class="vbig" style="color:#ff9ea0">Cut&nbsp; ' + vlNum(r.cut) + ' m³</div>' +
+      '<div class="vbig" style="color:#8ff0b6">Fill&nbsp; ' + vlNum(r.fill) + ' m³</div>' +
+      '<div class="vbig">Net&nbsp;&nbsp;&nbsp; ' + (r.net >= 0 ? '+' : '') + vlNum(r.net) + ' m³' +
+        ' <span style="font-size:12px;color:var(--mut)">(' + (r.net >= 0 ? 'surplus' : 'shortfall') + ' of soil)</span></div>' +
+      '<div class="tblwrap"><table><tbody>' +
+        '<tr><td>Area</td><td>' + esc(ring.name) + ' · ' + r.areaPolygon.toFixed(1) + ' m² · ' + strem.toFixed(3) + ' ha×0.1</td></tr>' +
+        '<tr><td>Surface</td><td>' + esc(sa.label) + (lbl2 ? ' &nbsp;→&nbsp; ' + esc(lbl2) : ' &nbsp;→&nbsp; ' + opts.refZ.toFixed(3) + ' m') + '</td></tr>' +
+        '<tr><td>Measured area</td><td>' + r.areaCovered.toFixed(1) + ' m²</td></tr>' +
+        '<tr><td>Points</td><td>' + r.points + ' · ' + (r.points / Math.max(strem, 1e-9)).toFixed(0) + ' per 0.1 ha</td></tr>' +
+        '<tr><td>Triangles</td><td>' + r.triangles +
+          (r.trianglesDropped ? (' · ' + r.trianglesDropped + ' dropped as bridges') : '') + '</td></tr>' +
+        '<tr><td>Longest edge</td><td>' + r.maxEdge.toFixed(2) + ' m</td></tr>' +
+        // Reported plainly. The tool doesn't know if it's a slope or an
+        // unmeasured step; that's for whoever was on site to judge.
+        '<tr><td>Steepest slope</td><td>' + r.slopeMax.toFixed(1) + '°</td></tr>' +
+        '<tr><td>Grid</td><td>' + r.spacing + ' m · ' + r.cells + ' cells · ' + r.__ms + ' ms</td></tr>' +
+      '</tbody></table></div>';
+
+    if (r.areaUncovered > 0.5){
+      var pc = r.areaUncovered / Math.max(r.areaCells, 1e-9) * 100;
+      h += '<div class="warnbox"><b>⚠ ' + r.areaUncovered.toFixed(1) + ' m² (' + pc.toFixed(1) +
+        '%) of the area has no measurement.</b><br>The volume covers only the measured part. ' +
+        'The rest was <b>not</b> filled in by guessing — if you want it included, points are needed there.</div>';
+    }
+    if (r.driftPct != null && r.driftPct > 1){
+      h += '<div class="warnbox"><b>⚠ The number hasn\'t stabilized: ' + r.driftPct.toFixed(2) + '%.</b><br>' +
+        'At half the step (' + r.half.spacing + ' m) it comes out ' + vlNum(r.half.net) + ' m³ instead of ' +
+        vlNum(r.net) + ' m³. For this terrain the points are sparse or the grid is coarse.</div>';
+    } else if (r.driftPct != null){
+      h += '<div class="okbox">Stability check: at half the step the difference is <b>' +
+        r.driftPct.toFixed(2) + '%</b> — the number holds.</div>';
+    }
+    if (r.areaCovered > 0){
+      h += '<div class="hint">Mean height difference over the measured area: <b>' +
+        (r.net / r.areaCovered >= 0 ? '+' : '') + (r.net / r.areaCovered).toFixed(3) + ' m</b></div>';
+    }
+    h += '</div>';
+    document.getElementById('vlOut').innerHTML = h;
+    setStatus('volume ' + vlNum(r.net) + ' m\u00b3 ✓', 'ok');
+  }
+
+  /*  Boundary from the points themselves.
+   *
+   *  The polygon isn't missing out of laziness — it's missing because in
+   *  the field you measure points, you don't draw boundaries. The outline
+   *  comes from the layer's outer points and goes into the shapes the app
+   *  built, so it draws on the map, exports to DXF, and saves with the job.
+   *
+   *  The convex hull has no settings and never breaks apart. Tightening
+   *  follows a Γ shape better, but on irregular points it can fragment the
+   *  boundary — so it's optional, and the number of pieces is reported.
+   */
+  window.vlMakeHull = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('There are no points with an elevation.'); return; }
+    var sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (!sa){ vlWarn('Pick a surface.'); return; }
+
+    var tight = numIn('vlTight');
+    var h = Vol.hull(sa.pts, (Number.isFinite(tight) && tight > 0) ? tight : 0);
+    if (h.err){ vlWarn(esc(h.err)); return; }
+
+    var base = sa.label.split(' —')[0].replace(/\s+/g, '_');
+    var id = 'BOUNDARY_' + base + (tight > 0 ? ('_' + tight) : '');
+    // The same name twice would create a second shape on top of the first.
+    genLines = genLines.filter(function(g){ return g.id !== id; });
+
+    // Closed: the first vertex repeats at the end, like in polygons.
+    var ring = h.ring.concat([h.ring[0]]);
+    var pts = ring.map(function(p){
+      var w = CRS.isReady() ? CRS.toWGS84(p.x, p.y, p.z || 0) : {lat:0, lon:0};
+      return {x:p.x, y:p.y, z:p.z || 0, lat:w.lat, lon:w.lon};
+    });
+    genLines.push({id:id, layer:id, pts:pts,
+      remarks:'boundary from ' + sa.label + (tight > 0 ? (' · tightness ' + tight) : ' · convex')});
+
+    renderSummary(); renderLayers(); renderMap();
+    vlScan();
+    // The new boundary selects itself: that's why the button was pressed.
+    var sel = document.getElementById('vlRing');
+    for (var i = 0; i < VOLRINGS.length; i++){
+      if (VOLRINGS[i].name === id){ sel.selectedIndex = i; break; }
+    }
+
+    var msg = '<div class="okbox"><b>' + esc(id) + ' created</b><br>' +
+      h.ring.length + ' vertices · <b>' + h.area.toFixed(1) + ' m²</b> · ' +
+      (h.area / 1000).toFixed(3) + ' ha×0.1<br>' +
+      'Typical point spacing ' + h.spacing.toFixed(2) + ' m. ' +
+      'It\'s on the map as a green dashed line — <b>check it</b> before computing.</div>';
+    if (h.rings > 1){
+      msg += '<div class="warnbox"><b>⚠ ' + h.rings + ' separate pieces came out</b> and ' +
+        'the largest was kept. The tightness is too low for these points — increase it or leave it empty.</div>';
+    }
+    out.innerHTML = msg;
+    setStatus('boundary ' + h.area.toFixed(1) + ' m\u00b2 ✓', 'ok');
+  };
+
+  /*  DXF export: contours and digital terrain model.
+   *
+   *  Contours come straight from the triangles themselves — each triangle
+   *  is flat, so its intersection with a horizontal plane is a straight
+   *  segment. There is no grid interpolation or smoothing: the lines pass
+   *  EXACTLY through the measured elevations, and on a flat slope they come
+   *  out straight.
+   *
+   *  The model is written as 3DFACE, which is how a CAD program accepts a
+   *  triangulated surface without needing its own format.
+   */
+  function vlDxfLayers(){
+    var out = [], sa = VOLSETS[+document.getElementById('vlSurf').value];
+    if (sa) out.push({ tag: 'A', set: sa, col: 3 });
+    if (document.getElementById('vlMode').value === 'surf2'){
+      var sb = VOLSETS[+document.getElementById('vlSurf2').value];
+      if (sb && sb.key !== sa.key) out.push({ tag: 'B', set: sb, col: 4 });
+    }
+    return out;
+  }
+
+  /*  Fixed English layer names — NOT taken from the surface's own label
+   *  (which may have non-ASCII characters/emoji, e.g. a layer from SW Maps
+   *  or a LandXML title) — a hand-written ASCII DXF with non-ASCII in
+   *  group code 2 (layer name) is a known cause of "won't open" in strict
+   *  CAD readers. With one surface per file (see below) these names don't
+   *  even need to distinguish A/B — each file has its own complete set of
+   *  layers. */
+  function vlDxfOne(S, ring, wantIso, wantDtm, clip, step, maxEdge){
+    var lyr = {}, ents = '';
+    function addLyr(n, c){ if (!(n in lyr)) lyr[n] = c; }
+    var note = S.set.label + ': ';
+    var pts = vlShiftedPts(S.set);   // base shift per surface, if it's checked
+
+    if (wantDtm){
+      var m = Vol.mesh(pts, maxEdge);
+      if (m.err) return { err: m.err };
+      addLyr('DTM', S.col);
+      m.tris.forEach(function(t){
+        // 3DFACE wants four vertices; the third is repeated.
+        ents += '0\n3DFACE\n8\nDTM\n' +
+          '10\n' + num(t[0].x) + '\n20\n' + num(t[0].y) + '\n30\n' + num(t[0].z) + '\n' +
+          '11\n' + num(t[1].x) + '\n21\n' + num(t[1].y) + '\n31\n' + num(t[1].z) + '\n' +
+          '12\n' + num(t[2].x) + '\n22\n' + num(t[2].y) + '\n32\n' + num(t[2].z) + '\n' +
+          '13\n' + num(t[2].x) + '\n23\n' + num(t[2].y) + '\n33\n' + num(t[2].z) + '\n';
+      });
+      note += m.tris.length + ' triangles';
+      addLyr('POINTS', S.col);
+      pts.forEach(function(p){
+        ents += '0\nPOINT\n8\nPOINTS\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n' + num(p.z) + '\n';
+      });
+    }
+
+    if (wantIso){
+      var c = Vol.contours(pts, { interval: step, maxEdge: maxEdge,
+                                        ring: clip ? ring.ring : null });
+      if (c.err) return { err: S.set.label + ': ' + c.err };
+      // Every 5th on its own layer: that's how surveyors thicken the index contours.
+      addLyr('CONTOURS', S.col); addLyr('CONTOURS_INDEX', 1); addLyr('CONTOURS_TEXT', 2);
+      var nl = 0;
+      c.levels.forEach(function(L){
+        var main = Math.abs(L.z / (step * 5) - Math.round(L.z / (step * 5))) < 1e-6;
+        var lay = main ? 'CONTOURS_INDEX' : 'CONTOURS';
+        L.lines.forEach(function(P){
+          if (P.length < 2) return;
+          nl++;
+          ents += '0\nPOLYLINE\n8\n' + lay + '\n66\n1\n70\n8\n';
+          P.forEach(function(p){
+            ents += '0\nVERTEX\n8\n' + lay + '\n70\n32\n10\n' + num(p.x) +
+                    '\n20\n' + num(p.y) + '\n30\n' + num(L.z) + '\n';
+          });
+          ents += '0\nSEQEND\n8\n' + lay + '\n';
+          // Label in the middle, only on lines long enough to read.
+          if (main && P.length >= 4){
+            var q = P[Math.floor(P.length / 2)];
+            ents += '0\nTEXT\n8\nCONTOURS_TEXT\n10\n' + num(q.x) + '\n20\n' + num(q.y) +
+                    '\n30\n' + num(L.z) + '\n40\n0.400\n1\n' + num(L.z) + '\n';
+          }
+        });
+      });
+      note += (wantDtm ? ' · ' : '') + c.count + ' levels (' +
+        c.zmin.toFixed(2) + '–' + c.zmax.toFixed(2) + ' m) · ' + nl + ' lines · ' +
+        c.length.toFixed(0) + ' m';
+    }
+
+    if (ring){
+      addLyr('BOUNDARY', 6);
+      ents += '0\nPOLYLINE\n8\nBOUNDARY\n66\n1\n70\n1\n';
+      ring.ring.forEach(function(p){
+        ents += '0\nVERTEX\n8\nBOUNDARY\n10\n' + num(p.x) + '\n20\n' + num(p.y) + '\n30\n0.000\n';
+      });
+      ents += '0\nSEQEND\n8\nBOUNDARY\n';
+      note += ' · boundary ' + ring.ring.length + ' vertices · ' + ring.area.toFixed(1) + ' m²';
+    }
+
+    var layerEnts = '';
+    Object.keys(lyr).forEach(function(n){
+      layerEnts += '0\nLAYER\n2\n' + n + '\n70\n0\n62\n' + lyr[n] + '\n6\nCONTINUOUS\n';
+    });
+    var d = dxfPreamble(layerEnts) + '0\nSECTION\n2\nENTITIES\n' + ents + '0\nENDSEC\n0\nEOF\n';
+    return { d: d, note: note };
+  }
+
+  window.vlExportDxf = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('There are no points with an elevation.'); return; }
+    var surfaces = vlDxfLayers();
+    if (!surfaces.length){ vlWarn('Pick a surface.'); return; }
+
+    var wantIso = document.getElementById('vlDxfIso').checked;
+    var wantDtm = document.getElementById('vlDxfDtm').checked;
+    if (!wantIso && !wantDtm){ vlWarn('Pick contours or the model — otherwise the file would be empty.'); return; }
+
+    var step = numIn('vlIso');
+    if (wantIso && !(step > 0)){ vlWarn('Give a contour interval in meters.'); return; }
+    var clip = document.getElementById('vlDxfClip').checked;
+    var ring = VOLRINGS.length ? VOLRINGS[+document.getElementById('vlRing').value] : null;
+    if (clip && !ring){ vlWarn('There is no polygon to clip to — uncheck it or build a boundary.'); return; }
+
+    var maxEdge = numIn('vlMaxEdge');
+    if (!(Number.isFinite(maxEdge) && maxEdge > 0)) maxEdge = 0;
+
+    // With a second surface, the user picks which one — or both, each its
+    // own separate DXF (no shared file anymore, see the vlDxfOne comment).
+    if (surfaces.length > 1){
+      var which = document.getElementById('vlDxfWhich').value;
+      if (which === 'A') surfaces = [surfaces[0]];
+      else if (which === 'B') surfaces = [surfaces[1]];
+    }
+
+    var reports = [];
+    for (var s = 0; s < surfaces.length; s++){
+      var r = vlDxfOne(surfaces[s], ring, wantIso, wantDtm, clip, step, maxEdge);
+      if (r.err){ vlWarn(esc(r.err)); return; }
+      var tag = surfaces.length > 1 ? ('_' + surfaces[s].tag) : '';
+      var fname = 'Volumes' + tag + (wantIso ? '_contours' : '') + (wantDtm ? '_dtm' : '') + '.dxf';
+      download(r.d, fname);
+      reports.push('<b>' + esc(fname) + '</b><br>' + esc(r.note));
+    }
+
+    out.innerHTML = '<div class="okbox">' + reports.join('<hr style="border:0;border-top:1px solid var(--line);margin:8px 0">') + '</div>';
+    setStatus('DXF ✓ (' + reports.length + ' file' + (reports.length > 1 ? 's' : '') + ')', 'ok');
+  };
+
+  /*  Same triangulation (Vol.surface, indexed triangles) as the DXF/3DFACE,
+   *  just as LandXML points+faces — same coordinate convention (Northing
+   *  Easting Elevation) as the LandXML import above, so it round-trips. */
+  function vlLandXML(name, pts, maxEdge){
+    var ox = pts[0].x, oy = pts[0].y;
+    var local = pts.map(function(p){ return { x: p.x - ox, y: p.y - oy, z: p.z }; });
+    var s = Vol.surface(local, maxEdge);
+    var pnts = pts.map(function(p, i){
+      return '<P id="' + (i + 1) + '">' + p.y.toFixed(3) + ' ' + p.x.toFixed(3) + ' ' + p.z.toFixed(3) + '</P>';
+    }).join('\n');
+    var faces = s.tris.map(function(t){ return '<F>' + (t[0]+1) + ' ' + (t[1]+1) + ' ' + (t[2]+1) + '</F>'; }).join('\n');
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<LandXML xmlns="http://www.landxml.org/schema/LandXML1.2" version="1.2">\n' +
+      '<Units><Metric areaUnit="squareMeter" linearUnit="meter" volumeUnit="cubicMeter" temperatureUnit="celsius" pressureUnit="mmHG"/></Units>\n' +
+      '<Surfaces><Surface name="' + kmlEsc(name) + '"><Definition surfType="TIN">\n' +
+      '<Pnts>\n' + pnts + '\n</Pnts>\n<Faces>\n' + faces + '\n</Faces>\n' +
+      '</Definition></Surface></Surfaces>\n</LandXML>\n';
+  }
+
+  window.vlExportLandXML = function(){
+    var out = document.getElementById('vlOut');
+    if (!VOLSETS.length){ vlScan(); vlWarn('There are no points with an elevation.'); return; }
+    var surfaces = vlDxfLayers();
+    if (!surfaces.length){ vlWarn('Pick a surface.'); return; }
+    var maxEdge = numIn('vlMaxEdge');
+    if (!(Number.isFinite(maxEdge) && maxEdge > 0)) maxEdge = 0;
+    if (surfaces.length > 1){
+      var which = document.getElementById('vlDxfWhich').value;
+      if (which === 'A') surfaces = [surfaces[0]];
+      else if (which === 'B') surfaces = [surfaces[1]];
+    }
+    var reports = [];
+    for (var s = 0; s < surfaces.length; s++){
+      var S = surfaces[s];
+      var pts = vlShiftedPts(S.set);
+      var xml = vlLandXML(S.set.label.split(' —')[0], pts, maxEdge);
+      var tag = surfaces.length > 1 ? ('_' + S.tag) : '';
+      var fname = 'Volumes' + tag + '.xml';
+      download(xml, fname);
+      reports.push(esc(fname) + ' — ' + pts.length + ' points');
+    }
+    out.innerHTML = '<div class="okbox">' + reports.join('<br>') + '</div>';
+    setStatus('LandXML ✓', 'ok');
+  };
+
+
+</script>
+<script>
+/*  Job history — ties the page to lib/jobs.js.
+ *
+ *  Snapshot = loaded model + stakeout points + layer state.
+ *  Projected coordinates are not stored; they are recomputed on restore, so
+ *  a fix carries over to old jobs too.
+ */
+(function(){
+  'use strict';
+  var TOOL='sw-maps-global';
+  var activeName='';                   // for messages without a second read
+
+  function when(ts){
+    var d=new Date(ts);
+    return d.toLocaleDateString('en-US')+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  }
+  function esc2(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+  function jobSnapshot(){
+    var feats=(model&&model.features)?model.features.length:0;
+    if(!feats && !computed.length && !genLines.length) return {empty:true};
+    return {
+      v:1,
+      model: model?{layers:model.layers, features:model.features, __fname:model.__fname}:null,
+      computed: computed,
+      genLines: genLines,
+      layerState: layerState,
+      geoid: document.getElementById('chkOrtho').checked,
+      info: {feats:feats, comp:computed.length, gen:genLines.length,
+             fname:(model&&model.__fname)||''}
+    };
+  }
+
+  function jobRestore(s){
+    if(!s) return;
+    document.getElementById('chkOrtho').checked = (s.geoid!==false);
+    computed = s.computed||[];
+    genLines = s.genLines||[];
+    layerState = s.layerState||{};
+    model = s.model||null;
+    if(model) transformModel();
+    var any = !!model || computed.length>0;
+    document.getElementById('btnDxf').disabled=!any;
+    document.getElementById('btnCsv').disabled=!any;
+    pick={p1:null,p2:null};
+    renderSummary(); renderLayers(); renderMap();
+  }
+
+  function label(m){
+    var i=m.info||{}, p=[];
+    if(i.feats) p.push(i.feats+' features');
+    if(i.comp) p.push(i.comp+' stakeout');
+    if(i.gen) p.push(i.gen+' lines');
+    if(i.fname) p.push(esc2(i.fname));
+    return p.join(' \u00b7 ')||'\u2014';
+  }
+
+  function box(inner){
+    return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;'+
+           'background:rgba(255,255,255,.03)">'+inner+'</div>';
+  }
+
+  function renderJobs(){
+    return Promise.all([Jobs.list(), Jobs.activeMeta()]).then(function(r){
+      var rows=r[0], act=r[1];
+      activeName = act ? act.name : '';
+      var blank = !(model && model.features && model.features.length) && !computed.length;
+      var auto=null, saved=[];
+      rows.forEach(function(x){ if(x.id===Jobs.AUTO) auto=x; else saved.push(x); });
+
+      var ha=document.getElementById('jobAuto');
+      if(act){
+        // Open job: every change is written into it, no action needed from the user.
+        ha.innerHTML=box(
+          '<div style="font-size:13px;color:#f0f6ff">\u25cf <b>'+esc2(act.name)+'</b> '+
+            '<span style="color:var(--ok);font-weight:600">\u00b7 saved automatically</span></div>'+
+          '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+
+            'last saved '+when(act.saved)+' \u00b7 '+label(act)+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            (blank ? '<button class="btn small" onclick="jobOpen(\''+act.id+'\')">\u21bb Open</button>'
+                   : '<button class="btn small" onclick="jobRefreshData()">\u21ba Refresh data</button>')+
+            '<button class="btn ghost small" onclick="jobClose()">\u2715 Close</button>'+
+          '</div>');
+      } else if(auto){
+        ha.innerHTML=box(
+          '<div style="font-size:13px;color:#f0f6ff"><b>Latest job (unnamed)</b> \u2014 '+when(auto.saved)+'</div>'+
+          '<div style="font-size:12px;color:var(--mut);margin:2px 0 8px">'+label(auto)+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<button class="btn small" onclick="jobOpen(\''+Jobs.AUTO+'\')">\u21bb Continue the job</button>'+
+            '<button class="btn red small" onclick="jobDel(\''+Jobs.AUTO+'\',\'\')">\u2715</button>'+
+          '</div>');
+      } else { ha.innerHTML=''; }
+
+      var h=document.getElementById('jobList');
+      if(!saved.length){ h.innerHTML='<div class="empty">No saved jobs.</div>'; return; }
+      h.innerHTML=saved.map(function(m){
+        var nm=esc2(m.name), q=nm.replace(/'/g,"&#39;");
+        var isAct = act && act.id===m.id;
+        return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding:9px 0">'+
+          '<div style="flex:1;min-width:150px">'+
+            '<div style="font-size:13px;color:#f0f6ff">'+(isAct?'\u25cf ':'')+nm+'</div>'+
+            '<div style="font-size:11px;color:var(--mut)">'+when(m.saved)+' \u00b7 '+label(m)+'</div>'+
+          '</div>'+
+          (isAct ? '<span class="pill" style="color:var(--ok)">open</span>'
+                 : '<button class="btn small" onclick="jobOpen(\''+m.id+'\')">Open</button>')+
+          '<button class="btn ghost small" onclick="jobRename(\''+m.id+'\',\''+q+'\')">\u270e</button>'+
+          '<button class="btn ghost small" onclick="Jobs.exportFile(\''+m.id+'\')">\u2b07</button>'+
+          '<button class="btn red small" onclick="jobDel(\''+m.id+'\',\''+q+'\')">\u2715</button>'+
+        '</div>';
+      }).join('');
+    }).catch(function(e){
+      document.getElementById('jobList').innerHTML='<div class="empty">Storage is not available ('+esc2(e.message)+').</div>';
+    });
+  }
+
+  /*  Refresh data: the browser isn't allowed to re-read a file on its own,
+   *  so the file picker opens. Same file name = same job, the stakeout
+   *  points stay. */
+  window.jobRefreshData=function(){ document.getElementById('fileDb').click(); };
+
+  /*  A DIFFERENT database was loaded than the one the open job started
+   *  from: the old one is written and closed, and the new one starts as an
+   *  anonymous job. Otherwise one job's stakeout points would silently
+   *  continue inside the other. */
+  window.jobOnNewFile=function(fname){
+    if(!window.Jobs) return;
+    var prev = model && model.__fname;
+    if(!fname || !prev || fname===prev) return;   // same file = data refresh
+    var act = Jobs.getActive(), nm = activeName, msg;
+    if(act){
+      Jobs.save();                     // the named one is written and closed
+      Jobs.setActive(null);
+      msg = 'New job \u2014 "'+nm+'" was saved and closed.';
+    } else if(computed.length){
+      /*  Anonymous job with stakeout points: it's saved on its own under the
+       *  name of the file that produced it. Otherwise the new load would
+       *  silently wipe it \u2014 or worse, its points would carry over into
+       *  the new one. */
+      msg = 'New job \u2014 the previous one was saved as "'+prev+'".';
+      Jobs.saveAs(prev).then(function(){ Jobs.setActive(null); renderJobs(); })
+                       .catch(function(){});
+    } else {
+      msg = 'New job.';
+    }
+    computed = [];                     // the new one always starts clean
+    genLines = [];
+    pick = {p1:null, p2:null};
+    if(window.clearLines) clearLines();
+    setTimeout(function(){ renderJobs(); setStatus(msg,'ok'); }, 400);
+  };
+
+  window.jobOpen=function(id){
+    var busy = (model&&model.features&&model.features.length)||computed.length;
+    if(busy && id!==Jobs.getActive()){
+      if(!confirm('This will replace the data currently open. Continue?')) return;
+    }
+    Jobs.load(id).then(function(s){
+      jobRestore(s);
+      if(id!==Jobs.AUTO){ Jobs.setActive(id); Jobs.dropAuto().then(renderJobs); return; }
+      renderJobs();
+    }).catch(function(e){ alert('Could not open: '+e.message); });
+  };
+
+  window.jobSaveAs=function(){
+    var n=prompt('Job name:', (model&&model.__fname)||('Job '+new Date().toLocaleDateString('en-US')));
+    if(n===null) return;
+    Jobs.saveAs(n).then(function(m){
+      renderJobs();
+      setStatus('saved "'+m.name+'" \u2713','ok');
+    }).catch(function(e){ alert(e.message); });
+  };
+
+  /*  Close: the job stays saved, the screen empties for the next one.
+   *  Without this, the next job's work would get written into the old one. */
+  window.jobClose=function(){
+    Jobs.activeMeta().then(function(m){
+      if(!confirm('The job "'+(m?m.name:'')+'" is saved. Clear the screen for a new one?')) return;
+      Jobs.setActive(null);
+      jobRestore({computed:[], model:null, layerState:{}, geoid:document.getElementById('chkOrtho').checked});
+      renderJobs();
+      setStatus('job closed','ok');
+    });
+  };
+
+  window.jobRename=function(id,cur){
+    var n=prompt('New name:', cur);
+    if(n===null) return;
+    Jobs.rename(id,n).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+
+  window.jobDel=function(id,nm){
+    if(!confirm('Delete "'+(nm||'latest job')+'"?')) return;
+    Jobs.remove(id).then(renderJobs).catch(function(e){ alert(e.message); });
+  };
+
+  document.getElementById('fileJob').addEventListener('change',function(e){
+    var f=e.target.files[0]; e.target.value='';
+    if(!f) return;
+    Jobs.importFile(f).then(function(m){ renderJobs(); setStatus('imported "'+m.name+'" \u2713','ok'); })
+                      .catch(function(err){ alert(err.message); });
+  });
+
+  if(!window.indexedDB){
+    document.getElementById('jobList').innerHTML='<div class="empty">This browser does not support storage.</div>';
+    return;
+  }
+  Jobs.init({tool:TOOL, snapshot:jobSnapshot, onSaved:function(){ renderJobs(); }})
+      .then(function(){ renderJobs(); });
+})();
+</script>
+<script>
+/*  Service worker: lets the tool open even with no signal.
+ *  It lives at the site's root and automatically takes that as its scope,
+ *  so it also covers lib/ \u2014 even when the site isn't at the domain's
+ *  root (GitHub Pages: /zsgeolab/).
+ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('../sw.js').catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
