@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Αντιρρήσεις δασικών | ZS-GeoLab</title>
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" type="image/png" sizes="32x32" href="../sw-maps-gr/favicon-32.png">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  :root{--bg:#0b1220;--bg2:#0f1830;--card:#131d33;--ink:#e6ecf5;--mut:#93a3bd;
+    --navy:#1e4d8c;--navy2:#2f6bbd;--red:#e0353a;--line:#25334f;--ok:#2ecc71;--warn:#f1c40f;}
+  body{background:var(--bg);color:var(--ink);min-height:100vh;}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg2);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;}
+  header .logo-img{height:36px;width:auto;display:block;background:#fff;padding:4px 7px;border-radius:8px;}
+  header .htitle{font-size:18px;font-weight:800;} header .htitle span{color:var(--red);}
+  main{max-width:1000px;margin:0 auto;padding:16px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;}
+  .card h2{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:9px;}
+  .card h2 .c{width:4px;height:15px;background:var(--red);border-radius:2px;display:inline-block;}
+  .hint{color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:6px;}
+  .fld label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px;}
+  input[type=text],input[type=number],select{width:100%;padding:9px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);font-size:13.5px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .btn{padding:11px 16px;border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;background:var(--navy2);}
+  .btn.red{background:var(--red);} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);}
+  .btn:disabled{opacity:.45;cursor:default;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;}
+  th{background:var(--bg2);color:#f0f6ff;font-weight:600;}
+  td.num{text-align:right;font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+  .warnbox{border:1px solid #7a5b12;background:#2a2210;color:#f5d98a;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .okbox{border:1px solid #1d5c39;background:#0f2a1c;color:#8ff0b6;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-top:10px;line-height:1.55;}
+  .pill{display:inline-block;background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11.5px;color:var(--mut);margin:0 6px 6px 0;}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+  .row label.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink);cursor:pointer;}
+  .fileline{margin-top:8px;font-size:12.5px;color:var(--mut);}
+  #cv{width:100%;height:460px;background:#081018;border:1px solid var(--line);border-radius:10px;display:block;cursor:grab;touch-action:none;}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12px;color:var(--mut);}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;}
+  #prog{height:6px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-top:10px;display:none;}
+  #prog div{height:100%;width:0;background:var(--navy2);transition:width .15s;}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:20px;}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<header>
+  <a href="../index.html" title="ZS-GeoLab" style="display:flex;align-items:center">
+    <img src="../assets/zsgeolab-logo.png" alt="ZS-GeoLab" class="logo-img"></a>
+  <div class="htitle">Αντιρρήσεις<span> δασικών</span></div>
+</header>
+
+<main>
+  <div class="card">
+    <h2><span class="c"></span>1. Εισαγωγή DXF αντιρρήσεων</h2>
+    <div class="hint">Εισαγωγή DXF με πολύγωνο ή πολύγωνα αντιρρήσεων, σε ΕΓΣΑ87. Οι ανοιχτές πολυγραμμές κλείνονται αυτόματα.</div>
+    <input type="file" id="fDxf" accept=".dxf" style="display:none">
+    <div class="row"><button class="btn" onclick="document.getElementById('fDxf').click()">📂 Άνοιγμα DXF</button><span id="dxfName" class="fileline"></span></div>
+    <div id="dxfInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="c"></span>2. Εισαγωγή shp κύρωσης</h2>
+    <div class="hint">Το <b>.zip</b> όπως κατέβηκε, ή τα αρχεία <b>.shp + .dbf</b> (μαζί με τα .shx/.cpg/.prj). Το αρχείο δεν ανεβαίνει πουθενά — διαβάζεται τοπικά.</div>
+    <input type="file" id="fK" accept=".zip,.shp,.shx,.dbf,.cpg,.prj" multiple style="display:none">
+    <div class="row"><button class="btn" onclick="document.getElementById('fK').click()">📂 Άνοιγμα κύρωσης</button><span id="kName" class="fileline"></span></div>
+    <div id="kInfo"></div>
+    <div class="row">
+      <span class="hint" style="margin:0">Στο DXF εξαγωγής να μπει:</span>
+      <label class="chk"><input type="radio" name="kmode" value="all" checked> όλη η κύρωση του αρχείου</label>
+      <label class="chk"><input type="radio" name="kmode" value="near"> μόνο τα πολύγωνα κοντά στην αντίρρηση</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="c"></span>3. Εισαγωγή shp ανάρτησης</h2>
+    <div class="hint">Συνήθως ολόκληρος ο νομός (δεκάδες MB). Διαβάζεται σε ρεύμα και κρατιέται μόνο ό,τι πέφτει στην περιοχή των αντιρρήσεων.</div>
+    <input type="file" id="fA" accept=".zip,.shp,.shx,.dbf,.cpg,.prj" multiple style="display:none">
+    <div class="row"><button class="btn" onclick="document.getElementById('fA').click()">📂 Άνοιγμα ανάρτησης</button><span id="aName" class="fileline"></span></div>
+    <div id="aInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="c"></span>4. Υπολογισμός</h2>
+    <div class="hint">Η εξαγωγή του DXF γίνεται σε ξεχωριστό layer ανά είδος και κατηγορία.</div>
+    <div class="row"><button class="btn red" id="go" onclick="run()">▶ Υπολογισμός</button>
+      <button class="btn" id="exp" onclick="exportDxf()" disabled>⬇ Εξαγωγή DXF</button></div>
+    <div id="prog"><div></div></div>
+    <div id="status" class="hint"></div>
+    <div id="msgs"></div>
+  </div>
+
+  <div class="card" id="resCard" style="display:none">
+    <h2><span class="c"></span>Αποτέλεσμα</h2>
+    <canvas id="cv"></canvas>
+    <div class="legend" id="legend"></div>
+    <div class="hint">Τροχός = ζουμ · σύρσιμο = μετακίνηση · διπλό κλικ = επαναφορά.</div>
+    <table id="tbl" style="margin-top:12px"></table>
+    <div id="stats" style="margin-top:10px"></div>
+  </div>
+</main>
+
+<datalist id="catlist"></datalist>
+<footer>ZS-GeoLab · οι υπολογισμοί γίνονται στον υπολογιστή σου, τίποτα δεν αποστέλλεται.</footer>
+
+<script src="../lib/vendor/clipper.js"></script>
+<script src="core.js?v=6"></script>
+<script src="io.js?v=4"></script>
+<script>
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var S = { objs: [], dxf: null, K: null, A: null, kField: '', aField: '', result: null };
+var KNOWN_CATS = ['ΑΑ','ΑΔ','ΔΑ','ΔΔ','ΠΑ','ΠΔ','ΠΧ','ΧΧ','ΧΑ','ΑΧ'];
+var ACI = [3, 4, 5, 6, 2, 30, 40, 150, 210, 8, 1, 7];
+var CSS = ['#2ecc71','#1fd1d1','#4a86ff','#d05bd0','#e8d33a','#e08a2e','#d4b13a','#5b7fb8','#a05bd0','#8a94a6','#e0353a','#e6ecf5'];
+var catIndex = {};
+function catColor(c) { if (!(c in catIndex)) catIndex[c] = Object.keys(catIndex).length; return catIndex[c] % ACI.length; }
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function fillCatList(extra) {
+  var set = {}; KNOWN_CATS.forEach(function (c) { set[c] = 1; }); (extra || []).forEach(function (c) { if (c) set[c] = 1; });
+  $('catlist').innerHTML = Object.keys(set).map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+}
+fillCatList();
+function box(kind, html) { return '<div class="' + kind + '">' + html + '</div>'; }
+function shoelace(pts) { return Math.abs(DasikosCore.signedArea(pts)); }
+function fmt(n, d) { return (+n).toLocaleString('el-GR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
+function invalidate() { S.result = null; $('exp').disabled = true; $('resCard').style.display = 'none'; }
+
+/* ---------- 1. DXF ---------- */
+$('fDxf').addEventListener('change', async function (e) {
+  var f = e.target.files[0]; if (!f) return;
+  invalidate(); $('dxfName').textContent = f.name;
+  try {
+    S.dxf = DasikosIO.parseDxf(await f.arrayBuffer());
+    renderObjections();
+  } catch (err) { $('dxfInfo').innerHTML = box('warnbox', 'Δεν διαβάστηκε το DXF: ' + esc(err.message)); }
+});
+function renderObjections() {
+  var d = S.dxf, names = Object.keys(d.layers), h = '';
+  if (!names.length) { $('dxfInfo').innerHTML = box('warnbox', 'Δεν βρέθηκε καμία πολυγραμμή με ≥3 κορυφές (LWPOLYLINE/POLYLINE).'); S.objs = []; return; }
+  h += '<div class="hint" style="margin-top:12px">Layers με πολυγραμμές — τσέκαρε ποια είναι αντιρρήσεις:</div><div class="row">';
+  names.forEach(function (n) {
+    h += '<label class="chk"><input type="checkbox" class="lyrchk" value="' + esc(n) + '" checked onchange="rebuildObjs()"> ' + esc(n) + ' <span class="pill">' + d.layers[n].length + '</span></label>';
+  });
+  h += '</div><div class="row"><span class="hint" style="margin:0">Ίδιος χαρακτηρισμός για όλες:</span><input type="text" id="allCat" list="catlist" placeholder="π.χ. ΔΑ" style="width:120px" oninput="setAllCat(this.value)"></div>';
+  h += '<table id="objTbl" style="margin-top:10px"></table>';
+  var ig = Object.keys(d.ignored); if (ig.length) h += box('hint', 'Αγνοήθηκαν: ' + ig.map(function (k) { return esc(k) + ' ×' + d.ignored[k]; }).join(', '));
+  d.warnings.forEach(function (w) { h += box('warnbox', esc(w)); });
+  $('dxfInfo').innerHTML = h; rebuildObjs();
+}
+function rebuildObjs() {
+  var keep = {}; S.objs.forEach(function (o) { keep[o.id] = o.cat; });
+  var checked = Array.prototype.map.call(document.querySelectorAll('.lyrchk:checked'), function (c) { return c.value; });
+  S.objs = [];
+  checked.forEach(function (n) { S.dxf.layers[n].forEach(function (e, k) {
+    var id = n + ' #' + (k + 1); S.objs.push({ id: id, layer: n, pts: e.pts, cat: keep[id] || '' });
+  }); });
+  var h = '<tr><th>Αντίρρηση</th><th>Κορυφές</th><th style="text-align:right">Εμβαδόν (τ.μ.)</th><th>Χαρακτηρισμός</th></tr>';
+  S.objs.forEach(function (o, i) {
+    h += '<tr><td>' + esc(o.id) + '</td><td>' + o.pts.length + '</td><td class="num">' + fmt(shoelace(o.pts), 1) + '</td>' +
+      '<td><input type="text" list="catlist" value="' + esc(o.cat) + '" style="width:110px" oninput="S.objs[' + i + '].cat=this.value.trim();invalidate()"></td></tr>';
+  });
+  $('objTbl').innerHTML = h; invalidate();
+}
+function setAllCat(v) { S.objs.forEach(function (o) { o.cat = v.trim(); }); document.querySelectorAll('#objTbl input').forEach(function (i) { i.value = v; }); invalidate(); }
+
+/* ---------- 2/3. Shapefiles ---------- */
+async function loadShp(files, which) {
+  var nameEl = $(which === 'K' ? 'kName' : 'aName'), infoEl = $(which === 'K' ? 'kInfo' : 'aInfo');
+  invalidate();
+  nameEl.textContent = Array.prototype.map.call(files, function (f) { return f.name; }).join(', ');
+  infoEl.innerHTML = '';
+  try {
+    var dss = await DasikosIO.listDatasets(files);
+    if (!dss.length) throw new Error('Δεν βρέθηκε .shp μέσα στα αρχεία.');
+    S[which] = { datasets: dss, ds: dss[0], field: '' };
+    var h = '<div class="grid2" style="margin-top:12px"><div class="fld"><label>Shapefile</label><select id="ds' + which + '" onchange="pickDs(\'' + which + '\')">' +
+      dss.map(function (d, i) { return '<option value="' + i + '">' + esc(d.name) + (d.dbf ? '' : ' (χωρίς .dbf)') + ' — ' + fmt(d.shp.size / 1048576, 1) + ' MB</option>'; }).join('') +
+      '</select></div><div class="fld"><label>Πεδίο χαρακτηρισμού</label><select id="fld' + which + '" onchange="S.' + which + '.field=this.value;invalidate()"></select></div></div><div id="note' + which + '"></div>';
+    infoEl.innerHTML = h; await pickDs(which);
+  } catch (err) { S[which] = null; infoEl.innerHTML = box('warnbox', esc(err.message)); }
+}
+async function pickDs(which) {
+  var st = S[which]; st.ds = st.datasets[+$('ds' + which).value];
+  var fields = await DasikosIO.datasetFields(st.ds), sel = $('fld' + which);
+  var def = fields.filter(function (f) { return /^KATHGORDX$/i.test(f); })[0] || fields.filter(function (f) { return /KATH/i.test(f); })[0] || fields[0] || '';
+  sel.innerHTML = '<option value="">(χωρίς χαρακτηρισμό)</option>' + fields.map(function (f) { return '<option' + (f === def ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('');
+  st.field = def; invalidate();
+  $('note' + which).innerHTML = st.ds.dbf ? '' : box('warnbox', 'Δεν βρέθηκε .dbf — τα πολύγωνα θα μείνουν χωρίς χαρακτηρισμό.');
+}
+$('fK').addEventListener('change', function (e) { if (e.target.files.length) loadShp(e.target.files, 'K'); });
+$('fA').addEventListener('change', function (e) { if (e.target.files.length) loadShp(e.target.files, 'A'); });
+
+/* ---------- Υπολογισμός ---------- */
+var cache = {};
+function setProg(p, txt) { $('prog').style.display = p == null ? 'none' : 'block'; if (p != null) $('prog').firstChild.style.width = Math.round(p * 100) + '%'; if (txt != null) $('status').textContent = txt; }
+async function readCached(which, bbox, label) {
+  var st = S[which], key = which + '|' + st.ds.shp.name + '|' + st.ds.shp.size + '|' + (bbox ? bbox.join(',') : 'all');
+  if (cache[key]) return cache[key];
+  setProg(0, label);
+  var r = await DasikosIO.readDataset(st.ds, { bbox: bbox, onProgress: function (f) { setProg(f, label + ' ' + Math.round(f * 100) + '%'); } });
+  cache = {}; cache[key] = r; return r;
+}
+async function run() {
+  $('msgs').innerHTML = ''; invalidate();
+  try {
+    if (!S.objs.length) throw new Error('Άνοιξε πρώτα το DXF με τις αντιρρήσεις (και τσέκαρε τουλάχιστον ένα layer).');
+    var miss = S.objs.filter(function (o) { return !o.cat; });
+    if (miss.length) throw new Error('Δώσε χαρακτηρισμό στις αντιρρήσεις: ' + miss.map(function (o) { return o.id; }).join(', '));
+    if (!S.K) throw new Error('Άνοιξε το shapefile της κύρωσης.');
+    if (!S.A) throw new Error('Άνοιξε το shapefile της ανάρτησης.');
+    var xs = [], ys = []; S.objs.forEach(function (o) { o.pts.forEach(function (p) { xs.push(p[0]); ys.push(p[1]); }); });
+    var bx = [Math.min.apply(null, xs), Math.max.apply(null, xs)], by = [Math.min.apply(null, ys), Math.max.apply(null, ys)];
+    var crsMsg = '';
+    if (bx[0] < 100000 || bx[1] > 1000000 || by[0] < 3800000 || by[1] > 4700000)
+      crsMsg = box('warnbox', 'Οι συντεταγμένες των αντιρρήσεων (X ' + fmt(bx[0]) + '…' + fmt(bx[1]) + ', Y ' + fmt(by[0]) + '…' + fmt(by[1]) + ') δεν μοιάζουν με ΕΓΣΑ87 (EPSG:2100). Το εργαλείο ΔΕΝ κάνει μετατροπή συστήματος — τα δεδομένα πρέπει να είναι ήδη σε ΕΓΣΑ87.');
+    $('go').disabled = true;
+    var objections = S.objs.map(function (o) { return { id: o.id, cat: o.cat, rings: [o.pts] }; });
+    var bb = DasikosCore.readBBox(objections), tAll = Date.now();
+    var kAll = document.querySelector('input[name=kmode]:checked').value === 'all';
+    if (kAll && S.K.ds.shp.size > 150 * 1048576 &&
+        !confirm('Η κύρωση είναι ' + fmt(S.K.ds.shp.size / 1048576) + ' MB και επέλεξες «όλη η κύρωση» — το DXF θα βγει πολύ μεγάλο. Συνέχεια; (Ακύρωση = διάλεξε «μόνο τα πολύγωνα που αγγίζουν την περιοχή».)')) { $('go').disabled = false; setProg(null, ''); return; }
+    var K = await readCached('K', kAll ? null : bb, 'Ανάγνωση κύρωσης…');
+    var A = await readCached('A', bb, 'Ανάγνωση ανάρτησης…');
+    setProg(1, 'Υπολογισμός…'); await new Promise(function (r) { setTimeout(r, 20); });
+    function conv(r, fld) { return { id: r.id, cat: (r.attrs && fld) ? (r.attrs[fld] || '') : '', rings: r.rings }; }
+    var res = DasikosCore.compute({
+      objections: objections,
+      kyrosi: K.records.map(function (r) { return conv(r, S.K.field); }),
+      anartisi: A.records.map(function (r) { return conv(r, S.A.field); })
+    });
+    res.timing = { readK: K.ms, readA: A.ms, scannedA: A.scanned, keptA: A.records.length, scannedK: K.scanned, keptK: K.records.length, total: Date.now() - tAll };
+    S.result = res;
+    var extra = []; K.records.concat(A.records).forEach(function (r) { if (r.attrs) { var v = r.attrs[S.K.field] || r.attrs[S.A.field]; if (v) extra.push(v); } });
+    fillCatList(extra);
+    var m = crsMsg; [K.crsNote, A.crsNote].forEach(function (n) { if (n) m += box('warnbox', esc(n)); });
+    res.warnings.forEach(function (w) { m += box('warnbox', esc(w)); });
+    $('msgs').innerHTML = m;
+    setProg(null, 'Έτοιμο — ' + res.timing.total + ' ms συνολικά.');
+    showResult(res); $('exp').disabled = false;
+  } catch (err) { setProg(null, ''); $('msgs').innerHTML = box('warnbox', esc(err.message)); console.error(err); }
+  $('go').disabled = false;
+}
+
+/* ---------- Αποτέλεσμα ---------- */
+function pieceArea(pc) { var a = 0; pc.rings.forEach(function (r) { a += (r.hole ? -1 : 1) * shoelace(r.pts); }); return a; }
+function groups(res) {
+  var g = {};
+  function add(kind, prefix, arr) { arr.forEach(function (pc) {
+    var cat = pc.cat || 'NA', key = prefix + '_' + cat;
+    (g[key] = g[key] || { name: DasikosIO.dxfName(key), kind: kind, cat: cat, pieces: [] }).pieces.push(pc);
+  }); }
+  add('K', 'KYROSI', res.kyrosi); add('A', 'ANARTISI', res.anartisi); add('O', 'ANTIRRISI', res.objections);
+  return g;
+}
+function showResult(res) {
+  $('resCard').style.display = 'block';
+  var g = groups(res), keys = Object.keys(g).sort();
+  var h = '<tr><th>Layer</th><th>Κομμάτια</th><th style="text-align:right">Εμβαδόν (τ.μ.)</th></tr>';
+  keys.forEach(function (k) { var a = 0; g[k].pieces.forEach(function (p) { a += pieceArea(p); });
+    h += '<tr><td>' + esc(g[k].name) + '</td><td>' + g[k].pieces.length + '</td><td class="num">' + fmt(a, 1) + '</td></tr>'; });
+  $('tbl').innerHTML = h;
+  var s = res.stats, t = res.timing;
+  $('stats').innerHTML = box('okbox',
+    'Αντιρρήσεις: ' + fmt(s.objectionArea, 1) + ' τ.μ. · Buffer (' + (s.buffer.fallback ? 'ΔΕΝ βρέθηκε στην κύρωση για: ' + esc(s.buffer.fallbackIds.join(', ')) + ' — ίσο ' + fmt(s.buffer.fallbackM, 2) + ' μ.' + (s.buffer.fallbackIds.length < S.objs.length ? ' · για τις υπόλοιπες βρέθηκε από την κύρωση: ' + fmt(s.buffer.medM, 2) + ' μ. τυπικά' : '') : 'βρέθηκε από την κύρωση: ' + fmt(s.buffer.medM, 2) + ' μ. τυπικά, ' + fmt(s.buffer.minM, 2) + '–' + fmt(s.buffer.maxM, 2) + ' μ.') + '): ' + fmt(s.bufferArea, 1) + ' τ.μ. · Δακτύλιος: ' + fmt(s.ringArea, 1) + ' τ.μ.<br>' +
+    'Κύρωση που αφαιρέθηκε μέσα στο buffer: <b>' + fmt(s.kyrosiRemoved, 2) + ' τ.μ.</b> (πολύγωνα κύρωσης που άγγιξαν το buffer: ' + s.kyrosiTouched + ')<br>' +
+    'Ανάρτηση που κρατήθηκε (δακτύλιος): <b>' + fmt(s.anartisiKept, 1) + ' τ.μ.</b> από ' + fmt(t.keptA) + ' πολύγωνα ' + '(σκαναρίστηκαν ' + fmt(t.scannedA) + ')<br>' +
+    'Χρόνοι: κύρωση ' + t.readK + ' ms · ανάρτηση ' + t.readA + ' ms · γεωμετρία ' + s.ms + ' ms · σύνολο ' + t.total + ' ms · πλέγμα ' + s.gridMm + ' mm');
+  var seen = {}; res.kyrosi.concat(res.anartisi, res.objections).forEach(function (p) { seen[p.cat || 'NA'] = 1; });
+  $('legend').innerHTML = Object.keys(seen).sort().map(function (c) { return '<span><i style="background:' + CSS[catColor(c)] + '"></i>' + esc(c) + '</span>'; }).join('') +
+    '<span><i style="background:transparent;border:2px solid #e0353a"></i>Αντιρρήσεις (γεμάτο)</span><span><i style="background:transparent;border:2px dashed #ff9d2e"></i>Buffer</span><span><i style="background:transparent;border:2px dashed #fff"></i>Ανάρτηση (διακεκομμένο)</span>';
+  view = null; draw();
+}
+
+/* ---------- Προεπισκόπηση (canvas) ---------- */
+var cv = $('cv'), ctx = cv.getContext('2d'), view = null;
+function fit() {
+  var b = DasikosCore.bboxOfRings(S.result.buffer.map(function (r) { return r.pts; })), w = b[2] - b[0], h = b[3] - b[1];
+  var W = cv.clientWidth, H = cv.clientHeight, sc = Math.min(W / (w * 1.15), H / (h * 1.15));
+  view = { sc: sc, cx: (b[0] + b[2]) / 2, cy: (b[1] + b[3]) / 2 };
+}
+function draw() {
+  if (!S.result) return;
+  var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return;                          // κρυφό/χωρίς μέγεθος — ξανασχεδιάζεται όταν αποκτήσει
+  if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  if (!view || !(view.sc > 0)) fit();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  function X(x) { return W / 2 + (x - view.cx) * view.sc; } function Y(y) { return H / 2 - (y - view.cy) * view.sc; }
+  function path(pc) { ctx.beginPath(); pc.rings.forEach(function (r) { r.pts.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); }); ctx.closePath(); }); }
+  var res = S.result;
+  function layer(arr, alpha, stroke, dash, lw) {
+    arr.forEach(function (pc) { path(pc); ctx.fillStyle = CSS[catColor(pc.cat || 'NA')]; ctx.globalAlpha = alpha; ctx.fill('evenodd'); ctx.globalAlpha = 1;
+      ctx.setLineDash(dash || []); ctx.strokeStyle = stroke || CSS[catColor(pc.cat || 'NA')]; ctx.lineWidth = lw || 1; ctx.stroke(); });
+  }
+  layer(res.kyrosi, 0.30, null, null, 1);
+  layer(res.anartisi, 0.55, '#ffffff', [4, 3], 1);
+  layer(res.objections, 0.45, '#e0353a', null, 2);
+  ctx.setLineDash([6, 4]); ctx.strokeStyle = '#ff9d2e'; ctx.lineWidth = 1.5; path({ rings: res.buffer }); ctx.stroke(); ctx.setLineDash([]);
+}
+window.addEventListener('resize', draw);
+if (window.ResizeObserver) new ResizeObserver(function () { draw(); }).observe(cv);
+cv.addEventListener('wheel', function (e) { e.preventDefault(); if (!view) return;
+  var r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, W = cv.clientWidth, H = cv.clientHeight;
+  var wx = view.cx + (mx - W / 2) / view.sc, wy = view.cy - (my - H / 2) / view.sc, f = e.deltaY < 0 ? 1.25 : 0.8;
+  view.sc *= f; view.cx = wx - (mx - W / 2) / view.sc; view.cy = wy + (my - H / 2) / view.sc; draw(); }, { passive: false });
+var drag = null;
+cv.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', function (e) { if (!drag || !view) return; view.cx -= (e.clientX - drag.x) / view.sc; view.cy += (e.clientY - drag.y) / view.sc; drag = { x: e.clientX, y: e.clientY }; draw(); });
+cv.addEventListener('pointerup', function () { drag = null; cv.style.cursor = 'grab'; });
+cv.addEventListener('dblclick', function () { view = null; draw(); });
+
+/* ---------- Εξαγωγή ---------- */
+/*  Ανά layer: οι εξωτερικοί δακτύλιοι στο κανονικό layer, οι τρύπες σε δικό τους (`…_TRYPES`),
+ *  ώστε να φαίνονται ή να σβήνονται ξεχωριστά στην εκτύπωση. */
+function splitHoles(name, color, pieces) {
+  var main = [], holes = [];
+  pieces.forEach(function (pc) {
+    var o = pc.rings.filter(function (r) { return !r.hole; }), h = pc.rings.filter(function (r) { return r.hole; });
+    if (o.length) main.push({ rings: o }); if (h.length) holes.push({ rings: h });
+  });
+  var out = [];
+  if (main.length) out.push({ name: name, color: color, pieces: main });
+  if (holes.length) out.push({ name: DasikosIO.dxfName(name + '_TRYPES'), color: color, pieces: holes });
+  return out;
+}
+function buildLayers() {
+  var g = groups(S.result), out = [];
+  Object.keys(g).sort().forEach(function (k) { out = out.concat(splitHoles(g[k].name, ACI[catColor(g[k].cat)], g[k].pieces)); });
+  return out;
+}
+function exportDxf() {
+  if (!S.result) return;
+  var blob = new Blob([DasikosIO.writeDxf(buildLayers())], { type: 'application/dxf' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'Dasikos_meta_antirrisis.dxf'; document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+</script>
+</body>
+</html>
